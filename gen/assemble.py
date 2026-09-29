@@ -21,7 +21,8 @@ import numpy as np
 
 SR = 48000
 UP = sys.argv[1] if len(sys.argv) > 1 else None
-RAW = 'https://raw.githubusercontent.com/maxmadesign/livex/claude/modest-heisenberg-k6wc4z/gen/'
+# pin to a commit (GEN_REF) so raw.githubusercontent's branch cache can't serve a stale EDL
+RAW = f"https://raw.githubusercontent.com/maxmadesign/livex/{os.environ.get('GEN_REF', 'claude/modest-heisenberg-k6wc4z')}/gen/"
 os.makedirs('work', exist_ok=True)
 os.chdir('work')
 
