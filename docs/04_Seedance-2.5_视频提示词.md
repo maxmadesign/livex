@@ -212,7 +212,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
    - **浅色模式**（Gateway、日间 Portal：S09、S10、S11、S15 ③④⑤、J10a）："the display area is an evenly glowing, featureless light grey-white panel, slightly dimmer than paper white, with a faint glass reflection"。底板线性光约为 `--paper #f4f5f7` 的 85%（sRGB 约 #e3e4e6），均匀、无纹理、无图像，保留 3–5% 玻璃反光。
    - **深色模式**（Paragon、医院夜间 Portal：S14、S15 ①②）："the display area is pure solid black glass with a faint reflection"。
    - 这一口径与 master world_bible 一致：浅色屏生成浅灰白（sRGB 约 #e3e4e6），深色屏生成纯黑，UI 与屏幕里的 Lyra 一律后期合成。本文与 03 的 B 底板版、05 §11.2(5) 的键控方法都按这一口径，全套文档只用 #e3e4e6 这一个底板值。
-   - **浅色屏为什么不能生成黑的**：亮屏是场景里真实的中性白光源。S09 里屏幕是陈师傅身上的主光，S11 里屏幕在她左侧勾出一道冷边，屏幕还会照亮字条、在水磨石上留下倒影。黑屏不会产生这些光，成片贴上白底 Lyra 以后，光照和倒影对不上，一眼就能看出是合成。浅灰白底板比 UI 白暗约 15%，贴入后 UI 仍是画面里最亮的面，发光关系正确。
+   - **浅色屏为什么不能生成黑的**：亮屏是场景里真实的中性白光源。S09 里屏幕是陈师傅身上的主光，S11 里屏幕在她左侧勾出一道冷边，屏幕还会照亮字条、在水磨石上留下倒影。黑屏不会产生这些光，成片贴上白底 Lyra 以后，光照和倒影对不上，一眼就能看出是合成。浅灰白底板的线性光比 UI 白低约 15%（sRGB 约 #e3e4e6），贴入后 UI 仍是画面里最亮的面，发光关系正确。
    - LED 灯条、灯箱、墙晕照常点亮；浅色屏对人脸和地面的溢光写进 Prompt（"soft cool-white spill from the display"），素材里已有，合成只校亮度；深色屏的溢光很弱，由合成按设计系统的 glow / spill 参数补足。
 2. **比例校验（正视真实尺寸）**：`screens.json` 的四角来自客户产品渲染图（斜角视图）的抠像，带渲染透视（例如 gateway_front 上边 tl(93,60)→tr(435,94) 明显倾斜），原表里的屏幕高宽比 2.22 / 1.93 / 2.15 / 2.00 / 1.95 都是透视造成的。这些像素坐标和比例**不能**拿到 GPT-image 或 Seedance 生成的画面里去初始化追踪或检查透视。生成画面按下表的正视真实比例校验：所有屏幕都是 16:9 竖屏，高宽比约 1.78；设备正对镜头时（例如 S15，偏转 ≤ 5°），屏幕在画面里的高宽比应接近 1.78，斜看时按透视变化。
 
