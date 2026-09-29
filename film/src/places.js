@@ -109,7 +109,7 @@ function dressWall(wall, { scallops = 7, color = 'rgba(255,240,220,0.22)', door 
 function linearLight(x0, x1, y, z, n, c, i) { return Array.from({ length: n }, (_, k) => ({ x: lerp(x0, x1, k / (n - 1)), y, z, c, i })); }
 
 // A place vignette. opts: { t0: when the UI starts arriving (s), dur, push, caption }
-export function PlaceShot(root, kind, { slugAt = 0.1, uiAt = 0.15, push = 0.08, drift = 30, caption = null, slug = true, aperture = 16 } = {}) {
+export function PlaceShot(root, kind, { slugAt = 0.1, uiAt = 0.15, push = 0.08, drift = 30, caption = null, slug = true, aperture = 16, centre = false, tight = 1 } = {}) {
   const P = PLACES[kind];
   const R = rng(kind.length * 97 + 13);
   css(root, { background: P.bg });
@@ -136,8 +136,8 @@ export function PlaceShot(root, kind, { slugAt = 0.1, uiAt = 0.15, push = 0.08, 
     P, sp, dev, ui, card,
     update(t, dur = 2) {
       const k = clamp(t / dur);
-      const c = P.cam;
-      sp.pose({ x: c.x + drift * (k - 0.5), y: c.y, z: c.z * (1 - push * E.cine(k)), focus: -c.z * (1 - push * E.cine(k)), aperture });
+      const c = P.cam, cz = c.z * tight, cx = centre ? (P.lift ? 0 : 0) : c.x;
+      sp.pose({ x: cx + drift * (k - 0.5), y: c.y, z: cz * (1 - push * E.cine(k)), focus: -cz * (1 - push * E.cine(k)), aperture });
       pl.draw(t);
       ui.idle(t); ui.statusIn(1);
       card.update(clamp((t - uiAt) / 0.9), 0);

@@ -518,3 +518,14 @@ def lowpass_world(x, t0, t1, f0=300, f1=18000):
         F = 2 * np.sin(np.pi * np.minimum(f, SR * 0.2) / SR)
         y[ch, :i1] = _svf(np.ascontiguousarray(seg), F, 1 / 0.7, 0)
     return y
+
+
+def fetal_doppler(dur, bpm=142, vol=0.12):
+    """Fetal heart on a Doppler monitor: fast, wet, whooshing double pulse."""
+    n = T(dur)
+    t = np.arange(n) / SR
+    ph = (t * bpm / 60) % 1.0
+    env = np.exp(-((ph - 0.12) / 0.07) ** 2) + 0.6 * np.exp(-((ph - 0.38) / 0.08) ** 2)
+    body = bp(noise(n), 180, 900) * env
+    gurgle = bp(noise(n), 500, 1600) * (0.3 + 0.7 * lp(np.abs(noise(n)), 12)) * env * 0.4
+    return lp(body + gurgle, 1400) * vol

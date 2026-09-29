@@ -3,16 +3,27 @@
 // light and depth. Dividers are 1 px warm grey hairlines.
 import { el, css, lerp, clamp, E, W, H } from './engine.js';
 
-// Cells for n panels (x, y, w, h in px). Order matters: panel i keeps its identity
-// across layouts so cells can morph.
+// Layouts are built by *splitting*: every step halves each existing cell, and the
+// new panel opens out of the far edge of the cell it splits from. Panel identity is
+// stable across steps, so nothing ever crosses: 1 -> 2 (vertical split), 2 -> 4
+// (horizontal), 4 -> 8 (vertical), 8 -> 16 (horizontal).
+const STEPS = [1, 2, 4, 8, 16];
 export function cells(n) {
-  if (n <= 1) return [[0, 0, W, H]];
-  if (n === 2) return [[0, 0, W / 2, H], [W / 2, 0, W / 2, H]];
-  if (n === 4) return [[0, 0, W / 2, H / 2], [W / 2, 0, W / 2, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]];
-  const cols = n === 8 ? 4 : 4, rows = n === 8 ? 2 : 4;
-  const out = [];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push([c * W / cols, r * H / rows, W / cols, H / rows]);
-  return out;
+  let rects = [[0, 0, W, H]];
+  for (const m of STEPS.slice(1)) {
+    if (m > n) break;
+    const vertical = rects.length === 1 || rects.length === 4;
+    const next = rects.map(r => vertical ? [r[0], r[1], r[2] / 2, r[3]] : [r[0], r[1], r[2], r[3] / 2]);
+    const born = rects.map(r => vertical ? [r[0] + r[2] / 2, r[1], r[2] / 2, r[3]] : [r[0], r[1] + r[3] / 2, r[2], r[3] / 2]);
+    rects = [...next, ...born];
+  }
+  return rects;
+}
+// where a newborn panel starts: zero-size at the far edge of its parent cell
+function birth(nB, i) {
+  const B = cells(nB), half = B.length / 2, parent = i - half;
+  const r = B[i], vertical = half === 1 || half === 4;
+  return vertical ? [r[0] + r[2], r[1], 0, r[3]] : [r[0], r[1] + r[3], r[2], 0];
 }
 
 // panelsRoot: container. makePanel(i, root) builds panel i into a 1920x1080 root.
@@ -34,7 +45,7 @@ export function Grid(parent, count, makePanel) {
       const A = cells(nA), B = cells(nB);
       panels.forEach((P, i) => {
         let a = A[i], b = B[i];
-        if (!a && b) a = [b[0], b[1], 0, b[3]];
+        if (!a && b) a = birth(nB, i);
         if (a && !b) b = [a[0], a[1], 0, a[3]];
         if (!a && !b) { P.cell.style.display = 'none'; return; }
         const r = a.map((v, j) => lerp(v, b[j], k));
@@ -42,8 +53,10 @@ export function Grid(parent, count, makePanel) {
         P.cell.style.display = 'block';
         P.rect = r;
         css(P.cell, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
-        // fit the 16:9 scene into the cell (cover), centred
-        const s = Math.max(r[2] / W, r[3] / H);
+        // the scene keeps the scale of its *final* cell (no squash), centred in the
+        // opening window, so a split reads as a window opening onto another place
+        const sB = Math.max(b[2] / W, b[3] / H), sA = (a[2] > 0 && a[3] > 0) ? Math.max(a[2] / W, a[3] / H) : sB;
+        const s = lerp(sA, sB, k) * (P.zoom || 1);
         css(P.inner, { transform: `translate(${(r[2] - W * s) / 2}px, ${(r[3] - H * s) / 2}px) scale(${s})` });
       });
     },

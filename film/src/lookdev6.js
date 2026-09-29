@@ -6,7 +6,7 @@ const KINDS = ['hospital', 'hotel', 'retail', 'campus', 'stadium', 'corporate', 
 export async function setup(film) {
   film.add({
     id: 'grid', t0: 0, t1: 8,
-    build(root) { this.g = Grid(root, 8, (i, r) => PlaceShot(r, KINDS[i], { slug: false })); },
+    build(root) { this.g = Grid(root, 8, (i, r) => PlaceShot(r, KINDS[i], { slug: false, centre: true, tight: 0.8 })); },
     update(t) {
       let a = 1, b = 2, k = 0;
       if (t < 2) { a = 1; b = 2; k = E.cine(inv(1.0, 2.0, t)); }
