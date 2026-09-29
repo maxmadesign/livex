@@ -14,7 +14,7 @@ export const LINES = [
   [6.8, 2.71, 'human', '…right where my old depot used to be.'],
   [9.6, 0.76, 'lyra', 'May I?'],
   [10.5, 2.75, 'human', 'They built a stadium on my bus depot.', 'dark'],
-  [13.45, 2.12, 'lyra', "Route 7's last stop. I know it.", 'dark'],
+  [13.45, 2.5, 'lyra', "Route 7's last stop. I know it.", 'dark'],
   [21.0, 1.8, 'human', 'Somebody still remembered.'],
   [33.8, 0.68, 'human', 'Gate C?'],
   [34.6, 3.32, 'human', 'Past the clock tower. Follow the scarves.'],
