@@ -106,10 +106,10 @@ sh('ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', 'list.txt'
 
 ovl = get(RAW + 'assets/overlay.webm', 'overlay.webm')
 fc = ('[2:v]format=rgba,fade=t=in:st=51.72:d=0.28:alpha=1,fade=t=out:st=52.0:d=0.06:alpha=1[w];'
-      '[0:v][1:v]overlay=0:0:format=auto[a];[a][w]overlay=0:0:format=auto,noise=alls=4:allf=t,format=yuv420p[v]')
+      '[0:v][1:v]overlay=0:0:format=auto[a];[a][w]overlay=0:0:format=auto,format=yuv420p[v]')
 sh('ffmpeg', '-v', 'error', '-y', '-i', 'base.mp4', '-c:v', 'libvpx-vp9', '-i', ovl,
    '-f', 'lavfi', '-i', f'color=c=white:s={W}x{H}:r={FPS}:d=60', '-filter_complex', fc, '-map', '[v]',
-   '-c:v', 'libx264', '-preset', 'slow', '-crf', '15', '-r', str(FPS), '-t', '60', 'video.mp4')
+   '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-r', str(FPS), '-t', '60', 'video.mp4')
 
 # ------------------------------------------------------------------ sound
 N = SR * 60
@@ -129,12 +129,24 @@ def fftconv(x, h):
     return np.fft.irfft(np.fft.rfft(x, n) * np.fft.rfft(h, n), n)[:len(x) + len(h) - 1]
 
 
+SPEECH_RMS = 0.16   # about -16 dBFS while talking: 6-8 dB over the ducked score
+
+
+def level(x):
+    """Scale a voice line so its speech (the frames above -40 dBFS) sits at SPEECH_RMS."""
+    f = 1200
+    fr = x[:len(x) // f * f].reshape(-1, f)
+    r = np.sqrt((fr ** 2).mean(axis=1))
+    act = r[r > 0.01]
+    return x * (SPEECH_RMS / (np.sqrt((act ** 2).mean()) if len(act) else 1.0))
+
+
 vo = np.zeros(N)
 for v in E['vo']:
     if v['id'] == 'L2' and use_g06:
         continue
     x = decode(get(U['audio'][v['id']], v['id'] + '.mp3'), v['tempo'])
-    x *= 10 ** (v['gain'] / 20)
+    x = level(x) * 10 ** (v['gain'] / 20)
     if v['room']:
         x = fftconv(x, IR)
     a = int(v['at'] * SR)
@@ -145,8 +157,8 @@ if use_g06:
     g = decode('G06.wav')
     src = [c for c in E['clips'] if c['id'] == 'G06'][0]
     a, s0 = int(12.8 * SR), int(src['src'] * SR)
-    seg = g[s0:s0 + int(src['dur'] * SR)]
-    vo[a:a + len(seg)] += seg * 0.9
+    seg = level(g[s0:s0 + int(src['dur'] * SR)]) * 10 ** (-1 / 20)
+    vo[a:a + len(seg)] += seg
 
 # duck the score under the voices: ~ -7 dB while anyone speaks, 40 ms attack, 450 ms release
 env = np.sqrt(np.convolve(vo ** 2, np.ones(int(0.03 * SR)) / int(0.03 * SR), 'same'))
@@ -158,7 +170,7 @@ for i in range(0, N, 48):   # block-rate follower (1 ms)
     g = att * g + (1 - att) * k if k > g else rel * g + (1 - rel) * k
     duck[i:i + 48] = g
 gain = 1 - 0.55 * duck
-mix = score * gain + vo[None, :] * 0.95
+mix = score * gain + vo[None, :]
 
 
 def lufs(x):
@@ -209,7 +221,7 @@ def tp_limit(x, ceil_db=-2.0):
 I0, tp0, lra0 = lufs(mix)
 print(f'pre-norm {I0:.2f} LUFS {tp0:.2f} dBTP LRA {lra0:.1f}')
 gdb = -14.0 - I0
-for it in range(3):
+for it in range(5):
     y = tp_limit(mix * 10 ** (gdb / 20))
     I, TP, LRA = lufs(y)
     print(f'norm pass {it}: {I:.2f} LUFS {TP:.2f} dBTP LRA {LRA:.1f}')
