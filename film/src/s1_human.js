@@ -108,7 +108,7 @@ export const interchange = {
     this.sign = sp.add(sign, { x: 150, y: -300, z: 900, pxPerCm: 2, ox: 0, oy: 0 });
     const sign2 = el('div', 'abs'); sign2.innerHTML = sign.innerHTML.replace('Exit A', 'Exit C').replace('Harbour Plaza', 'Pier Tower');
     sp.add(sign2, { x: -700, y: -310, z: 2100, pxPerCm: 2, ox: 0, oy: 0 });
-    // cool linear ceiling light + floor reflections + the warm Exit B escalator far right
+    // cool linear ceiling light + floor reflections + the warm Exit B moving walkway far right (step-free)
     const ceil = [];
     for (let i = 0; i < 70; i++) ceil.push({ x: -300, y: -440, z: 1300 + i * 45, c: '#eef4ff', i: 0.1 }, { x: 300, y: -440, z: 1300 + i * 45, c: '#eef4ff', i: 0.1 });
     const warm = Array.from({ length: 10 }, () => ({ x: 900 + R() * 300, y: -60 - R() * 300, z: 2600 + R() * 600, c: '#ffc98e', i: 0.9 }));

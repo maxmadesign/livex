@@ -42,7 +42,7 @@ export const meet = {
       const c = el('div', 'abs'); css(c, { width: '80px', height: '900px', background: 'linear-gradient(90deg, #6d6f6c, #a4a49e 45%, #83847f 70%, #4e504e)' });
       sp.add(c, { x: side * 560 + (side < 0 ? -40 : 40), y: 0, z: -300 + i * 600, pxPerCm: 1, ox: 40, oy: 900 });
     }
-    // the Exit B escalator: a warm diagonal of light far right (Lyra's arrow points here)
+    // the Exit B moving walkway (step-free): a warm diagonal of light far right (Lyra's arrow points here)
     const esc = el('div', 'abs');
     css(esc, { width: '900px', height: '80px', background: 'linear-gradient(90deg, rgba(255,190,120,0), rgba(255,205,150,0.95) 30%, rgba(255,214,160,1) 70%, rgba(255,190,120,0.2))', transform: 'rotate(-28deg)', transformOrigin: '0 50%', filter: 'blur(3px)', boxShadow: '0 0 60px 20px rgba(255,180,110,0.35)' });
     this.esc = sp.add(esc, { x: 760, y: -40, z: 2400, pxPerCm: 1, ox: 0, oy: 40 });

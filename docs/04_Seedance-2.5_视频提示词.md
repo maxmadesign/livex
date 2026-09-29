@@ -84,7 +84,7 @@
 | KF-S14-B-START-PLATE · KF-S14-PLATE | J14b 首 / 尾 | 派生（手正抬向砖墙）/ `S14_B.png`（43.8 主帧，手掌已贴砖） | 派生 / 直接 |
 | KF-S14-C-PLATE · -C-END-PLATE · -D1-END | J14c、J14d1 | 派生 | 派生 |
 | KF-S14-BACK | J14d2 尾 | 由 `S14_A_varB.png`（「S14 变体 B」背面）派生：中央标志区改为未点亮的黑色点阵 | 派生 |
-| KF-S15-01-PLATE … KF-S15-05-PLATE | J15-01 / 02 / 03 / 04 / GC | 03「S15 B ①」…「S15 B ⑤」（建议存为 `S15_B_1.png` … `S15_B_5.png`）；①② 纯黑，③④⑤ 浅色底板 | 直接 |
+| KF-S15-01-PLATE … KF-S15-GC-PLATE | J15-01 / 02 / 03 / 04 / GC | 03「S15 B ①」…「S15 B ⑤」（建议存为 `S15_B_1.png` … `S15_B_5.png`）；①② 纯黑，③④⑤ 浅色底板 | 直接 |
 | KF-S15-TN | J15-TN | 派生（03 无） | 派生 |
 | KF-S16-SIT · -SIT-END | J16a | 由 `S16_A.png`（52.4 举纸条主帧）派生：正在坐下、字条未举起 | 派生 |
 | KF-S16-POV | J16b | `S16_A_varA.png`（「S16 变体 A」，林的 POV；原 04 名 KF-S16） | 直接 |
@@ -1062,7 +1062,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 | J15-02 | KF-S15-02-PLATE（03「S15 B ②」，02 · Western Univ）：Quad 草坪边石材步道上的 Paragon（深色模式，屏幕纯黑）位于 Center-Lock 框，雨棚与上下灯箱清晰，背后校舍 2700K 窗灯 | `paragon_front.png` |
 | J15-03 | KF-S15-03-PLATE（03「S15 B ③」，03 · Harbour Hotel）：胡桃木与黄铜大堂，接待台一侧的 Gateway（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框，LED 竖灯条在抛光石材地面拖出倒影；一家三口在前景侧边 | `gateway_front.png` |
 | J15-04 | KF-S15-04-PLATE（03「S15 B ④」，04 · Pier Tower）：胡桃木墙板电梯厅，43 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；玻璃门外 Paragon 的两块白矩形在焦外；加班的女人在画左 | `portal_43.png`、`paragon_front.png` |
-| J15-GC | KF-S15-05-PLATE（03「S15 B ⑤」，→ Gate C）：清水混凝土墙上的 32 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；三辊闸紧贴墙面（离墙 ≤ 0.5 m）排在 Portal 右侧，按 Center-Lock 的取景，墙面在画内只有离地约 0.95–2.2 m，所以**画面下缘只露出闸机顶部与白色状态灯**；陈师傅离镜头约 2 m，从画右走向闸机，在 Portal 右侧（x ≥ 1150）以胸像以上入画，不遮挡屏幕；闸机另一侧的球场内廊在焦外深处：一个挂满与 Stall 4 同款藏青白条围巾的球迷商店摊位（暖色灯泡），旁边两道白色竖光（Gateway 光形），落在 4:5 安全列内，她入画时不把它完全挡住 | `portal_32.png`、CS-CHEN-B、`gateway_front.png` |
+| J15-GC | KF-S15-GC-PLATE（03「S15 B ⑤」，→ Gate C）：清水混凝土墙上的 32 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；三辊闸紧贴墙面（离墙 ≤ 0.5 m）排在 Portal 右侧，按 Center-Lock 的取景，墙面在画内只有离地约 0.95–2.2 m，所以**画面下缘只露出闸机顶部与白色状态灯**；陈师傅离镜头约 2 m，从画右走向闸机，在 Portal 右侧（x ≥ 1150）以胸像以上入画，不遮挡屏幕；闸机另一侧的球场内廊在焦外深处：一个挂满与 Stall 4 同款藏青白条围巾的球迷商店摊位（暖色灯泡），旁边两道白色竖光（Gateway 光形），落在 4:5 安全列内，她入画时不把它完全挡住 | `portal_32.png`、CS-CHEN-B、`gateway_front.png` |
 | J15-TN | KF-S15-TN：看台隧道，尽头是泛光灯下展开的碗形看台（逆光，人群为剪影） | — |
 
 **Duration**：成片 5.0 s（帧 1410–1560），剪辑点全部在整秒：47.0 / 48.0 / 49.0 / 50.0 / 51.0；51.5 闸机咔嗒切隧道。

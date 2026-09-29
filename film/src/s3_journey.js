@@ -47,7 +47,7 @@ export const exitB = {
     this.card.innerHTML = `<div class="eyebrow">Harbour Line · Exit B</div>
       <div style="display:flex;align-items:center;gap:26px;margin-top:14px"><span style="font:500 120px/1 var(--sans);color:#2f5bea">↑</span>
       <div><div style="font:600 54px/1.05 var(--sans);letter-spacing:-.025em">Exit B</div><div style="font:400 32px var(--sans);color:#4a5260;margin-top:8px">Market Hall · 120 m</div></div></div>`;
-    // the escalator going up to warm light, right
+    // the moving walkway going up to warm light, right (no steps)
     const esc = el('div', 'abs');
     css(esc, { width: '1200px', height: '140px', background: 'linear-gradient(90deg, rgba(120,110,100,0.8), rgba(255,210,160,0.9))', transform: 'rotate(-30deg)', transformOrigin: '0 50%', filter: 'blur(6px)' });
     sp.add(esc, { x: 260, y: -10, z: 380, pxPerCm: 1, ox: 0, oy: 70 });
