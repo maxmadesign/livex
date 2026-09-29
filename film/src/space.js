@@ -1,0 +1,87 @@
+// 2.5D camera: layers live at real depths (cm), the camera dollies through them.
+// Screen scale = F / (z - camZ), so a pull-back produces true parallax, and
+// depth-of-field blur is computed from the thin-lens circle of confusion.
+import { el, css, clamp, W, H } from './engine.js';
+import { Device, SCREEN_W, SCREEN_H } from './devices.js';
+
+export class Space {
+  constructor(parent, { F = 1100 } = {}) {
+    this.root = el('div', 'layer', parent);
+    this.F = F; this.layers = [];
+    this.cam = { x: 0, y: 0, z: -400, focus: 400, aperture: 0 };
+  }
+  // el is authored in px at `pxPerCm`; (ox, oy) is the element's own anchor in px
+  add(node, { x = 0, y = 0, z = 0, pxPerCm = 1, ox = 0, oy = 0, dof = true, zIndex } = {}) {
+    if (!node.parentNode) this.root.appendChild(node);
+    css(node, { position: 'absolute', left: '0', top: '0', transformOrigin: '0 0' });
+    const L = { node, x, y, z, pxPerCm, ox, oy, dof };
+    this.layers.push(L);
+    this.layers.sort((a, b) => b.z - a.z);
+    this.layers.forEach((l, i) => { l.node.style.zIndex = l.zIndexFixed ?? i + 1; });
+    return L;
+  }
+  pose(cam) {
+    Object.assign(this.cam, cam);
+    const c = this.cam;
+    for (const L of this.layers) {
+      const d = L.z - c.z;
+      if (d <= 1) { L.node.style.display = 'none'; continue; }
+      L.node.style.display = '';
+      const k = this.F / d;                // screen px per world cm at this depth
+      const s = k / L.pxPerCm;             // css scale of the authored element
+      const sx = W / 2 + (L.x - c.x) * k - L.ox * s;
+      const sy = H / 2 + (L.y - c.y) * k - L.oy * s;
+      L.node.style.transform = `translate(${sx.toFixed(2)}px, ${sy.toFixed(2)}px) scale(${s.toFixed(5)})`;
+      if (L.dof && c.aperture > 0) {
+        // circle of confusion in screen px (thin lens, relative)
+        const coc = c.aperture * Math.abs(1 / c.focus - 1 / d) * this.F;
+        const b = clamp(coc, 0, 60);
+        L.node.style.filter = b > 0.4 ? `blur(${(b / Math.max(s, 0.02)).toFixed(2)}px)` : 'none';
+      } else if (L.dof) L.node.style.filter = 'none';
+    }
+  }
+  // world -> screen for overlays (labels etc.)
+  project(x, y, z) {
+    const c = this.cam, k = this.F / (z - c.z);
+    return [W / 2 + (x - c.x) * k, H / 2 + (y - c.y) * k, k];
+  }
+}
+
+// A device standing in a space: product render + live screen, with contact shadow,
+// floor reflection, screen glow and light spill so it sits *in* the room.
+// World units: cm. y = 0 is the floor, negative is up.
+export function StagedDevice(space, kind, { x = 0, z = 0, reflect = 0.18, glow = 0.35, spill = 0.25, shadow = 0.8 } = {}) {
+  const wrap = el('div', 'abs');
+  const dev = Device(kind, wrap);
+  const { w, h, hCm } = dev.spec;
+  const ppc = h / hCm;
+  // contact shadow (on the floor, under the device)
+  const sh = el('div', 'abs', wrap);
+  css(sh, { left: `${-w * 0.08}px`, top: `${h - 26}px`, width: `${w * 1.16}px`, height: '52px', borderRadius: '50%', background: `radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,${shadow}), rgba(0,0,0,0) 70%)`, filter: 'blur(6px)', zIndex: -1 });
+  // reflection (mirror of the render, faded) — polished floors
+  let refl = null;
+  if (reflect > 0) {
+    refl = el('div', 'abs', wrap);
+    css(refl, { left: '0', top: `${h}px`, width: `${w}px`, height: `${h}px`, transform: 'scaleY(-1)', transformOrigin: '50% 50%', opacity: reflect, filter: 'blur(3px)',
+      WebkitMaskImage: 'linear-gradient(0deg, rgba(0,0,0,0.9), rgba(0,0,0,0) 40%)', maskImage: 'linear-gradient(0deg, rgba(0,0,0,0.9), rgba(0,0,0,0) 40%)' });
+    const ri = el('img', 'abs', refl); ri.src = dev.spec.img; css(ri, { width: `${w}px`, height: `${h}px` });
+  }
+  // screen glow: soft light around the screen quad (the screen is a light source)
+  let glowEl = null;
+  if (dev.screen && glow > 0) {
+    const q = dev.spec.quad;
+    const gx = (q[0][0] + q[1][0]) / 2, gy = (q[0][1] + q[3][1]) / 2, gw = q[1][0] - q[0][0], gh = q[3][1] - q[0][1];
+    glowEl = el('div', 'abs', wrap);
+    css(glowEl, { left: `${gx - gw}px`, top: `${gy - gh * 0.8}px`, width: `${gw * 2}px`, height: `${gh * 1.6}px`, background: 'radial-gradient(50% 50% at 50% 50%, rgba(235,242,255,0.55), rgba(235,242,255,0) 70%)', opacity: glow, mixBlendMode: 'screen', filter: 'blur(30px)', zIndex: -1 });
+    wrap.insertBefore(glowEl, wrap.firstChild);
+  }
+  // floor spill in front of the device
+  let spillEl = null;
+  if (spill > 0) {
+    spillEl = el('div', 'abs', wrap);
+    css(spillEl, { left: `${-w * 0.4}px`, top: `${h - 40}px`, width: `${w * 1.8}px`, height: `${h * 0.28}px`, background: 'radial-gradient(50% 45% at 50% 40%, rgba(230,238,255,0.5), rgba(0,0,0,0) 70%)', opacity: spill, mixBlendMode: 'screen', filter: 'blur(14px)' });
+  }
+  wrap.appendChild(dev.el);
+  const layer = space.add(wrap, { x, y: 0, z, pxPerCm: ppc, ox: w / 2, oy: h });
+  return { ...dev, wrap, layer, refl, glowEl, spillEl, ppc };
+}

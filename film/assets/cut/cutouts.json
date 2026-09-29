@@ -1,0 +1,93 @@
+{
+ "paragon_front": {
+  "sheet": "paragon_sheet.jpg",
+  "sheet_box": [
+   625,
+   60,
+   1074,
+   1040
+  ],
+  "size": [
+   449,
+   980
+  ]
+ },
+ "paragon_back": {
+  "sheet": "paragon_sheet.jpg",
+  "sheet_box": [
+   1343,
+   68,
+   1780,
+   1036
+  ],
+  "size": [
+   437,
+   968
+  ]
+ },
+ "gateway_front": {
+  "sheet": "gateway_sheet.jpg",
+  "sheet_box": [
+   668,
+   97,
+   1180,
+   1045
+  ],
+  "size": [
+   512,
+   948
+  ]
+ },
+ "gateway_back": {
+  "sheet": "gateway_sheet.jpg",
+  "sheet_box": [
+   1215,
+   134,
+   1675,
+   1004
+  ],
+  "size": [
+   460,
+   870
+  ]
+ },
+ "portal_32": {
+  "sheet": "portal_sheet.jpg",
+  "sheet_box": [
+   538,
+   237,
+   869,
+   877
+  ],
+  "size": [
+   331,
+   640
+  ]
+ },
+ "portal_43": {
+  "sheet": "portal_sheet.jpg",
+  "sheet_box": [
+   966,
+   179,
+   1335,
+   916
+  ],
+  "size": [
+   369,
+   737
+  ]
+ },
+ "portal_55": {
+  "sheet": "portal_sheet.jpg",
+  "sheet_box": [
+   1429,
+   97,
+   1834,
+   965
+  ],
+  "size": [
+   405,
+   868
+  ]
+ }
+}

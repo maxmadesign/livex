@@ -1,0 +1,7 @@
+out/stills/
+out/seg/
+out/*.wav
+out/frames/
+node_modules/
+__pycache__/
+*.pyc
