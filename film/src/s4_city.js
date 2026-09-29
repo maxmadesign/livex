@@ -169,7 +169,11 @@ export const gateC = {
     const R = rng(93);
     // the bowl beyond the tunnel: a wall of floodlight
     const fl = Array.from({ length: 40 }, (_, i) => ({ x: -1200 + (i % 10) * 260, y: -500 - Math.floor(i / 10) * 90, z: 3200, c: '#f4f8ff', i: 0.9 }));
-    this.pl = PointLights(root, sp, [...fl, ...reflectLights(fl, 0.3)], { base: 2.4 });
+    // retail, echoed: deep in the concourse a scarf stall's bulbs, and beside it a Gateway's two light strips
+    const stall = Array.from({ length: 7 }, (_, i) => ({ x: 250 + i * 30, y: -200 + 8 * Math.sin(Math.PI * i / 6), z: 1300, c: '#ffcf9a', i: 0.7 }));
+    const strips = Array.from({ length: 56 }, (_, i) => ({ x: i < 28 ? 520 : 620, y: -12 - (i % 28) * 7, z: 1300, c: '#eef3ff', i: 0.16 }));
+    const shop = [...stall, ...strips];
+    this.pl = PointLights(root, sp, [...fl, ...shop, ...reflectLights([...fl, ...shop], 0.3)], { base: 2.4 });
     root.insertBefore(this.pl.el, sp.root);
     // pillar with the Portal 32, turnstiles in front
     const pillar = el('div', 'abs'); css(pillar, { width: '120px', height: '1000px', background: 'linear-gradient(90deg, #22262d, #3a3f48 50%, #1a1d22)' });

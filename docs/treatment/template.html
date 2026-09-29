@@ -124,6 +124,19 @@ details.prompt summary:focus-visible { outline: 2px solid var(--cobalt); outline
 .md blockquote { margin: 0 0 12px; padding-left: 14px; border-left: 2px solid var(--cobalt); color: var(--dim); }
 .tablewrap { overflow-x: auto; }
 .note { font-size: 14px; color: var(--dim); }
+/* collapsible doc sections */
+details.doc { border-top: 1px solid var(--line); }
+details.doc:last-of-type { border-bottom: 1px solid var(--line); }
+details.doc summary { cursor: pointer; padding: 14px 0; font: 500 17px/1.4 var(--sans); list-style: none; display: flex; gap: 12px; align-items: baseline; }
+details.doc summary::-webkit-details-marker { display: none; }
+details.doc summary::before { content: "+"; font: 500 14px var(--mono); color: var(--dim); width: 14px; flex: none; }
+details.doc[open] summary::before { content: "–"; }
+details.doc summary:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+details.doc > .md { padding: 0 0 22px 26px; min-width: 0; }
+.prompts { display: grid; gap: 8px; }
+table.files { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.files td { border-top: 1px solid var(--line); padding: 10px 12px 10px 0; vertical-align: top; }
+table.files code { font: 13px var(--mono); color: var(--warm); white-space: nowrap; }
 footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--line); font: 12px var(--mono); letter-spacing: .08em; color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>

@@ -29,20 +29,55 @@ def esc(s):
     return html.escape(str(s or ''))
 
 
-def split_prompts(name, level=3):
-    """Split a prompt doc into (title, body) blocks on headings of `level`."""
+def split_prompts(name):
+    """Split a prompt doc into (head, [(shot title, body)], tail): one block per `### Sxx` heading."""
     p = os.path.join(DOCS, name)
     if not os.path.exists(p):
-        return '', []
+        return '', [], ''
     src = open(p, encoding='utf-8').read()
-    marker = '\n' + '#' * level + ' '
-    parts = src.split(marker)
-    head = parts[0]
-    blocks = []
-    for part in parts[1:]:
+    shots = list(re.finditer(r'^### (S\d\d.*)$', src, re.M))
+    if not shots:
+        return src, [], ''
+    head, blocks, tail = src[:shots[0].start()], [], ''
+    for i, m in enumerate(shots):
+        end = shots[i + 1].start() if i + 1 < len(shots) else len(src)
+        body = src[m.end():end]
+        cut = re.search(r'^## ', body, re.M)
+        if cut:
+            tail, body = body[cut.start():], body[:cut.start()]
+        blocks.append((m.group(1).strip(), body.strip()))
+    return head, blocks, tail
+
+
+def md_sections(src, open_first=False):
+    """Render markdown as collapsible <details>, one per `## ` section; text before the first one stays open."""
+    parts = re.split(r'^## ', src, flags=re.M)
+    out = []
+    if parts[0].strip():
+        out.append(f'<div class="md">{mdx(re.sub(r"^# .*$", "", parts[0], count=1, flags=re.M))}</div>')
+    for i, part in enumerate(parts[1:]):
         title, _, body = part.partition('\n')
-        blocks.append((title.strip(), body.strip()))
-    return head, blocks
+        if title.strip() in ('目录', 'Contents'):
+            continue
+        out.append(f'<details class="doc"{" open" if open_first and i == 0 else ""}><summary>{esc(title.strip())}</summary><div class="md">{mdx(body)}</div></details>')
+    return ''.join(out)
+
+
+def mdx(src):
+    out = markdown.markdown(src, extensions=['tables', 'fenced_code', 'sane_lists'])
+    return re.sub(r'<table>', '<div class="tablewrap"><table>', out).replace('</table>', '</table></div>')
+
+
+def doc(name):
+    p = os.path.join(DOCS, name)
+    return open(p, encoding='utf-8').read() if os.path.exists(p) else ''
+
+
+DOCLIST = [('00_三个概念与选择.md', '三个概念、评审与选择'), ('01_60秒故事与时间线.md', '60 秒故事、人物与世界设定、时间线、完整分镜表'),
+           ('02_Shot_List.md', '18 镜总览与跨文档索引'), ('03_GPT-image-2.5_分镜提示词.md', '14 张关键帧的中文提示词与负向词'),
+           ('04_Seedance-2.5_视频提示词.md', '逐镜视频提示词、拆段、首尾帧与预算'), ('05_ClaudeCode_Motion_UI_Brief.md', 'Motion Graphic 与屏幕 UI 规范'),
+           ('06_音乐与声音设计.md', '配乐、环境、Foley、UI 音、Sonic Logo 与逐秒 Cue'), ('07_Claude_Code_动态影片说明.md', '这支代码版影片的做法与复现'),
+           ('master.json', '主剧本：所有文档的唯一权威来源')]
 
 
 LADDER = [('PERSON', '一个人，一件真实发生的事'), ('AI', 'Lyra 以人的方式回应'), ('LIVEX', '原来她在一台真实的设备里'),
@@ -99,16 +134,20 @@ def page(video='LiveX_AI_City_60s_web.mp4', poster='stills/poster.jpg', stills_d
 <div><b>声音</b>{esc(s['sound_zh'])}</div><div><b>转场</b>{esc(s['transition_out_zh'])}</div></div></div></div>''')
     out.append(f'<section><div class="eyebrow">分镜表 · Shot List</div><h2>{len(M["shots"])} 个镜头，一条尺度阶梯</h2><p class="note">每一行左侧的画面取自代码版影片的对应时刻；文字是实拍 / 生成版的主剧本。</p><div class="shots">{"".join(rows)}</div></section>')
     # prompts
-    for name, title, eb in [('03_GPT-image-2.5_分镜提示词.md', 'GPT-image-2.5 分镜提示词', 'Storyboard'), ('04_Seedance-2.5_视频提示词.md', 'Seedance 2.5 视频提示词', 'Video')]:
-        head, blocks = split_prompts(name)
+    for name, title, eb, lead in [('03_GPT-image-2.5_分镜提示词.md', 'GPT-image-2.5 分镜提示词', 'Storyboard', '14 张关键帧，每张一条可直接粘贴的中文提示词，末尾带负向词与生成后检查清单。先读使用方法与全局前缀。'),
+                                  ('04_Seedance-2.5_视频提示词.md', 'Seedance 2.5 视频提示词', 'Video', '18 个镜头的视频提示词：时长、摄影机、动作、产品位置、Lyra、UI、光线、首尾帧、连续性与负向词。先读生成与剪辑策略。')]:
+        head, blocks, tail = split_prompts(name)
         items = ''.join(f'<details class="prompt"><summary><h3>{esc(t)}</h3></summary><div class="body"><pre>{esc(b)}</pre><button class="copy" type="button">复制提示词</button></div></details>' for t, b in blocks)
-        out.append(f'<section><div class="eyebrow">{eb}</div><h2>{title}</h2><div class="read md">{markdown.markdown(head, extensions=["tables"])}</div>{items}</section>')
+        out.append(f'<section><div class="eyebrow">{eb}</div><h2>{title}</h2><p class="note read">{lead}</p>{md_sections(head)}<div class="prompts">{items}</div>{md_sections(tail)}</section>')
     # system + sound
     out.append(f'<section><div class="eyebrow">Claude Code · Motion / UI</div><h2>一套系统，所有节点</h2><div class="stills">' +
                ''.join(f'<img src="{stills_dir}/{n}" alt="" loading="lazy">' for n in ('ui_a.jpg', 'ui_b.jpg', 'ui_c.jpg')) +
-               f'</div><div class="md">{md("05_ClaudeCode_Motion_UI_Brief.md")}</div></section>')
-    out.append(f'<section><div class="eyebrow">Music + Sound</div><h2>从小调到大调：孤独到连接</h2><div class="md">{md("06_音乐与声音设计.md")}</div></section>')
-    out.append(f'<section><div class="eyebrow">Code Film</div><h2>这支片的代码版</h2><div class="md">{md("07_Claude_Code_动态影片说明.md")}</div></section>')
+               f'</div>{md_sections(doc("05_ClaudeCode_Motion_UI_Brief.md"))}</section>')
+    out.append(f'<section><div class="eyebrow">Music + Sound</div><h2>从小调到大调：孤独到连接</h2>{md_sections(doc("06_音乐与声音设计.md"))}</section>')
+    out.append(f'<section><div class="eyebrow">Code Film</div><h2>这支片的代码版</h2>{md_sections(doc("07_Claude_Code_动态影片说明.md"), open_first=True)}</section>')
+    out.append('<section><div class="eyebrow">Files</div><h2>整套文件</h2><div class="tablewrap"><table class="files"><tbody>' +
+               ''.join(f'<tr><td><code>docs/{esc(f)}</code></td><td>{esc(d)}</td></tr>' for f, d in DOCLIST) +
+               '<tr><td><code>film/</code></td><td>影片的全部代码：画面引擎、五幕场景、Lyra OS、合成器与总谱</td></tr></tbody></table></div></section>')
     out.append('<footer>LiveX AI City · 概念、导演 Treatment、分镜、提示词、动态影片（画面 / UI / 动效 / 声音）全部由 Claude 生成；影片每一帧与每一个声音都由代码渲染。</footer></div>')
     out.append('''<script>
 document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', () => {
