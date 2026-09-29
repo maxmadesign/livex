@@ -14,7 +14,8 @@ export function LyraScreen(screen, { mode = 'light', photo = 'white', place = ''
   if (mode === 'dark') css(bg, { background: 'radial-gradient(120% 70% at 50% 35%, #1a2030 0%, #07090d 70%)' });
   // Lyra stands on the screen. The cutout lets her step back and make room for an
   // answer without revealing a photo edge; a soft floor shadow grounds her.
-  const lyra = el('div', 'layer', os);
+  const slideWrap = el('div', 'layer', os);
+  const lyra = el('div', 'layer', slideWrap);
   css(lyra, { transformOrigin: '540px 150px' });
   const shadowEl = el('div', 'abs', lyra);
   css(shadowEl, { left: '330px', top: '1840px', width: '420px', height: '60px', borderRadius: '50%', background: mode === 'dark' ? 'radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,0.5), rgba(0,0,0,0))' : 'radial-gradient(50% 50% at 50% 50%, rgba(20,24,32,0.22), rgba(20,24,32,0))', filter: 'blur(6px)' });
@@ -30,6 +31,13 @@ export function LyraScreen(screen, { mode = 'light', photo = 'white', place = ''
     os, bg, photo: ph, lyra, status, content, dot,
     // k = 0: Lyra full height, face to face. k = 1: she steps back (x0.64) and the lower
     // 40% of the screen belongs to the answer.
+    // the Handoff: Lyra leaves one screen through its edge (dx in canvas px), with a
+    // horizontal motion blur while she moves fast
+    slide(dx, blur = 0) {
+      slideWrap.style.transform = `translateX(${dx}px)`;
+      slideWrap.style.filter = blur > 0.05 ? 'url(#mblur2)' : 'none';
+      slideWrap.style.opacity = 1 - Math.min(1, Math.abs(dx) / 1400) * 0.4;
+    },
     makeRoom(k, side = 0) {
       const s = 1 - 0.36 * k;
       lyra.style.transform = `translate(${side * 150 * k}px, ${-10 * k}px) scale(${s})`;

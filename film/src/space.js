@@ -7,12 +7,13 @@ import { Device, SCREEN_W, SCREEN_H } from './devices.js';
 export class Space {
   constructor(parent, { F = 1100 } = {}) {
     this.root = el('div', 'layer', parent);
+    css(this.root, { isolation: 'isolate', zIndex: 0 });   // keep layer z-indices inside the space
     this.F = F; this.layers = [];
     this.cam = { x: 0, y: 0, z: -400, focus: 400, aperture: 0 };
   }
   // el is authored in px at `pxPerCm`; (ox, oy) is the element's own anchor in px
   add(node, { x = 0, y = 0, z = 0, pxPerCm = 1, ox = 0, oy = 0, dof = true, zIndex } = {}) {
-    if (!node.parentNode) this.root.appendChild(node);
+    if (node.parentNode !== this.root) this.root.appendChild(node);
     css(node, { position: 'absolute', left: '0', top: '0', transformOrigin: '0 0' });
     const L = { node, x, y, z, pxPerCm, ox, oy, dof };
     this.layers.push(L);
@@ -105,4 +106,13 @@ export function frameScreen(space, dev, { cx = W / 2, cy = H / 2, hPx = 700 } = 
   const X = L.x + (qcx - w / 2) / ppc, Y = L.y - (h - qcy) / ppc, hcm = qh / ppc;
   const k = hPx / hcm;
   return { x: X - (cx - W / 2) / k, y: Y - (cy - H / 2) / k, z: L.z - space.F / k, focus: space.F / k };
+}
+
+// World position (cm) of a point on a staged device's screen canvas (u, v in 1080x1920).
+import { quadMap } from './engine.js';
+export function screenWorld(dev, u, v) {
+  const map = dev._map || (dev._map = quadMap(1080, 1920, dev.spec.quad));
+  const [px, py] = map(u, v);
+  const L = dev.layer, { w, h } = dev.spec;
+  return { x: L.x + (px - w / 2) / dev.ppc, y: L.y - (h - py) / dev.ppc, z: L.z };
 }

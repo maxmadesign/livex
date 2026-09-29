@@ -89,3 +89,24 @@ export function City(root, { seed = 7, nodes = 420, featured = [] } = {}) {
   };
   return self;
 }
+
+// Draw the stadium onto the city light map: a floodlit bowl with a green pitch.
+export function drawStadium(city, x, y, { rx = 150, ry = 110, a = -0.35 } = {}) {
+  // a real bowl at night from altitude: dark translucent roof ring with a lit inner edge,
+  // warm stands, and a floodlit pitch (the brightest green in the city, but not a sticker)
+  const g = city.canvas.getContext('2d'), R = rng(99);
+  g.save(); g.translate(x, y); g.rotate(a);
+  g.fillStyle = '#05070a'; g.beginPath(); g.ellipse(0, 0, rx * 1.32, ry * 1.36, 0, 0, 7); g.fill();
+  const pitch = g.createRadialGradient(0, 0, 0, 0, 0, rx * 0.7);
+  pitch.addColorStop(0, '#4b6b52'); pitch.addColorStop(1, '#1b2e22');
+  g.fillStyle = pitch; g.fillRect(-rx * 0.6, -ry * 0.52, rx * 1.2, ry * 1.04);
+  g.strokeStyle = 'rgba(235,245,235,0.3)'; g.lineWidth = 1; g.strokeRect(-rx * 0.56, -ry * 0.47, rx * 1.12, ry * 0.94);
+  g.beginPath(); g.moveTo(0, -ry * 0.47); g.lineTo(0, ry * 0.47); g.stroke(); g.beginPath(); g.arc(0, 0, ry * 0.14, 0, 7); g.stroke();
+  for (let k = 0; k < 1400; k++) { const t = R() * 7, r = 0.74 + R() * 0.3; g.fillStyle = `rgba(255,${200 + R() * 40 | 0},150,${0.15 + R() * 0.35})`; g.fillRect(Math.cos(t) * rx * r, Math.sin(t) * ry * r * 1.04, 1.3, 1.3); }
+  g.globalCompositeOperation = 'lighter';
+  g.strokeStyle = 'rgba(225,235,255,0.55)'; g.lineWidth = 2.5; g.beginPath(); g.ellipse(0, 0, rx * 1.05, ry * 1.09, 0, 0, 7); g.stroke();
+  g.strokeStyle = 'rgba(200,215,255,0.10)'; g.lineWidth = 22; g.beginPath(); g.ellipse(0, 0, rx * 1.05, ry * 1.09, 0, 0, 7); g.stroke();
+  const fl = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.1); fl.addColorStop(0, 'rgba(210,235,215,0.22)'); fl.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fl; g.beginPath(); g.ellipse(0, 0, rx * 1.1, ry * 1.1, 0, 0, 7); g.fill();
+  g.restore();
+}

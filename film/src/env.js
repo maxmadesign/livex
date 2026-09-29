@@ -207,7 +207,8 @@ export function PointLights(parent, space, points, { base = 3, gain = 1, maxCoc 
         const coc = Math.min(maxCoc, (c.aperture || 0) * Math.abs(1 / (c.focus || d) - 1 / d) * space.F);
         const r = Math.max(base * Math.sqrt(k), 0.8) + coc;
         if (sx < -r || sx > W + r || sy < -r || sy > H + r) continue;
-        const I = (p.i ?? 1) * gain * fade * (p.flicker ? 1 - p.flicker * noise1(t * 3 + p.x, 9) : 1);
+        const I = (p.i ?? 1) * gain * fade * (p.flicker ? 1 - p.flicker * noise1(t * 3 + p.x, 9) : 1) * (p.on != null ? clamp((t - p.on) / 0.1) : 1);
+        if (I <= 0.001) continue;
         const a = clamp(I * Math.min(1, (14 / r) ** 1.05));
         g.globalAlpha = a;
         g.drawImage(tinted(sprite, p.c || '#ffe2c0'), sx - r, sy - r, r * 2, r * 2);

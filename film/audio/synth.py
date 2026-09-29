@@ -92,6 +92,8 @@ def svf_sweep(x, f_start, f_end, q=0.7, mode='lp'):
     n = len(x)
     f = f_start * (f_end / f_start) ** (np.arange(n) / max(n - 1, 1))
     F = 2 * np.sin(np.pi * np.minimum(f, SR * 0.2) / SR)
+    kq = 1.0 / q
+    F = np.minimum(F, 0.9 * (np.sqrt(kq * kq + 4) - kq))   # Chamberlin stability bound
     return _svf(np.ascontiguousarray(x, dtype=np.float64), F, 1.0 / q, {'lp': 0, 'bp': 1, 'hp': 2}[mode])
 
 
@@ -506,18 +508,13 @@ def page_flip(vol=0.08):
 
 
 def lowpass_world(x, t0, t1, f0=300, f1=18000):
-    """'Clarity is belonging': open a low-pass on a bus from f0 to f1 between t0-t1."""
-    i0, i1 = T(t0), T(t1)
-    y = x.copy()
-    for ch in range(2):
-        seg = x[ch, :i1]
-        n = len(seg)
-        f = np.full(n, f0, dtype=float)
-        ramp = np.clip((np.arange(n) - i0) / max(i1 - i0, 1), 0, 1)
-        f = f0 * (f1 / f0) ** ramp
-        F = 2 * np.sin(np.pi * np.minimum(f, SR * 0.2) / SR)
-        y[ch, :i1] = _svf(np.ascontiguousarray(seg), F, 1 / 0.7, 0)
-    return y
+    """'The doors open': crossfade a low-passed (muffled) version into the full band
+    between t0 and t1 (stable; no time-varying filter blow-ups)."""
+    muff = lp(lp(x, f0), f0 * 1.4)
+    n = x.shape[-1]
+    k = np.clip((np.arange(n) / SR - t0) / max(t1 - t0, 1e-3), 0, 1)
+    k = k * k * (3 - 2 * k)
+    return muff * (1 - k) + x * k
 
 
 def fetal_doppler(dur, bpm=142, vol=0.12):
@@ -529,3 +526,157 @@ def fetal_doppler(dur, bpm=142, vol=0.12):
     body = bp(noise(n), 180, 900) * env
     gurgle = bp(noise(n), 500, 1600) * (0.3 + 0.7 * lp(np.abs(noise(n)), 12)) * env * 0.4
     return lp(body + gurgle, 1400) * vol
+
+
+# ------------------------------------------------------------------ Route 7 instruments
+def bell(f=1318.5, vol=0.2, dur=2.2, ratios=(1.0, 2.76, 5.40, 8.93), metal=1.0):
+    """1980s bus stop bell: struck bar, inharmonic partials, fast attack."""
+    n = T(dur)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for k, r in enumerate(ratios):
+        a = [1.0, 0.55, 0.28, 0.12][k] * (metal if k else 1)
+        y += a * np.sin(2 * np.pi * f * r * t + k) * np.exp(-t / ([1.1, 0.5, 0.22, 0.1][k] * dur / 2.2))
+    click = hp(noise(T(0.004)), 3000) * 0.3
+    y[:len(click)] += click
+    return y * env_adsr(n, 0.001, 0.02, 1, 0.2) * vol
+
+
+@njit(cache=True)
+def _ks(n, period, burst, decay):
+    y = np.zeros(n)
+    buf = burst.copy()
+    L = len(buf)
+    i = 0
+    for k in range(n):
+        v = buf[i]
+        y[k] = v
+        nxt = buf[(i + 1) % L]
+        buf[i] = decay * 0.5 * (v + nxt)
+        i = (i + 1) % L
+    return y
+
+
+def upright(freq, dur=1.2, vol=0.3, bright=0.5):
+    """Plucked upright bass (Karplus-Strong), woody and short."""
+    period = int(SR / freq)
+    burst = lp(noise(period), 300 + 1800 * bright)
+    burst = burst / (np.abs(burst).max() + 1e-9)
+    y = _ks(T(dur), period, burst, 0.996)
+    y = lp(y, 900) * env_adsr(T(dur), 0.002, 0.1, 0.9, 0.25)
+    return np.tanh(y * 1.5) * vol
+
+
+def brush(vol=0.08, dur=0.35):
+    n = T(dur)
+    e = np.minimum(1, np.linspace(0, 1, n) * 8) * np.exp(-np.linspace(0, 1, n) * 4)
+    return bp(noise(n), 1800, 9000) * e * vol
+
+
+def crowd_clap(vol=0.25, people=28, seed=0):
+    r = np.random.default_rng(seed)
+    y = np.zeros(T(0.35))
+    for p in range(people):
+        c = bp(r.standard_normal(T(0.05)), 700 + r.uniform(0, 900), 4000 + r.uniform(0, 3000)) * expdecay(T(0.05), 0.008)
+        i = int(abs(r.normal(0, 0.012)) * SR)
+        y[i:i + len(c)] += c * r.uniform(0.4, 1)
+    return y / people ** 0.5 * vol
+
+
+def hum(freq, dur, vol=0.08):
+    """A hummed note: nasal 'mm' — few harmonics, gentle vibrato, low formant."""
+    n = T(dur)
+    t = np.arange(n) / SR
+    vib = 1 + 0.004 * np.sin(2 * np.pi * 5.2 * t) * np.minimum(1, t / 0.4)
+    ph = 2 * np.pi * np.cumsum(freq * vib) / SR
+    y = np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.12 * np.sin(3 * ph) + 0.05 * np.sin(4 * ph)
+    y = lp(y, 900) + bp(pink(n), 200, 600) * 0.02
+    return y * env_adsr(n, 0.12, 0.1, 0.9, 0.35) * vol
+
+
+def choir_muffled(dur, vol=0.1, notes=('E3', 'B3', 'E4', 'G4')):
+    n = T(dur)
+    t = np.arange(n) / SR
+    y = np.zeros(n)
+    for j, nt in enumerate(notes):
+        for v in range(5):
+            f = note(nt) * (1 + (v - 2) * 0.004)
+            vib = 1 + 0.006 * np.sin(2 * np.pi * (4.5 + v * 0.3) * t + v)
+            y += saw(1, n) * 0 + np.sin(2 * np.pi * np.cumsum(f * vib) / SR) * 0.6 + 0.3 * np.sin(4 * np.pi * np.cumsum(f * vib) / SR)
+    y += crowd(dur, 0.8, seed=31)
+    return y / np.abs(y).max() * vol
+
+
+def ratchet(dur=0.8, rate=38, vol=0.1):
+    """Roller-blind drum / split-flap ratchet: fast mechanical clicks."""
+    n = T(dur)
+    y = np.zeros(n)
+    k = 0.0
+    while k < dur:
+        i = T(k)
+        c = bp(noise(T(0.008)), 1500, 6000) * expdecay(T(0.008), 0.0015)
+        m = min(len(c), n - i)
+        if m > 0:
+            y[i:i + m] += c[:m]
+        k += 1 / rate
+    return y * vol
+
+
+def flap(vol=0.14):
+    n = T(0.05)
+    return (bp(noise(n), 2000, 7000) * expdecay(n, 0.004) + np.sin(2 * np.pi * 900 * np.arange(n) / SR) * expdecay(n, 0.006) * 0.3) * vol
+
+
+def clack(vol=0.3):
+    n = T(0.25)
+    t = np.arange(n) / SR
+    return (bp(noise(n), 400, 3000) * expdecay(n, 0.02) + np.sin(2 * np.pi * 95 * t) * expdecay(n, 0.05) * 0.8) * vol
+
+
+def buzz(dur=0.5, vol=0.08):
+    n = T(dur)
+    t = np.arange(n) / SR
+    return np.sign(np.sin(2 * np.pi * 150 * t)) * 0.3 * lp(noise(n), 60) * 0 + np.sin(2 * np.pi * 150 * t) * (0.5 + 0.5 * np.sign(np.sin(2 * np.pi * 7 * t))) * vol
+
+
+def snap_shut(vol=0.4):
+    n = T(0.2)
+    t = np.arange(n) / SR
+    return (hp(noise(n), 1500) * expdecay(n, 0.006) + np.sin(2 * np.pi * 160 * t) * expdecay(n, 0.03)) * vol
+
+
+def tape_hiss(dur, vol=0.03):
+    return hp(noise(T(dur)), 4000) * vol
+
+
+def diesel(dur, vol=0.12):
+    n = T(dur)
+    t = np.arange(n) / SR
+    fir = 24
+    y = sum(np.sin(2 * np.pi * fir * h * t + h) / h for h in range(1, 9))
+    y *= 0.6 + 0.4 * np.maximum(0, np.sin(2 * np.pi * fir / 2 * t)) ** 2
+    return lp(y + lp(noise(n), 200) * 0.5, 500) * vol
+
+
+def rail_clacks(dur, vol=0.12, period=0.92):
+    y = np.zeros(T(dur))
+    k = 0.2
+    while k < dur:
+        for d in (0.0, 0.11):
+            i = T(k + d)
+            c = clack(1.0)[:T(0.12)] * 0.5
+            m = min(len(c), len(y) - i)
+            if m > 0:
+                y[i:i + m] += c[:m]
+        k += period
+    return lp(y, 2500) * vol
+
+
+def steel_rain(dur, vol=0.05, density=900):
+    n = T(dur)
+    y = np.zeros(n)
+    for _ in range(int(dur * density)):
+        i = rng.integers(0, n - 200)
+        f = rng.uniform(3000, 9000)
+        y[i:i + 200] += np.sin(2 * np.pi * f * np.arange(200) / SR) * expdecay(200, 0.0012) * rng.uniform(0.2, 1)
+    return y * vol + rain_bed(dur, vol * 0.8)

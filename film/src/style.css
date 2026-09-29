@@ -108,3 +108,23 @@ canvas.fill { position: absolute; inset: 0; width: 1920px; height: 1080px; }
 .vignette { background: radial-gradient(120% 90% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.42) 100%); }
 .grain { mix-blend-mode: overlay; opacity: 0.16; image-rendering: pixelated; }
 .flash { background: #fff; opacity: 0; mix-blend-mode: screen; }
+
+/* ---------------------------------------------------------------- Route 7 */
+@font-face { font-family: 'Nanum Pen'; src: url('../assets/fonts/NanumPen.woff2') format('woff2'); }
+@font-face { font-family: 'Reenie'; src: url('../assets/fonts/ReenieBeanie.woff2') format('woff2'); }
+@font-face { font-family: 'Long Cang'; src: url('../assets/fonts/LongCang_sub.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Cond'; src: url('../assets/fonts/BarlowCondensed700.woff2') format('woff2'); font-weight: 700; }
+:root { --scarf: #c8372d; --pencil: #3b3b40; --paper: #f1ece1; --hand: 'Nanum Pen', 'Long Cang', cursive; }
+
+.stop { position: absolute; left: 96px; top: 912px; display: flex; flex-direction: column; gap: 6px; padding: 12px 18px 12px 16px; background: rgba(38,40,44,0.86); color: #fff; font-family: var(--mono); border-radius: 3px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); backdrop-filter: blur(8px); }
+.stop .main { font-size: 21px; letter-spacing: 0.08em; display: flex; gap: 12px; align-items: baseline; white-space: nowrap; }
+.stop .no { font-weight: 500; }
+.stop .sub { font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.55); white-space: nowrap; }
+.stop::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: rgba(255,255,255,0.9); border-radius: 3px 0 0 3px; }
+
+.sub-human, .sub-lyra { position: absolute; left: 50%; top: 858px; transform: translateX(-50%); white-space: nowrap; text-align: center; color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,0.55); }
+.sub-human { font-family: var(--serif); font-style: italic; font-size: 50px; letter-spacing: -0.005em; }
+.sub-lyra { font-family: var(--sans); font-weight: 500; font-size: 40px; letter-spacing: -0.015em; }
+.sub-lyra .w, .sub-human .w { display: inline-block; white-space: pre; }
+
+.year { position: absolute; font-family: var(--mono); font-size: 20px; letter-spacing: 0.2em; color: rgba(255,255,255,0.8); }

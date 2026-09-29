@@ -137,3 +137,34 @@ export async function imagesReady(root = document) {
 export function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
+
+// Monotone cubic interpolation (Fritsch–Carlson) through [[t, v], ...]: smooth camera
+// paths that pass exactly through every milestone without overshoot or stops.
+export function spline(t, keys) {
+  const n = keys.length;
+  if (t <= keys[0][0]) return keys[0][1];
+  if (t >= keys[n - 1][0]) return keys[n - 1][1];
+  const xs = keys.map(k => k[0]), ys = keys.map(k => k[1]);
+  const d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+  m.push(d[0]);
+  for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+  m.push(d[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); m[i] = k * a * d[i]; m[i + 1] = k * b * d[i]; }
+  }
+  let i = 0; while (t > xs[i + 1]) i++;
+  const h = xs[i + 1] - xs[i], u = (t - xs[i]) / h;
+  const h00 = 2 * u ** 3 - 3 * u ** 2 + 1, h10 = u ** 3 - 2 * u ** 2 + u, h01 = -2 * u ** 3 + 3 * u ** 2, h11 = u ** 3 - u ** 2;
+  return h00 * ys[i] + h10 * h * m[i] + h01 * ys[i + 1] + h11 * h * m[i + 1];
+}
+
+// Homography as a point mapper: rect (0,0,w,h) -> quad; returns (u, v) => [x, y].
+export function quadMap(w, h, q) {
+  const s = quadMatrix(w, h, q).match(/matrix3d\((.*)\)/)[1].split(',').map(Number);
+  // matrix3d(a, d, 0, g, b, e, 0, h, 0, 0, 1, 0, c, f, 0, 1)
+  const [a, d, , g, b, e, , hh, , , , , c, f] = s;
+  return (u, v) => { const W_ = g * u + hh * v + 1; return [(a * u + b * v + c) / W_, (d * u + e * v + f) / W_]; };
+}

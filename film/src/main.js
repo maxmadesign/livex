@@ -8,6 +8,11 @@ const entry = params.get('entry') || 'film';
 
 window.__ready = (async () => {
   const stage = document.getElementById('stage');
+  // shared SVG filters: directional motion blur (long-exposure crowds, handoffs)
+  document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute"><defs>
+    <filter id="mblur" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="46 3"/></filter>
+    <filter id="mblur2" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="90 2"/></filter>
+  </defs></svg>`);
   const film = new Film(stage, { fps: 30, duration: 60 });
   const mod = await import(`./${entry}.js`);
   await mod.setup(film);
