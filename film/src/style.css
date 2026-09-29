@@ -92,7 +92,7 @@ canvas.fill { position: absolute; inset: 0; width: 1920px; height: 1080px; }
   font-size: 44px; line-height: 1.22; font-weight: 500; letter-spacing: -0.02em; color: var(--ui-ink);
 }
 .caption .w { display: inline-block; white-space: pre; }
-.dark .caption { color: #fff; }
+.dark .caption { color: #fff; background: rgba(18,22,30,0.6) !important; border-color: rgba(255,255,255,0.14) !important; }
 
 .wave { position: absolute; left: 50%; width: 360px; height: 90px; margin-left: -180px; }
 

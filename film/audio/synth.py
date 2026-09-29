@@ -416,3 +416,105 @@ def limiter(x, ceiling=0.93, look=0.004, release=0.08):
     pk = maximum_filter1d(peak, size=T(look) * 2 + 1)
     need = np.minimum(1.0, ceiling / np.maximum(pk, 1e-9))
     return x * _release(need, np.exp(-1 / (release * SR)))
+
+
+# ------------------------------------------------------------------ place sounds (foley / ambience)
+def elevator_ding(vol=0.18, f=1318.5):
+    n = T(1.6)
+    t = np.arange(n) / SR
+    y = (np.sin(2 * np.pi * f * t) + 0.35 * np.sin(2 * np.pi * f * 2.76 * t) * np.exp(-t / 0.2)) * np.exp(-t / 0.55)
+    return y * vol
+
+
+def pa_chime(vol=0.14, notes=('C5', 'E5', 'G5')):
+    """Three-tone public-address chime (airport / hospital)."""
+    y = np.zeros(T(2.4))
+    for i, n in enumerate(notes):
+        s = glass(note(n), 1.6, 0.5, bright=0.3)
+        i0 = T(i * 0.42)
+        y[i0:i0 + len(s)] += s[:len(y) - i0]
+    return y * vol * 4
+
+
+def suitcase(dur=2.0, vol=0.05):
+    n = T(dur)
+    t = np.arange(n) / SR
+    clicks = np.zeros(n)
+    for k in np.arange(0, dur, 0.105):
+        i = T(k + rng.uniform(-0.004, 0.004))
+        if i < n - 200:
+            clicks[i:i + 200] += bp(noise(200), 600, 3000) * expdecay(200, 0.002)
+    rumble = lp(noise(n), 220) * 0.6
+    return (clicks + rumble) * vol * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 0.4
+
+
+def monitor_beep(vol=0.06, f=880):
+    n = T(0.12)
+    t = np.arange(n) / SR
+    return np.sin(2 * np.pi * f * t) * env_adsr(n, 0.005, 0.02, 0.8, 0.04) * vol
+
+
+def auto_door(dur=1.2, vol=0.08):
+    n = T(dur)
+    x = svf_sweep(noise(n), 300, 1200, q=0.9, mode='bp')
+    e = np.sin(np.pi * np.linspace(0, 1, n)) ** 1.5
+    return x * e * vol
+
+
+def rain_bed(dur, vol=0.05):
+    n = T(dur)
+    base = hp(pink(n), 1200) * 0.7
+    drops = np.zeros(n)
+    for _ in range(int(dur * 180)):
+        i = rng.integers(0, n - 300)
+        drops[i:i + 300] += bp(noise(300), 2500, 9000) * expdecay(300, 0.001) * rng.uniform(0.2, 1)
+    return (base + drops) * vol
+
+
+def wind_bed(dur, vol=0.04):
+    n = T(dur)
+    return svf_sweep(pink(n), 250, 700, q=1.5, mode='bp') * (0.6 + 0.4 * np.sin(np.linspace(0, 3.3, n))) * vol
+
+
+def cheer(dur=3.0, vol=0.12):
+    n = T(dur)
+    y = crowd(dur, 1.0, seed=21) + bp(noise(n), 1500, 6000) * 0.25
+    e = np.minimum(1, np.linspace(0, 1, n) * 4) * np.exp(-np.linspace(0, 1, n) * 1.2)
+    return y * e * vol
+
+
+def bus_bell(vol=0.16):
+    n = T(0.9)
+    t = np.arange(n) / SR
+    y = sum(np.sin(2 * np.pi * f * t) * a for f, a in ((1450, 1), (2310, 0.5), (3920, 0.25))) * np.exp(-t / 0.25)
+    return y * vol
+
+
+def heartbeat(vol=0.3):
+    a = kick(1.0, pitch=(70, 38), tau=0.12, click=0.0)
+    b = kick(0.7, pitch=(65, 36), tau=0.12, click=0.0)
+    y = np.zeros(T(0.9))
+    y[:len(a)] += a[:len(y)]
+    i = T(0.22)
+    y[i:i + len(b)] += b[:len(y) - i]
+    return lp(y, 140) * vol
+
+
+def page_flip(vol=0.08):
+    n = T(0.35)
+    return bp(noise(n), 1500, 8000) * (np.sin(np.pi * np.linspace(0, 1, n)) ** 3) * vol
+
+
+def lowpass_world(x, t0, t1, f0=300, f1=18000):
+    """'Clarity is belonging': open a low-pass on a bus from f0 to f1 between t0-t1."""
+    i0, i1 = T(t0), T(t1)
+    y = x.copy()
+    for ch in range(2):
+        seg = x[ch, :i1]
+        n = len(seg)
+        f = np.full(n, f0, dtype=float)
+        ramp = np.clip((np.arange(n) - i0) / max(i1 - i0, 1), 0, 1)
+        f = f0 * (f1 / f0) ** ramp
+        F = 2 * np.sin(np.pi * np.minimum(f, SR * 0.2) / SR)
+        y[ch, :i1] = _svf(np.ascontiguousarray(seg), F, 1 / 0.7, 0)
+    return y

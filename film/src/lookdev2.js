@@ -13,7 +13,7 @@ export async function setup(film) {
       // lights: two rows of ceiling downlights receding, a warm pendant cluster, the city through glass
       const R = rng(4);
       const ceil = lightGrid({ x0: -700, x1: 700, z0: 150, z1: 2600, nx: 5, nz: 9, y: -360, c: '#ffd9a8', i: 0.9 });
-      const pend = Array.from({ length: 7 }, (_, i) => ({ x: -520 + R() * 160, y: -220 - R() * 90, z: 420 + R() * 120, c: '#ffc27a', i: 1.2 }));
+      const pend = Array.from({ length: 5 }, (_, i) => ({ x: -620 + R() * 200, y: -240 - R() * 90, z: 900 + R() * 200, c: '#ffc27a', i: 0.7 }));
       const city = Array.from({ length: 160 }, () => ({ x: -2600 + R() * 5200, y: -40 - R() * 700, z: 3200 + R() * 1500, c: R() < 0.7 ? '#ffcf9a' : '#dfe8ff', i: 0.5 + R() * 0.6 }));
       const lights = [...ceil, ...pend, ...city];
       this.pl = PointLights(root, this.sp, [...lights, ...reflectLights(ceil, 0.25), ...reflectLights(pend, 0.3)], { base: 2.4 });
@@ -22,10 +22,9 @@ export async function setup(film) {
       this.ui = LyraScreen(this.dev.screen, { place: 'Aurelia · Lobby', clock: '18:42' });
       this.cap = Caption(this.ui.content, 'Welcome back, Mia.', { top: 1060 });
       const hero = el('div', 'abs');
-      hero.innerHTML = `<svg viewBox="0 0 60 168" width="300" height="840" style="filter:drop-shadow(0 0 3px rgba(235,240,255,.45))"><g fill="#060504">
-        <path d="M30 2 C21 2 17 9 17 18 C17 26 18 33 16 44 C15 52 13 60 12 66 L48 66 C47 60 45 52 44 44 C42 33 43 26 43 18 C43 9 39 2 30 2 Z"/>
-        <path d="M13 40 C6 43 3 50 3 60 L1 104 L6 106 L9 70 L10 104 L12 168 L27 168 L29 110 L31 110 L33 168 L48 168 L50 104 L51 70 L54 106 L59 104 L57 60 C57 50 54 43 47 40 Z"/></g></svg>`;
-      this.sp.add(hero, { x: -58, y: 0, z: -95, pxPerCm: 5, ox: 150, oy: 840 });
+      hero.innerHTML = `<img src="assets/cut/human_sil.png" style="position:absolute;left:0;top:0;width:521px;height:1788px"><img src="assets/cut/human_rim.png" style="position:absolute;left:0;top:0;width:521px;height:1788px;opacity:.55;mix-blend-mode:screen">`;
+      css(hero, { width: '521px', height: '1788px' });
+      this.sp.add(hero, { x: -62, y: 0, z: -95, pxPerCm: 1788 / 166, ox: 260, oy: 1788 });
       // warm wall washes far behind (parallax, defocused)
       for (const [x, z, w, c] of [[-900, 1800, 1400, 'rgba(255,170,100,0.18)'], [1100, 2200, 1600, 'rgba(255,200,150,0.12)'], [0, 3000, 3000, 'rgba(120,140,190,0.10)']]) {
         const d = el('div', 'abs'); css(d, { width: w + 'px', height: '900px', background: `radial-gradient(50% 50% at 50% 50%, ${c}, rgba(0,0,0,0) 70%)` });

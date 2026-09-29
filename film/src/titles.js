@@ -48,9 +48,9 @@ export function EndCard(parent, { title = 'AI City', tagline = '', kicker = '' }
   const mark = el('div', 'abs', wrap, markSVG({ size: 92, glow: 0 }));
   const word = el('div', 'abs', wrap, wordmarkSVG({ height: 40 }));
   const ttl = el('div', 'title-xl', wrap, title);
-  css(ttl, { left: '0', right: '0', textAlign: 'center', top: '520px', fontSize: '150px' });
+  css(ttl, { left: '0', right: '0', textAlign: 'center', top: '500px', fontSize: '176px' });
   const tag = el('div', 'abs', wrap, tagline);
-  css(tag, { left: '0', right: '0', top: '720px', textAlign: 'center', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: '46px', color: 'rgba(255,255,255,0.86)', letterSpacing: '-0.005em' });
+  css(tag, { left: '0', right: '0', top: '730px', textAlign: 'center', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: '46px', color: 'rgba(255,255,255,0.86)', letterSpacing: '-0.005em' });
   const kick = kicker ? el('div', 'slug', wrap, kicker) : null;
   if (kick) css(kick, { left: '0', right: '0', justifyContent: 'center', top: '830px', color: 'rgba(255,255,255,0.5)' });
   const mw = 92 * MARK.w / 100, ww = 40 * WORD.w / 100, gap = 34;

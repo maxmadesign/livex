@@ -118,7 +118,7 @@ export function CityLights({ seed = 42, size = 4096 } = {}) {
   const nearest = (x, y) => { let b = districts[0], bd = 1e18; for (const d of districts) { const dd = (d.x - x) ** 2 + (d.y - y) ** 2; if (dd < bd) { bd = dd; b = d; } } return b; };
   const riverY = x => size * 0.6 + Math.sin(x / size * 4.6 + 1.3) * size * 0.06 + Math.sin(x / size * 11 + 0.4) * size * 0.012;
   const inRiver = (x, y) => Math.abs(y - riverY(x)) < size * 0.022;
-  const parks = Array.from({ length: 9 }, () => ({ x: lerp(0.15, 0.85, r()) * size, y: lerp(0.15, 0.85, r()) * size, rx: lerp(70, 220, r()), ry: lerp(60, 160, r()), a: r() * 3 }));
+  const parks = Array.from({ length: 9 }, () => ({ x: lerp(0.15, 0.85, r()) * size, y: lerp(0.15, 0.85, r()) * size, rx: lerp(40, 120, r()), ry: lerp(30, 90, r()), a: r() * 3 }));
   const inPark = (x, y) => parks.some(p => { const dx = x - p.x, dy = y - p.y, ca = Math.cos(p.a), sa = Math.sin(p.a); const u = (dx * ca + dy * sa) / p.rx, v = (-dx * sa + dy * ca) / p.ry; return u * u + v * v < 1; });
   const dens = (x, y) => { const d = Math.hypot(x - C * 0.96, y - C * 0.9) / C; return clamp(1.15 - d * 0.95) * (0.75 + 0.25 * noise1(x / 300 + y / 470, 5)); };
   const core = (x, y) => clamp(1 - Math.hypot(x - C * 0.96, y - C * 0.9) / (size * 0.13));

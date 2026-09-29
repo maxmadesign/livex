@@ -12,15 +12,28 @@ export function LyraScreen(screen, { mode = 'light', photo = 'white', place = ''
   const os = el('div', `lyra-os ${mode === 'dark' ? 'dark' : ''}`, screen);
   const bg = el('div', 'lyra-bg', os);
   if (mode === 'dark') css(bg, { background: 'radial-gradient(120% 70% at 50% 35%, #1a2030 0%, #07090d 70%)' });
-  const ph = el('img', 'lyra-photo', os);
+  // Lyra stands on the screen. The cutout lets her step back and make room for an
+  // answer without revealing a photo edge; a soft floor shadow grounds her.
+  const lyra = el('div', 'layer', os);
+  css(lyra, { transformOrigin: '540px 150px' });
+  const shadowEl = el('div', 'abs', lyra);
+  css(shadowEl, { left: '330px', top: '1840px', width: '420px', height: '60px', borderRadius: '50%', background: mode === 'dark' ? 'radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,0.5), rgba(0,0,0,0))' : 'radial-gradient(50% 50% at 50% 50%, rgba(20,24,32,0.22), rgba(20,24,32,0))', filter: 'blur(6px)' });
+  const ph = el('img', 'lyra-photo', lyra);
   ph.src = cut ? `assets/cut/lyra_${photo}_cut.png` : `assets/src/lyra_${photo}.jpg`;
+  if (!cut) shadowEl.style.display = 'none';
   const status = el('div', 'os-status', os, `
     <div class="place">${markSVG({ size: 30, color: mode === 'dark' ? '#fff' : '#0d1117' })}<span>${place}</span></div>
     <div class="os-live"><span>${clock}</span><span class="os-dot"></span></div>`);
   const content = el('div', 'layer', os);
   const dot = status.querySelector('.os-dot');
   return {
-    os, bg, photo: ph, status, content, dot,
+    os, bg, photo: ph, lyra, status, content, dot,
+    // k = 0: Lyra full height, face to face. k = 1: she steps back (x0.64) and the lower
+    // 40% of the screen belongs to the answer.
+    makeRoom(k, side = 0) {
+      const s = 1 - 0.36 * k;
+      lyra.style.transform = `translate(${side * 150 * k}px, ${-10 * k}px) scale(${s})`;
+    },
     // idle life: Lyra breathes (0.35% scale at ~0.25 Hz) and sways a hair.
     idle(t, amt = 1) {
       const b = Math.sin(t * Math.PI * 2 * 0.24) * 0.0035 * amt;
@@ -33,9 +46,13 @@ export function LyraScreen(screen, { mode = 'light', photo = 'white', place = ''
 }
 
 // Live caption: words land one by one (blur-to-sharp), like speech being heard.
-export function Caption(parent, text, { top = 1040, size = 46, align = 'center', left = 90, right = 90 } = {}) {
+export function Caption(parent, text, { top = 1040, size = 46, align = 'center', left = 90, right = 90, pill = true } = {}) {
   const c = el('div', 'caption', parent);
   css(c, { top: top + 'px', fontSize: size + 'px', textAlign: align, left: left + 'px', right: right + 'px' });
+  if (pill) {
+    // frosted pill sized to the line, so the words stay legible over Lyra
+    css(c, { left: '50%', right: 'auto', transform: 'translateX(-50%)', maxWidth: '900px', padding: '22px 40px', borderRadius: '999px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(24px) saturate(1.4)', WebkitBackdropFilter: 'blur(24px) saturate(1.4)', boxShadow: '0 20px 60px rgba(18,28,58,0.14)', border: '1.5px solid rgba(255,255,255,0.9)', whiteSpace: 'nowrap' });
+  }
   const words = text.split(' ').map((w, i, a) => el('span', 'w', c, w + (i < a.length - 1 ? ' ' : '')));
   return {
     el: c,
@@ -43,7 +60,7 @@ export function Caption(parent, text, { top = 1040, size = 46, align = 'center',
     update(p, out = 0) {
       const n = words.length;
       words.forEach((w, i) => reveal(w, E.settle(clamp(p * (n + 2) - i, 0, 1) ), { y: 10, blur: 8, scale: 1 }));
-      c.style.opacity = 1 - out; c.style.filter = out > 0 ? `blur(${out * 8}px)` : 'none';
+      c.style.opacity = Math.min(1, p * 4) * (1 - out); c.style.filter = out > 0 ? `blur(${out * 8}px)` : 'none';
     },
   };
 }

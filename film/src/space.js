@@ -50,17 +50,24 @@ export class Space {
 // A device standing in a space: product render + live screen, with contact shadow,
 // floor reflection, screen glow and light spill so it sits *in* the room.
 // World units: cm. y = 0 is the floor, negative is up.
-export function StagedDevice(space, kind, { x = 0, z = 0, reflect = 0.18, glow = 0.35, spill = 0.25, shadow = 0.8 } = {}) {
+export function StagedDevice(space, kind, { x = 0, z = 0, reflect = 0.18, glow = 0.35, spill = 0.25, shadow = 0.8, lift = 0, halo = 0 } = {}) {
   const wrap = el('div', 'abs');
   const dev = Device(kind, wrap);
   const { w, h, hCm } = dev.spec;
   const ppc = h / hCm;
   // contact shadow (on the floor, under the device)
   const sh = el('div', 'abs', wrap);
+  if (lift > 0) shadow = 0;
   css(sh, { left: `${-w * 0.08}px`, top: `${h - 26}px`, width: `${w * 1.16}px`, height: '52px', borderRadius: '50%', background: `radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,${shadow}), rgba(0,0,0,0) 70%)`, filter: 'blur(6px)', zIndex: -1 });
+  // wall-mounted (Portal): the signature cobalt backlight washing the wall
+  if (halo > 0) {
+    // soft wall-wash hugging the frame (as in the Portal product shot), not a neon ring
+    const hl = el('div', 'abs', wrap);
+    css(hl, { left: `${-w * 0.18}px`, top: `${-h * 0.08}px`, width: `${w * 1.36}px`, height: `${h * 1.16}px`, background: `radial-gradient(60% 55% at 50% 50%, rgba(90,140,255,${0.42 * halo}) 55%, rgba(70,120,255,${0.16 * halo}) 72%, rgba(60,110,255,0) 100%)`, filter: `blur(${w * 0.06}px)`, mixBlendMode: 'screen', zIndex: -1 });
+  }
   // reflection (mirror of the render, faded) — polished floors
   let refl = null;
-  if (reflect > 0) {
+  if (reflect > 0 && lift === 0) {
     refl = el('div', 'abs', wrap);
     css(refl, { left: '0', top: `${h}px`, width: `${w}px`, height: `${h}px`, transform: 'scaleY(-1)', transformOrigin: '50% 50%', opacity: reflect, filter: 'blur(3px)',
       WebkitMaskImage: 'linear-gradient(0deg, rgba(0,0,0,0.9), rgba(0,0,0,0) 40%)', maskImage: 'linear-gradient(0deg, rgba(0,0,0,0.9), rgba(0,0,0,0) 40%)' });
@@ -77,11 +84,25 @@ export function StagedDevice(space, kind, { x = 0, z = 0, reflect = 0.18, glow =
   }
   // floor spill in front of the device
   let spillEl = null;
-  if (spill > 0) {
+  if (spill > 0 && lift === 0) {
     spillEl = el('div', 'abs', wrap);
     css(spillEl, { left: `${-w * 0.4}px`, top: `${h - 40}px`, width: `${w * 1.8}px`, height: `${h * 0.28}px`, background: 'radial-gradient(50% 45% at 50% 40%, rgba(230,238,255,0.5), rgba(0,0,0,0) 70%)', opacity: spill, mixBlendMode: 'screen', filter: 'blur(14px)' });
   }
   wrap.appendChild(dev.el);
-  const layer = space.add(wrap, { x, y: 0, z, pxPerCm: ppc, ox: w / 2, oy: h });
+  const layer = space.add(wrap, { x, y: -lift, z, pxPerCm: ppc, ox: w / 2, oy: h });
   return { ...dev, wrap, layer, refl, glowEl, spillEl, ppc };
+}
+
+// Camera that puts a staged device's screen at a given screen rect (centre cx, cy and
+// height hPx). Used for screen-anchored match cuts: two different devices in two
+// different places occupy the exact same rectangle on the cut frame.
+export function frameScreen(space, dev, { cx = W / 2, cy = H / 2, hPx = 700 } = {}) {
+  const { w, h, quad } = dev.spec;
+  const ppc = dev.ppc, L = dev.layer;
+  const qcx = (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4;
+  const qcy = (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4;
+  const qh = ((quad[3][1] - quad[0][1]) + (quad[2][1] - quad[1][1])) / 2;
+  const X = L.x + (qcx - w / 2) / ppc, Y = L.y - (h - qcy) / ppc, hcm = qh / ppc;
+  const k = hPx / hcm;
+  return { x: X - (cx - W / 2) / k, y: Y - (cy - H / 2) / k, z: L.z - space.F / k, focus: space.F / k };
 }
