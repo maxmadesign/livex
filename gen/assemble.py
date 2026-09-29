@@ -164,7 +164,7 @@ if use_g06:
 env = np.sqrt(np.convolve(vo ** 2, np.ones(int(0.03 * SR)) / int(0.03 * SR), 'same'))
 key = np.clip(env / 0.02, 0, 1)
 duck = np.empty(N)
-g, att, rel = 0.0, np.exp(-1 / (0.04 * SR)), np.exp(-1 / (0.45 * SR))
+g, att, rel = 0.0, np.exp(-48 / (0.04 * SR)), np.exp(-48 / (0.45 * SR))   # per 48-sample step
 for i in range(0, N, 48):   # block-rate follower (1 ms)
     k = key[i]
     g = att * g + (1 - att) * k if k > g else rel * g + (1 - rel) * k
