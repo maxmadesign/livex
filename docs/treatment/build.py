@@ -90,7 +90,7 @@ def page(video='LiveX_AI_City_60s_web.mp4', poster='stills/poster.jpg', stills_d
     out = []
     out.append(f'''<div class="wrap">
 <header class="hero">
-  <div class="eyebrow">LiveX · 60 秒品牌影片 · 导演 Treatment</div>
+  <div class="eyebrow">LiveX · 60 秒品牌影片 · Spec film · 导演 Treatment</div>
   <h1>LiveX <em>AI City</em></h1>
   <p class="lede">{esc(M['logline_zh'])}</p>
   <div class="film"><video src="{video}" poster="{poster}" controls playsinline preload="metadata"></video></div>
