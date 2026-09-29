@@ -21,13 +21,48 @@ def run(args):
     subprocess.run([FF, '-hide_banner', '-loglevel', 'error', '-y', *args], check=True)
 
 
-# two-pass EBU R128 loudnorm to -14 LUFS; true peak aimed at -1.5 so the AAC encode stays under -1 dBTP
+# loudness: gain to -14 LUFS integrated, then a 4x-oversampled true-peak limiter at -1.6 dBTP, iterated until the
+# integrated loudness settles (ffmpeg's loudnorm falls back to dynamic mode here and flattens the film's arc)
 import json
-r = subprocess.run([FF, '-hide_banner', '-i', wav, '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json', '-f', 'null', '-'], capture_output=True, text=True)
-m = json.loads(r.stderr[r.stderr.rindex('{'):r.stderr.rindex('}') + 1])
-af = (f"loudnorm=I=-14:TP=-1.5:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
-      f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
-run(['-i', wav, '-af', af, '-ar', '48000', norm])
+import numpy as np
+import scipy.io.wavfile as wf
+from scipy.ndimage import minimum_filter1d
+from scipy.signal import resample_poly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'audio'))
+from synth import _release  # noqa: E402
+
+
+def measure(path):
+    r = subprocess.run([FF, '-hide_banner', '-i', path, '-af', 'loudnorm=print_format=json', '-f', 'null', '-'], capture_output=True, text=True)
+    m = json.loads(r.stderr[r.stderr.rindex('{'):r.stderr.rindex('}') + 1])
+    return float(m['input_i']), float(m['input_tp']), float(m['input_lra'])
+
+
+def tp_limit(x, sr, ceiling_db=-1.6, look=0.004, release=0.12):
+    ceil = 10 ** (ceiling_db / 20)
+    for _ in range(3):
+        up = np.abs(resample_poly(x, 4, 1, axis=1)).max(axis=0)
+        up = up[:x.shape[1] * 4].reshape(-1, 4).max(axis=1)
+        need = np.minimum(1.0, ceil / np.maximum(up, 1e-9))
+        if need.min() > 0.999:
+            break
+        need = minimum_filter1d(need, size=int(look * sr) * 2 + 1)
+        x = x * _release(need, np.exp(-1 / (release * sr)))
+    return x
+
+
+sr, raw = wf.read(wav)
+raw = raw.T.astype(np.float64) / 32768
+I0, _, _ = measure(wav)
+gain_db = -14.0 - I0
+for it in range(4):
+    y = tp_limit(raw * 10 ** (gain_db / 20), sr)
+    wf.write(norm, sr, (np.clip(y, -1, 1).T * 32767).astype(np.int16))
+    I, TP, LRA = measure(norm)
+    print(f'loudness pass {it}: gain {gain_db:+.2f} dB -> {I:.2f} LUFS, {TP:.2f} dBTP, LRA {LRA:.1f} LU')
+    if abs(I + 14.0) < 0.1:
+        break
+    gain_db += -14.0 - I
 
 master = os.path.join(OUT, 'LiveX_AI_City_60s_master.mp4')
 run(['-i', pic, '-i', norm, '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'slow', '-crf', '16',
