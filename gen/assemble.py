@@ -120,7 +120,7 @@ score = np.pad(score, ((0, 0), (0, N - score.shape[1])))
 
 rng = np.random.default_rng(7)
 t_ir = np.arange(int(0.9 * SR)) / SR
-IR = rng.standard_normal(len(t_ir)) * np.exp(-t_ir / 0.16) * 0.06
+IR = rng.standard_normal(len(t_ir)) * np.exp(-t_ir / 0.16) * 0.004   # tail ~12 dB under the dry voice
 IR[0] = 1.0
 
 
