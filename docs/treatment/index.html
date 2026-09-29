@@ -1,0 +1,427 @@
+<title>LiveX AI City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap">
+<style>
+/* Layout: a screening-room treatment — one reading column, film-wide media, and a
+   60-second timeline strip as the spine of the page. Deliberately dark (the film's world). */
+:root {
+  --ink: #07090c;          /* page ground = the film's black */
+  --panel: #0f1318;        /* raised surfaces */
+  --line: #232a33;         /* hairlines */
+  --fg: #e9edf2;           /* body text */
+  --dim: #8d96a3;          /* secondary text */
+  --cobalt: #3f6bff;       /* LiveX blue: Lyra, links, the live dot */
+  --warm: #ffcf9a;         /* time: timecodes, the clock */
+  --sans: 'Geist', 'Noto Sans SC', 'PingFang SC', system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --serif: 'Instrument Serif', 'Songti SC', Georgia, serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--ink); }
+body { margin: 0; background: var(--ink); color: var(--fg); font: 400 16px/1.7 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 120px; }
+.read { max-width: 720px; }
+a { color: var(--cobalt); }
+h1, h2, h3 { font-weight: 500; letter-spacing: -0.025em; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
+h3 { font-size: 20px; letter-spacing: -0.01em; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--dim); display: flex; gap: 14px; align-items: center; }
+.eyebrow::before { content: ""; width: 40px; height: 1px; background: var(--dim); }
+.tc { font-family: var(--mono); color: var(--warm); font-variant-numeric: tabular-nums; }
+section { padding-block: 72px 0; display: grid; gap: 28px; }
+.lede { font: 400 clamp(18px, 2.1vw, 23px)/1.75 'Noto Serif SC', 'Songti SC', serif; color: #fff; max-width: 820px; }
+
+/* hero */
+.hero { display: grid; gap: 22px; padding-top: 12px; }
+.hero h1 { font-size: clamp(48px, 9vw, 120px); line-height: .92; letter-spacing: -0.05em; }
+.hero h1 em { font: italic 400 1em var(--serif); letter-spacing: -0.02em; color: #fff; }
+.film { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--line); }
+.film video { width: 100%; height: 100%; display: block; }
+.meta { display: flex; flex-wrap: wrap; gap: 10px 28px; font: 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.meta b { color: var(--fg); font-weight: 500; }
+
+/* scale ladder */
+.ladder { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ladder div { padding: 16px 12px; border-left: 1px solid var(--line); font: 500 12px var(--mono); letter-spacing: .14em; }
+.ladder div:first-child { border-left: 0; }
+.ladder small { display: block; color: var(--dim); font: 400 13px/1.4 var(--sans); letter-spacing: 0; margin-top: 8px; }
+@media (max-width: 720px) { .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ladder div:nth-child(odd) { border-left: 0; } .ladder div { border-bottom: 1px solid var(--line); } }
+
+/* concepts */
+.concepts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.concept { background: var(--ink); padding: 24px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.concept.win { background: var(--panel); }
+.concept .tag { font: 500 11px var(--mono); letter-spacing: .16em; color: var(--dim); text-transform: uppercase; }
+.concept.win .tag { color: var(--cobalt); }
+.concept h3 { font-size: 26px; }
+.concept .zh { font-size: 15px; color: var(--dim); }
+.concept dl { margin: 0; display: grid; gap: 10px; font-size: 14px; line-height: 1.6; }
+.concept dt { font: 500 11px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.concept dd { margin: 0; }
+@media (max-width: 900px) { .concepts { grid-template-columns: minmax(0, 1fr); } }
+
+/* timeline strip */
+.strip-scroll { overflow-x: auto; border: 1px solid var(--line); }
+.strip { position: relative; min-width: 960px; height: 208px; background: var(--panel); }
+.strip .sec { position: absolute; top: 0; height: 28px; border-left: 1px solid var(--line); font: 500 10.5px/28px var(--mono); letter-spacing: .14em; padding-left: 8px; color: var(--dim); white-space: nowrap; overflow: hidden; }
+.strip .shot { position: absolute; top: 36px; height: 140px; border-left: 1px solid rgba(255,255,255,.25); overflow: hidden; background-size: cover; background-position: center; }
+.strip .shot span { position: absolute; left: 4px; bottom: 4px; font: 500 10px var(--mono); color: #fff; text-shadow: 0 1px 4px #000; }
+.strip .ticks { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; border-top: 1px solid var(--line); }
+.strip .ticks i { position: absolute; bottom: 0; height: 6px; border-left: 1px solid var(--dim); font: 10px/1 var(--mono); color: var(--dim); font-style: normal; }
+.strip .ticks i b { position: absolute; bottom: 9px; left: 3px; font-weight: 400; }
+
+/* shot list */
+.shots { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.shotrow { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; background: var(--ink); padding: 18px; }
+.shotrow img { width: 100%; max-width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #000; border: 1px solid var(--line); }
+.shotrow h3 { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.shotrow .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 22px; margin-top: 10px; font-size: 14px; line-height: 1.55; }
+.shotrow .facts div { min-width: 0; }
+.shotrow .facts b { display: block; font: 500 10.5px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin-bottom: 2px; }
+@media (max-width: 760px) { .shotrow { grid-template-columns: minmax(0, 1fr); } .shotrow .facts { grid-template-columns: minmax(0, 1fr); } }
+
+/* prompt blocks */
+details.prompt { border: 1px solid var(--line); background: var(--panel); }
+details.prompt summary { cursor: pointer; padding: 14px 18px; display: flex; gap: 14px; align-items: baseline; list-style: none; }
+details.prompt summary::-webkit-details-marker { display: none; }
+details.prompt summary::before { content: "+"; font: 500 14px var(--mono); color: var(--dim); width: 14px; }
+details.prompt[open] summary::before { content: "–"; }
+details.prompt summary:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -2px; }
+.prompt .body { padding: 0 18px 18px; display: grid; gap: 10px; }
+.prompt pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13.5px/1.65 var(--mono); color: #cfd6df; background: var(--ink); border: 1px solid var(--line); padding: 16px; max-height: 520px; overflow: auto; }
+.copy { justify-self: start; font: 500 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--fg); background: transparent; border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; }
+.copy:hover { border-color: var(--cobalt); }
+.copy:focus-visible { outline: 2px solid var(--cobalt); }
+
+/* system */
+.system { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.card { border: 1px solid var(--line); padding: 20px; background: var(--panel); min-width: 0; display: grid; gap: 12px; align-content: start; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.sw { width: 86px; font: 10.5px/1.3 var(--mono); color: var(--dim); }
+.sw i { display: block; height: 44px; border: 1px solid var(--line); margin-bottom: 6px; }
+.curves { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+.curves figure { margin: 0; font: 10.5px var(--mono); color: var(--dim); }
+.curves svg { width: 100%; height: auto; display: block; background: var(--ink); border: 1px solid var(--line); }
+.stills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stills img { width: 100%; max-width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; border: 1px solid var(--line); }
+@media (max-width: 760px) { .system { grid-template-columns: minmax(0, 1fr); } .stills { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* music form */
+.form { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); height: 64px; border: 1px solid var(--line); }
+.form div { border-left: 1px solid var(--line); padding: 8px; font: 500 10.5px var(--mono); letter-spacing: .1em; overflow: hidden; white-space: nowrap; }
+.md { font-size: 15px; line-height: 1.75; color: var(--fg); }
+.md table { border-collapse: collapse; font-size: 13.5px; width: 100%; }
+.md th, .md td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.md th { font: 500 11px var(--mono); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+.md h1, .md h2, .md h3, .md h4 { margin: 28px 0 10px; }
+.md h1 { font-size: 28px; } .md h2 { font-size: 24px; } .md h3 { font-size: 19px; } .md h4 { font-size: 16px; }
+.md p, .md ul, .md ol { margin: 0 0 12px; }
+.md code { font: 13px var(--mono); background: var(--panel); padding: 1px 5px; }
+.md pre { white-space: pre-wrap; font: 13px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--line); padding: 14px; overflow-x: auto; }
+.md blockquote { margin: 0 0 12px; padding-left: 14px; border-left: 2px solid var(--cobalt); color: var(--dim); }
+.tablewrap { overflow-x: auto; }
+.note { font-size: 14px; color: var(--dim); }
+footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--line); font: 12px var(--mono); letter-spacing: .08em; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">LiveX · 60 秒品牌影片 · 导演 Treatment</div>
+  <h1>LiveX <em>AI City</em></h1>
+  <p class="lede">72 岁的陈玉珍开了 31 年 7 路公交。旧 7 路总站的原址上如今盖起了体育场，今晚她 19 岁的孙女林穿 7 号球衣在那里首秀。她拒绝儿子接送，攥着孙女的铅笔座位字条独自出门，却发现最熟悉的城市已经认不出来。一路回答她的是 Lyra：当年 7 路的每一站，如今都是一个 LiveX 节点。城市变了，路线没变。Ask the city.</p>
+  <div class="film"><video src="LiveX_AI_City_60s_web.mp4" poster="stills/poster.jpg" controls playsinline preload="metadata"></video></div>
+  <div class="meta"><span>片名 <b>《7 路》 / Route 7</b></span><span>时长 <b>60.0 s</b></span><span>画幅 <b>1920×1080 · 30 fps</b></span><span>品牌线 <b>Ask the city.</b></span></div>
+</header>
+<section><div class="eyebrow">核心想法</div><h2>LiveX 的设备不是摆进城市里的东西。<br>它们本身就是城市的 AI 节点。</h2><div class="ladder"><div>PERSON<small>一个人，一件真实发生的事</small></div><div>AI<small>Lyra 以人的方式回应</small></div><div>LIVEX<small>原来她在一台真实的设备里</small></div><div>PLACE<small>设备属于一个真实空间</small></div><div>NETWORK<small>同一个 Lyra，许多地方</small></div><div>AI CITY<small>节点连起来，就是城市</small></div></div></section>
+<section><div class="eyebrow">三个概念</div><h2>三条完全不同的路，选一条走到底</h2><div class="concepts"><article class="concept win"><div class="tag">选定方案 · STRATEGIST2+</div>
+<h3>Route 7</h3><div class="zh">《7 路》</div><p>72 岁的陈玉珍开了 31 年 7 路公交。7 路总站的旧址上如今盖起了体育场，今晚她 19 岁的孙女林穿 7 号球衣在那里首秀。她拒绝家人接送，攥着孙女用铅笔写的座位字条独自出门，却发现自己最熟悉的城市已经认不出来了。一路上回答她的是 Lyra：当年 7 路的每一站，如今都是一个 LiveX 节点。</p>
+<dl><dt>主角</dt><dd>陈玉珍，72 岁，老街坊都叫她「陈师傅」。1981 到 2012 年，她开了整整 31 年 7 路公交，从 St. Mary&#x27;s 医院一直开到港口的 Harbour Depot 总站。她是这座城市里被问路最多、也最会指路的人。华人移民第二代，英语带一点口音。
+外形：身高 1.58 m，银灰色齐下巴短发，玳瑁圆框眼镜，藏蓝羊毛大衣，帆布托特包，黑色轻便运动鞋。脖子上围着自己织的红色粗针围巾（#C8372D），这是全片唯一的暖红，任何远景里…</dd><dt>标志性手法</dt><dd>站牌结构（The Route）：整部片被剪成一条 7 路公交线，只用一个声音和一块字卡。
+① 声音：一台 1980 年代公交下车铃的真实录音，「叮」，基频约 E6。它同时是转场声、全片调性 E 的来源，也是 Sonic Logo 的原型。
+② 字卡：每到一个编号站，铃声响起的同时，画面左下角出现一块极小的站牌字卡（Geist Mono，灰底白字，停留 0.8 秒）。编号就是 1985 年那块卷帘线路牌上旧 7 路的七个站：01 St. Mary&#x27;s · 02 Western Univ · 03 Harbour Ho…</dd><dt>Reveal</dt><dd>20.0–27.0s，一镜到底，后拉加升起，缓动 cubic-bezier(0.16,1,0.3,1)。关键帧写死如下：
+20.0 Lyra 的眼睛和微笑，大特写，看上去还是一个真人路人。
+21.3 Lyra 全身出现在白色影棚背景里，右手指向画右。
+22.3 细黑边框和内框线扫进画面，屏幕玻璃上有一层很淡的站厅反光。实拍版或生成版的接缝就藏在边框扫过的这一帧。
+23.5 header 横梁和黑色…</dd><dt>AI City 结尾</dt><dd>52.0–54.2 PERSON：看台 12 排 7 号。她坐下，站牌字卡的副行翻成「07 · Last stop」。草坪上热身的林抬头扫视看台，陈师傅把铅笔字条高高举起当标语。林看见了，笑着拍了两下胸口的 7。
+54.2–55.4 LIVEX / PLACE：摄影机从她身边升起，越过看台顶棚，在约 100 m 高度停 1.2 秒。体育场四个入口广场上四台 Paragon 的上下灯箱，像一圈白色的…</dd></dl></article><article class="concept"><div class="tag">备选方案 · STRANGER2+</div>
+<h3>First Listener</h3><div class="zh">《第一位听众》</div><p>韩国大提琴手朴瑞妍带着一把有自己机票的大提琴，搬进一座没有人认识她的城市。入职乐团的前夜 03:02，时差让她睡不着，手指已经 30 小时没碰过琴。空荡的酒店大堂里，Lyra 为她打开了空宴会厅的门，成了这座城市第一个听她拉琴的「人」。一百天后，她在市政广场第一次独奏，全城的 LiveX 屏幕同时为她让出画面。</p>
+<dl><dt>主角</dt><dd>朴瑞妍（Park Seo-yeon），29 岁，韩国大提琴手。她刚被这座城市的爱乐乐团聘为副首席，一个人带着全部家当搬了过来。
+外形：身高约 172 cm，黑色直发扎成低马尾，素颜，眼下挂着时差的青色。穿超大号黑色羊毛大衣、白 T 恤、宽腿牛仔裤，脚上是一双旧白球鞋。左手四根指尖有厚茧，右手腕缠着一根旧发圈。她一身黑衣、低马尾，剪影和 Lyra 的白色针织上衣、及胸长卷发区别明显。
+第二个角色：一只约 135 cm 高的白色碳纤维大提琴…</dd><dt>标志性手法</dt><dd>The Handoff：Lyra 的身体就是剪辑点。27–42s 的每一次转场都由 Lyra 完成：她从一台设备屏幕的左边框走出去，下一帧从另一个地点、另一台设备屏幕的右边框走进来。步伐、节奏、行走轨迹完全连续，而且都发生在屏幕内，符合真实设备的显示逻辑。她每走一步，城市就过去几天，画面角落里一个极细的里程表式日期计数器随之翻动：Day 1 → 4 → 19 → 77 → 100。屏幕外的一切都在变：空间、光线、季节、她的状态和身边的人。只有 Lyra 的步子是连续的。Same AI. Different plac…</dd><dt>Reveal</dt><dd>20–27s，一个 7 秒的连续拉远：
+① 20.0 Lyra 面部近景，带着笑。
+② 21.2 屏幕玻璃的微光和底部 UI 卡片的边缘入画。
+③ 22.2 细黑边框和内框线。
+④ 23.2 86 英寸竖屏全貌：白底上真人等身的 Lyra 全身。
+⑤ 24.2 Gateway 整机：header 横梁和摄像头、两条白色 LED 灯条、黑色底板，以及脚轮在大理石上的倒影。
+⑥ 25.0 越过瑞妍的肩…</dd><dt>AI City 结尾</dt><dd>52–60s，20:00，蓝调时刻。广场的大台阶上坐满了人，全是逆着舞台暖光的剪影。她拉响第一个音：和第一夜凌晨三点那个一模一样的空弦 C。
+镜头从琴弓的大特写一路升起：她 → 舞台 → 舞台旁的 Paragon。Lyra 已经走到屏幕边缘，把整块屏幕让给舞台的直播画面，自己闭上眼听，和 Day 1 前厅里那个 Lyra 是同一个姿势 → 整座广场 → 屋顶 → 蓝调中的真实城市。
+镜头越升越高，…</dd></dl></article><article class="concept"><div class="tag">备选方案 · INTIMATE1+</div>
+<h3>First Hello</h3><div class="zh">《初次见面》</div><p>凌晨 4:52，一个刚下红眼航班、从没抱过婴儿的桥梁工程师冲进一家陌生的医院，去见刚出生 71 分钟的外甥女。空旷的大厅里，第一个教她怎么托住婴儿头部的，是 Lyra。</p>
+<dl><dt>主角</dt><dd>娜迪亚·哈达德（Nadia Haddad），31 岁，桥梁结构工程师，黎巴嫩裔。
+外形：齐下巴的深色短卷发，脸上有雀斑，素颜，飞了 14 小时之后眼睛有点肿。她的发型、剪影和暖色衣服都要和 Lyra 的及胸长卷发、白色针织上衣明显区分开，镜像构图里观众绝不能把两人看混。
+服装：驼色 oversized 羊毛大衣，灰色连帽卫衣，黑色直筒裤，一双旧白运动鞋。银色登机箱上挂着皱巴巴的行李条，帆布托特包里露出一截图纸筒。
+关键道具：妈妈织的一顶…</dd><dt>标志性手法</dt><dd>镜像托抱（The Mirror Cradle）。
+Gateway 是 1:1 真人等身的屏幕，这是全片唯一的形式核心：Lyra 教她托抱，她照着做，拉远后两人以相同比例、相同姿势镜像站立。
+托抱的弧线是全片的图形母题，依次出现在四个地方：10 秒时的手势轨迹，瞳孔反光里那条弧形导航线，40 秒她抱着婴儿的手臂，结尾交叉成 LiveX X 标志的两道弧线。
+LiveX 的 X 本来就由两道回旋镖形状的笔画组成。我们让观众看到，那其实是两只手臂，一只属于人，一只属于 AI。品牌符号在最后一秒被重新解释。…</dd><dt>Reveal</dt><dd>20–27s，一个 7 秒不间断的拉远加升起，缓动用 cubic-bezier(0.16,1,0.3,1)。关键帧写死：
+20.0 Lyra 的眼睛特写，此时她仍然像一个真人。
+21.3 Lyra 全身出现在白色影棚背景里，双臂做出托抱的弧形。
+22.3 细黑边框和内框线进入画面，屏幕玻璃上有一层很淡的中庭反射，观众这才明白这是一块屏幕。实拍或生成版的接缝就藏在这一帧。
+23.5 黑色 heade…</dd><dt>AI City 结尾</dt><dd>52–56s，一次连续上升：长椅上的娜迪亚（PERSON）→ 她身边的 Paragon（AI / LIVEX）→ 医院广场（PLACE）→ 河湾边的医院街区 → 日出中的整座城市（NETWORK → AI CITY）。
+太阳线从画右向画左扫过城市。LiveX 节点在阳光到达之前，就先在阴影里亮起：大堂玻璃后 Gateway 的两道白色竖光、广场上 Paragon 的白色灯箱、走廊窗户里 Porta…</dd></dl></article></div><div class="read md"><p><b>为什么选它：</b>最终选定《7 路》。
+1. 它是唯一从战略层面回答客户核心那句话的方案：「LiveX 不是 AI City 里摆放的设备，设备本身就是构成 AI City 的节点。」城市本来就是一张网络，由站台、线路和问路的人组成。旧站台靠人回答问题，新站台就是 LiveX 节点。这样 PERSON → AI → LIVEX → PLACE → NETWORK → AI CITY 这条尺度阶梯自然成立，NETWORK 也不需要画一根线。
+2. 评审共识：三位评审各自的前三名里，只有《7 路》和《第一位听众》同时出现在全部三份名单中。《第一位听众》的平均分最高（85.7），但它最核心的两个画面恰好压在 AI 视频最弱的地方：屏幕里 Lyra 的连续步行，和真人拉大提琴。它的情绪赌注也最低，品牌句最弱。所以我们只把它最好的手法 The Handoff 嫁接进来。
+3. 和真实交付物匹配：这支片最终要由 Claude Code 逐帧渲染成 60 秒的动态影片，发布在 X 上。《7 路》的每一个核心装置都是代码的原生语法：铅笔字变印刷体、站牌字卡、卷帘翻牌、铃声驱动节点点亮、两笔画出 X。只用现有的静态 Lyra 抠图和产品抠图，就能做到电影级；现有引擎里的 Space、LyraScreen、PlaceShot、City、EndCard 可以直接复用。
+4. 差异化：本轮 12 个方案里，4 个在赶去看新生儿，4 个用手机电量耗尽开场，还有好几个依赖「被 AI 认出来」。《7 路》全部避开了。Lyra 懂的是城市的历史，而不是这个人的脸。它还是唯一一个把尊严还给老人、并让老人也去帮助别人的方案。
+5. 品牌资产：「Ask the city.」让 LiveX 占住一个动词。一声公交铃同时承担结构、调性和 Sonic Logo，品牌可以长期拥有它。
+6. 短板已修：站号逻辑现在正好 7 站，以「07 · Last stop」收尾；符号做了减法；陈师傅不再是「无助老人」；节点光形在前 45 秒系统地教给观众；产品角色各归其位。精修版都已处理。
+《初次见面》的镜像托抱是本轮最强的单个 Hero 画面，它最好的想法（两笔交叉成 X）也已嫁接进来。</p><p><b>嫁接进来的想法：</b>1. The Handoff，来自 STRANGER2《第一位听众》：27–42 秒每响一声「叮」，Lyra 就从上一台屏幕的左边框走出，再从下一台屏幕的右边框走进来，依次经过换乘大厅的 Gateway、Exit B 的 Portal、Market Hall 的 Gateway。原稿靠字卡说明「这是同一个 Lyra」，现在靠她的动作来证明。
+2. Center-Lock 和双字体系统，来自 FORMAL1《静点》：47–50 秒上游四站的蒙太奇，每一格里 Lyra 的双眼都注册在画面同一坐标上。地点在变，她不动，所以 0.8 秒一格也认得出是同一个 Lyra。人说的话用 Instrument Serif 斜体，Lyra 和 UI 用 Geist，两套字体就是两种声音。Lyra 的近讲干声和站厅的长混响形成对比，这是留给耳朵的伏笔。
+3. 两道弧线交叉成 X，来自 INTIMATE1《初次见面》：这里改写成一笔属于人、一笔属于 AI。第一笔是字条上划在 Seat 7 下面的那道铅笔线，第二笔是 Lyra 路线卡上的钴蓝路线。两条路线交叉，成为 LiveX 的 X，品牌符号在最后一秒被重新解释：她的路和 Lyra 的路。
+4. 指向即现实，来自 RELAY2《同一分钟》：Lyra 在屏幕里指向画右，Reveal 拉开后，真实的 Exit B 扶梯正好在那个方向亮着。屏幕里的空间和真实建筑对上了，这是 Physical AI 最准的一个细节。
+5. 安静的一拍，来自 FORMAL2《你在这里》：在 01 · St. Mary&#x27;s 的医院走廊里，Lyra 把食指轻放在唇前，UI 显示「Quiet volume」。一拍就证明她懂语境。
+6. 节点只靠产品自己的光被认出、机身背面就是品牌，来自 WILDCARD1《守夜灯》和 RELAY1《交接》：前 45 秒系统地教观众认三种光形（Gateway 是两道白色竖条，Portal 是一圈蓝晕，Paragon 是上下两块白色矩形）。结尾航拍先在 100 m 高度停 1.2 秒，让光形能被认出来。广场上 Paragon 背面发光的 X，是品牌第一次以真实机身出现。
+7. 按评审 1 的修正落实：站号正好 7 站，以「Last stop」收尾；零售场景改用 Gateway，Portal 只放在过渡空间；Gateway 里的 Lyra 统一为 1:1 真人等身；陈师傅主动给迷路的球迷指路，而不是被救助的人；删掉搪瓷徽章，符号只留字条、红围巾、钟楼和三个 7。按评审 3 的修正落实：4:5 安全区，1985 年段落延长，字条在手机上一眼可读。</p></div></section>
+<section><div class="eyebrow">60 秒故事</div><h2>《7 路》</h2><div class="read md"><p>【人 00–10】1985 年，16mm 胶片里一双年轻的手把巨大的方向盘向右打满，车顶卷帘牌「rrrrt—咔」停在「7 HARBOUR DEPOT」。硬切：同一个「7」变成 2026 年一张铅笔字条上的「Seat 7」——「奶奶 — Gate C · 114 · Row 12 · Seat 7 · 19:30 ♡ 林」。陈玉珍 72 岁，开了 31 年 7 路，今晚一个人去看孙女首秀。儿子发来「Mum, I&#x27;ll come get you?」，她「啪」地合上翻盖手机。扶梯把她送进 Harbour Line 的新换乘大厅：白色清水混凝土柱廊、四种语言的导向牌，没有一个旧站名。她在柱旁停下展开字条，手在抖。画面左缘一团冷白竖光，画外一句贴近耳边的「May I?」。</p><p>【AI 10–20】一个穿白色立领针织衫的年轻女人探身看字条。陈师傅嘟囔：「They built a stadium on my bus depot.」对方答：「Route 7&#x27;s last stop. I know it.」有人记得她的总站。她愣住，笑出一声，像当年乘客给她看月票那样把字条举高；镜片反光里铅笔字逐个变成印刷体，路线卡滑过，「Step-free route」已被点亮——她没开口要。</p><p>【LiveX 20–27】一镜到底后拉：Lyra 的眼睛 → 全身 → 屏幕边框 → 2.18 m 的 LiveX Gateway（顶梁、摄像头、两条白色 LED 竖灯条与水磨石上的倒影、底板与脚轮）→ 围红围巾、举着字条的 1.58 m 的陈师傅 → 30 m 柱廊。人潮带着拖影绕流，只有她们不动。25.5 秒第一声 1980 年代公交下车铃「叮」，字卡「05 · Harbour Interchange」。沿路线所指，真实的 Exit B 扶梯亮着暖光。</p><p>【旅程 27–42】每一声「叮」，Lyra 从一块屏幕左边框离开、从下一块屏幕右边框进来：白墙通道里的 Portal（→ Exit B），旧菜市场改成的 Market Hall 里的 Gateway（06）。她买下最后三条之一的 7 号主场围巾，叠在自己织的红围巾上。迷路的外国球迷问「Gate C?」，她脱口而出「Past the clock tower. Follow the scarves.」——31 年的反射还在。条纹围巾越来越多，门一开，风、雨和齐唱涌进来。</p><p>【城市 42–52】「叮」07 · Harbour Depot。蓝调细雨，1978 年红砖钟楼是旧总站唯一的遗存，旁边立着 Paragon Outdoor。她手掌贴砖：「I drove this route for thirty years.」Lyra：「Then you know the way.」她挺直背汇入人潮。摄影机绕到 Paragon 背面：发光的 X 与 LIVEX.AI。字卡「rrrrt」倒翻回 01——同一分钟，上游四站都在为这场比赛运转：St. Mary&#x27;s、Western Univ、Harbour Hotel、Pier Tower，每格都是同一个 Lyra，双眼在同一位置。「→ Gate C」，闸机咔嗒，球场轰鸣。</p><p>【AI City 52–60】12 排 7 号，她坐下，字卡翻成「07 · Last stop」。草坪上的林在人海里找到一张举高的白纸和一点红，笑着拍两下胸口的 7。音乐抽空，远处一声铃。摄影机升起：100 m，四台 Paragon 的灯箱像表盘刻度；500 m，七声铃由远及近点亮旧 7 路七站，一根线都不画；然后数百个节点静静亮起。黑场，一笔铅笔、一笔钴蓝交叉成 LiveX 的 X。LIVEX.AI。AI City。Ask the city.</p></div><div class="strip-scroll"><div class="strip"><div class="sec" style="left:0.0%;width:100.0%;color:#8d96a3">HUMAN</div><div class="shot" style="left:0.0%;width:2.5%;background-image:url(stills/S01.jpg)"><span>S01</span></div><div class="shot" style="left:2.5%;width:5.0%;background-image:url(stills/S02.jpg)"><span>S02</span></div><div class="shot" style="left:7.5%;width:5.0%;background-image:url(stills/S03.jpg)"><span>S03</span></div><div class="shot" style="left:12.5%;width:4.166666666666666%;background-image:url(stills/S04.jpg)"><span>S04</span></div><div class="sec" style="left:16.666666666666664%;width:83.33333333333334%;color:#3f6bff">AI</div><div class="shot" style="left:16.666666666666664%;width:4.166666666666666%;background-image:url(stills/S05.jpg)"><span>S05</span></div><div class="shot" style="left:20.833333333333336%;width:4.166666666666666%;background-image:url(stills/S06.jpg)"><span>S06</span></div><div class="shot" style="left:25.0%;width:4.166666666666666%;background-image:url(stills/S07.jpg)"><span>S07</span></div><div class="shot" style="left:29.166666666666668%;width:4.166666666666666%;background-image:url(stills/S08.jpg)"><span>S08</span></div><div class="sec" style="left:33.33333333333333%;width:66.66666666666667%;color:#ffffff">REVEAL</div><div class="shot" style="left:33.33333333333333%;width:11.666666666666666%;background-image:url(stills/S09.jpg)"><span>S09</span></div><div class="sec" style="left:45.0%;width:55.0%;color:#ffcf9a">JOURNEY</div><div class="shot" style="left:45.0%;width:5.0%;background-image:url(stills/S10.jpg)"><span>S10</span></div><div class="shot" style="left:50.0%;width:5.0%;background-image:url(stills/S11.jpg)"><span>S11</span></div><div class="shot" style="left:55.00000000000001%;width:7.5%;background-image:url(stills/S12.jpg)"><span>S12</span></div><div class="shot" style="left:62.5%;width:7.5%;background-image:url(stills/S13.jpg)"><span>S13</span></div><div class="sec" style="left:70.0%;width:30.0%;color:#ffb468">CITY</div><div class="shot" style="left:70.0%;width:8.333333333333332%;background-image:url(stills/S14.jpg)"><span>S14</span></div><div class="shot" style="left:78.33333333333333%;width:8.333333333333332%;background-image:url(stills/S15.jpg)"><span>S15</span></div><div class="sec" style="left:86.66666666666667%;width:13.333333333333329%;color:#e9edf2">AI CITY</div><div class="shot" style="left:86.66666666666667%;width:3.3333333333333335%;background-image:url(stills/S16.jpg)"><span>S16</span></div><div class="shot" style="left:90.0%;width:5.0%;background-image:url(stills/S17.jpg)"><span>S17</span></div><div class="shot" style="left:95.0%;width:5.0%;background-image:url(stills/S18.jpg)"><span>S18</span></div><div class="ticks"><i style="left:0.0%"><b>0</b></i><i style="left:8.333333333333332%"><b>5</b></i><i style="left:16.666666666666664%"><b>10</b></i><i style="left:25.0%"><b>15</b></i><i style="left:33.33333333333333%"><b>20</b></i><i style="left:41.66666666666667%"><b>25</b></i><i style="left:50.0%"><b>30</b></i><i style="left:58.333333333333336%"><b>35</b></i><i style="left:66.66666666666666%"><b>40</b></i><i style="left:75.0%"><b>45</b></i><i style="left:83.33333333333334%"><b>50</b></i><i style="left:91.66666666666666%"><b>55</b></i><i style="left:100.0%"><b>60</b></i></div></div></div></section>
+<section><div class="eyebrow">分镜表 · Shot List</div><h2>18 个镜头，一条尺度阶梯</h2><p class="note">每一行左侧的画面取自代码版影片的对应时刻；文字是实拍 / 生成版的主剧本。</p><div class="shots"><div class="shotrow"><img src="stills/S01.jpg" alt="S01 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">00.00–01.50</span> S01 · 1985 年港城傍晚，旧 7 路单层城市公交驾驶座，挡风玻璃内侧</h3>
+<div class="facts"><div><b>尺度</b>PERSON · HUMAN</div><div><b>景别 / 运镜</b>大特写（ECU）：双手与方向盘上缘，挡风玻璃上方映出卷帘线路牌；16mm 质感，4:3，50mm f/2.8；驾驶座右后方略俯 15° 越肩，轻微手持呼吸。0.8–1.5 方向盘向右打满时摄影机同向旋转 12°（cine 缓动），把旋转动量交给 1.5 的匹配剪辑。</div>
+<div><b>动作</b>第 0 帧：31 岁女人的双手握着直径约 50 cm 的黑色胶木方向盘，右手无名指细金戒，左手拇指根一道新愈小疤。挡风玻璃上缘映出车顶卷帘牌镜像：0.0–0.9「rrrrt」滚过 NOT IN SERVICE、7 ST. MARY&#x27;S，0.9 停在「7 HARBOUR DEPOT」。0.8 起双手交替把方向盘向右打满。左上角 Geist Mono「1985」。不拍脸。</div><div><b>设备</b>无：无设备。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无屏幕 UI；影片层角标「1985」（Geist Mono 18 px，x 96 / y 64，4:5 版移入安全列）。</div>
+<div><b>声音</b>单声道 + 磁带嘶声。柴油怠速低频；转向灯「哒—哒」落在 0.0/0.5/1.0（120 BPM 四分音符，全片节拍器由此起步）；0.0–0.9 卷帘摇柄「rrrrt」，0.9 定位「咔」（为 46.5 倒卷埋伏笔）。不用铃，第一声「叮」留给 25.5。无配乐。</div><div><b>转场</b>1.5 图形匹配剪辑：卷帘牌「7」→ 字条「Seat 7」的「7」，同位置同字高（生成版为方向盘转动接字条转动）；声音同帧由单声道磁带硬切为 2026 立体声车厢。</div></div></div></div><div class="shotrow"><img src="stills/S02.jpg" alt="S02 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">01.50–04.50</span> S02 · 2026 年 Harbour Line 地铁车厢，晚高峰 18:24</h3>
+<div class="facts"><div><b>尺度</b>PERSON · HUMAN</div><div><b>景别 / 运镜</b>大特写 → 特写（字条占画宽 62%）→ 3.0 起手机特写；1.5 继承 12° 旋转，0.3 s settle 归零；1.5–2.5 从「Seat 7」大特写后拉到整张字条（100mm 微距感 f/2.8）；车厢摇晃 ±4 px（0.8 Hz）；3.0 焦点 0.3 s 内从字条拉到左手翻盖手机。</div>
+<div><b>动作</b>同一双手，72 岁：皱纹、同一枚磨薄金戒、同一道拇指疤，捏着对折的米白便签。铅笔字静音可读：「奶奶 — Gate C · 114 · Row 12 · Seat 7」「19:30 ♡ 林」，Seat 7 下一道略弯的下划线。纸随车厢轻颤，隧道灯每半拍扫过纸面。3.0 左手的银色旧翻盖机震两下，外屏亮起「Ming: Mum, I&#x27;ll come get you?」；4.1 拇指把盖子顶开一条缝，犹豫；4.5「啪」地合上。</div><div><b>设备</b>无：无设备。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无 LiveX UI。翻盖机外屏（单色小屏）显示消息；影片层角标 1.5 由「1985」split-flap 翻成「2026」。</div>
+<div><b>声音</b>1.5 硬切立体声：轮轨节奏、35 Hz 车厢低频、纸张轻响。A 段起：毛毡钢琴 E3 单音 + E1 低频长音，约 −21 LUFS。3.0 / 3.25 两下手机震动闷响，4.1 盖子轻响，4.5 合盖「啪」——干脆高频瞬态，即剪辑点。</div><div><b>转场</b>4.5 声音剪辑点：合盖「啪」同帧硬切，接扶梯梳齿的机械节奏。</div></div></div></div><div class="shotrow"><img src="stills/S03.jpg" alt="S03 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">04.50–07.50</span> S03 · 05 · Harbour Interchange（尚不出字卡）：新换乘大厅扶梯口与清水混凝土柱廊，浅灰水磨石，18:29 晚高峰</h3>
+<div class="facts"><div><b>尺度</b>PERSON · HUMAN</div><div><b>景别 / 运镜</b>中景 → 中全景（她随扶梯升入画面，踏上平台后 3/4 侧身全身）；35mm f/2.8，扶梯顶端低位 90 cm 略仰，4.5–6.0 与她同速后退（glide）；6.0 改为 45 cm 横移 3/4 侧跟（cine），柱子产生视差；6.5–7.5 摄影机停，她停在左三分线。</div>
+<div><b>动作</b>扶梯把她送进大厅：藏蓝大衣、银灰短发、玳瑁眼镜，红围巾是唯一暖色，左手攥着字条。她抬头找——四语导向牌全部虚焦，只见箭头与图形，没有「Harbour Depot」。人潮从两侧穿过。7.0 脚步第一次犹豫：半步停住，重心后移。</div><div><b>设备</b>无：无设备入画；Gateway 已在世界坐标中立于 Exit B 方向柱旁（她前方约 12 m），被柱子挡住。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无。</div>
+<div><b>声音</b>扶梯梳齿金属咔嗒（八分音符锁网格）；站厅 3 s 长混响人声底噪；广播颗粒化为听不清的纹理；列车离站 35 Hz 次声；钢琴稀疏单音 B2、G2；7.0 脚步声变稀。</div><div><b>转场</b>7.5 动作连续剪辑：她走向柱子的一步跨过剪辑点。</div></div></div></div><div class="shotrow"><img src="stills/S04.jpg" alt="S04 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">07.50–10.00</span> S04 · 05 · Harbour Interchange：Exit B 方向一根清水混凝土柱旁</h3>
+<div class="facts"><div><b>尺度</b>PERSON · HUMAN</div><div><b>景别 / 运镜</b>近景（胸像）：她 3/4 侧脸 + 展开的字条；85mm f/1.8 锁定，8.0–10.0 极慢推 3%（settle）。画面左缘 12% 宽是一团完全虚焦的冷白竖光（距镜头约 0.6 m）。</div>
+<div><b>动作</b>她靠柱停下，重新展开字条，手微微发抖；抬眼扫一圈人潮，又低头看字条。9.0 画外一个温和、贴近耳边的年轻女声：「May I?」她循声转头向画左——那团光的方向。</div><div><b>设备</b>Gateway V2（仅以画面左缘虚焦 LED 竖光出现）：Gateway 立在柱廊间 Exit B 方向那根柱旁，在她左侧约 0.8 m，屏幕朝向她；只露左侧 LED 灯条的虚焦光与地面竖直倒影，观众只当它是站厅的灯。</div>
+<div><b>Lyra</b>只闻其声：近讲干声，无站厅混响。</div><div><b>UI</b>屏幕在画外，Lyra OS 处于 listening（语音线平静起伏），不可见。</div>
+<div><b>声音</b>站厅 3 s 混响底噪、她的呼吸、纸的轻颤；钢琴 8.5 停住留半拍空；9.0「May I?」是全片第一句近讲干声，与四周长混响对比——留给耳朵的伏笔。</div><div><b>转场</b>10.0 视线匹配剪辑：她转头向画左 → 反向过肩。</div></div></div></div><div class="shotrow"><img src="stills/S05.jpg" alt="S05 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">10.00–12.50</span> S05 · 05 · Harbour Interchange：Gateway 屏幕正前方</h3>
+<div class="facts"><div><b>尺度</b>AI · AI</div><div><b>景别 / 运镜</b>过肩近景：越过陈师傅的肩和红围巾（前景占右下），看屏幕里 Lyra 的头肩（画左 1/3）；85mm f/2，机高 1.45 m 仰 6°（她眼高 1.47 m，Lyra 眼高约 1.75 m）；锁定，呼吸级漂移；画面严格裁在 Gateway 屏幕边框以内，焦点在 Lyra 脸上。</div>
+<div><b>动作</b>穿白色短袖小立领针织衫的年轻女人侧身微低头看字条，只露侧脸、深色微卷长发和肩；身后白色影棚背景读作一面被灯照亮的白墙，像一个好心路人。陈师傅低声嘟囔：「They built a stadium on my bus depot.」</div><div><b>设备</b>Gateway V2（屏幕内画面，机身不入画）：Gateway 距她约 0.8 m 正对；86 寸竖屏可视区约 107×190 cm，Lyra 1:1 等身，所以过肩机位微仰，像当年乘客仰头看驾驶座上的她。</div>
+<div><b>Lyra</b>生成版：侧身低头看字条，专注温和，手在画外。代码版：正面静帧，微呼吸。</div><div><b>UI</b>listening：语音线在屏幕底部（y 1790，画外）平静起伏；无 UI 露出。</div>
+<div><b>声音</b>她的声音带 3 s 混凝土混响，沙哑不修；B 段起：Em9 pad 淡入，心跳式 Sub 脉冲落在每小节 1、3 拍（10.0/11.0/12.0）；站厅底噪压低 4 dB。</div><div><b>转场</b>12.5 正反打：切 Lyra 近景（视线匹配）。</div></div></div></div><div class="shotrow"><img src="stills/S06.jpg" alt="S06 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">12.50–15.00</span> S06 · Gateway 屏幕内（白色影棚背景）；14.0 起反打陈师傅</h3>
+<div class="facts"><div><b>尺度</b>AI · AI</div><div><b>景别 / 运镜</b>近景（Lyra 胸像，眼在上三分线）→ 14.0–15.0 陈师傅近景；12.5–14.0 反打 Lyra，85mm f/2，与上镜同焦段同光比，极慢推 2%（settle）；14.0 硬切陈师傅近景（100mm）锁定。</div>
+<div><b>动作</b>Lyra 温暖地看着她，嘴角先笑，然后说：「Route 7&#x27;s last stop. I know it.」14.0 陈师傅愣住，慢慢抬头，眼眶一热，短短笑了一声——有人记得她的总站。</div><div><b>设备</b>Gateway V2（屏幕内画面）：同 S05；反打时屏幕是她脸上唯一的冷白光源。</div>
+<div><b>Lyra</b>生成版：近景直视，克制温暖的笑，说话自然。代码版：lyra_white 静帧，不做口型。</div><div><b>UI</b>speaking：语音线振幅由分层噪声驱动（屏幕内，画外）；无卡片。</div>
+<div><b>声音</b>12.5 Lyra 动机首次出现：FM 玻璃钟 G5–B5–E6（小调，载波:调制 1:3.5）——刻意留给被读懂的这一句；Lyra 仍是干声；14.4 陈师傅短笑 + 吸气（带站厅混响）；Pad 转 Cmaj7。</div><div><b>转场</b>15.0 动作剪辑：她举起字条的动作跨过剪辑点。</div></div></div></div><div class="shotrow"><img src="stills/S07.jpg" alt="S07 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">15.00–17.50</span> S07 · 05 · Harbour Interchange：Gateway 屏幕前 0.6 m</h3>
+<div class="facts"><div><b>尺度</b>AI · AI</div><div><b>景别 / 运镜</b>特写：玳瑁眼镜镜片（上半）+ 举高的字条（下半）；100mm 微距 f/2.8 锁定；15.0–15.4 字条从画面下方升入（动作切）；焦点在镜片反光上，字条前景轻虚。</div>
+<div><b>动作</b>她下意识把字条举高，对准 header 正中的黑色玻璃摄像头，像当年乘客把月票举给她看。镜片映出屏幕的冷白光：铅笔字在反光里浮起，0.8 秒内逐字变成印刷体，排成一张路线卡。</div><div><b>设备</b>Gateway V2（仅以镜片反光出现）：屏幕在她正前方约 0.6 m；她举起的字条正对 header 横梁正中的黑色玻璃摄像头模组。</div>
+<div><b>Lyra</b>不入画，只以反光中的冷白光存在。</div><div><b>UI</b>屏幕下方 22% 区域：孙女的铅笔字先以原笔迹浮起，0.8 s 内逐字变成 Geist 印刷体，组成路线卡「Exit B → Market Hall → Gate C · 9 min」；本镜只在镜片反光里看到（镜像、30% 不透明度），下一镜正向出现。UI 不遮挡 Lyra 腰部以上。</div>
+<div><b>声音</b>铅笔笔尖「沙沙」逐渐变成细小的打印「嗒」（每字一嗒，十六分音符）；UI 音只取纸与木的真实材料，压在 −18 LUFS 以下；心跳 Sub 继续，Pad G/B。</div><div><b>转场</b>17.5 方向连续剪辑：反光里的卡片向画右滑出 → 下一镜路线卡边缘从左向右滑过。</div></div></div></div><div class="shotrow"><img src="stills/S08.jpg" alt="S08 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">17.50–20.00</span> S08 · Gateway 屏幕近景（屏幕下半部）</h3>
+<div class="facts"><div><b>尺度</b>AI · AI</div><div><b>景别 / 运镜</b>近景：屏幕下半——Lyra 腰部以下的阔腿裤与交握的手 + 路线卡；50mm f/2.8，17.5–20.0 向画右横移约 60 cm（cine），方向与路线一致；边框刚好不入画。</div>
+<div><b>动作</b>生成版：一条从白色短袖针织袖口伸出的手臂指向画右。路线卡边缘在虚焦中滑过；卡片底部「Step-free route」开关被 Lyra 轻轻点亮——她没开口要，这个选项默认就在。</div><div><b>设备</b>Gateway V2（屏幕内画面）：同 S05。</div>
+<div><b>Lyra</b>生成版：右手指向画右，手势舒展。代码版：静帧，makeRoom 向画左后退让位。</div><div><b>UI</b>result → handoff。卡片（y ≥ 1160，左右 64 px，圆角 36，rgba(255,255,255,.74) + backdrop blur 28 px + 1.5 px 白描边）：眉标「ROUTE」（Geist Mono 21，0.16em）；标题「Exit B → Market Hall → Gate C」（Geist 50/600/−0.025em）；数字「9 min」（Geist 84/500）；RouteMap 细线平面图，钴蓝路线由左画到右并越出卡片右缘；底行开关「Step-free route」18.5 由灰转钴蓝。状态栏：[X] Harbour Interchange ｜ 18:31 ●。</div>
+<div><b>声音</b>17.5 卡片滑入一声纸页轻响；18.5 Step-free 开关 = 一声软木鱼（第 10 小节第 2 拍）；18.0–20.0 噪声上升音 + 反向钟声吸气，把能量吸向 20.0。</div><div><b>转场</b>20.0 硬切到 Lyra 双眼大特写，Reveal 一镜到底从这一帧开始，Boom 同帧。</div></div></div></div><div class="shotrow"><img src="stills/S09.jpg" alt="S09 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">20.00–27.00</span> S09 · 05 · Harbour Interchange：30 m 清水混凝土柱廊，Exit B 方向柱旁，浅灰水磨石，18:31 晚高峰</h3>
+<div class="facts"><div><b>尺度</b>LIVEX · REVEAL</div><div><b>景别 / 运镜</b>大特写（眼睛）→ 全身 → 设备全景 → 人机双人全景 → 大全景（柱廊）；一镜到底后拉 + 升起，主缓动 cubic-bezier(0.16,1,0.3,1)。关键帧（Space z，cm）：20.0 z −45 双眼大特写 → 21.5 z −260 Lyra 全身充满画高 → 22.5 z −330 细黑边框与内框线扫入 → 23.5 z −420 header、摄像头、两条 LED 竖灯条入画，23.5–24.0 降速到 15% 在灯条与倒影上多停半拍 → 24.5 z −560 底板与锁定脚轮落地，陈师傅从前景左侧入画 → 25.5 z −800 升 0.6 m → 26.4 z −1250 升 3 m 俯 9° → 26.4–27.0 落幅静止 0.6 s（海报帧）。</div>
+<div><b>动作</b>20.0 Lyra 的眼睛和微笑，还像一个真人路人。21.5 她全身站在白色影棚背景里（生成版右手指向画右）。22.5 细黑边框与内框线扫过，玻璃上一层很淡的站厅反光——原来是屏幕。23.5 略宽、向前微挑的 header 横梁与正中黑色玻璃摄像头、正面两条几乎通高的白色 LED 竖灯条入画，灯条在水磨石上拖出两道竖直倒影（Gateway 光形）。24.5 宽大的黑色底板与 4 个锁定万向脚轮压在水磨石上；陈师傅从前景左侧以 3/4 背影入画，仍举着字条，红围巾是唯一暖色——1.58 m 对 2.18 m。25.5 第一声下车铃「叮」，左下角字卡「05 · Harbour Interchange」。25.5–26.4 继续后拉升高：30 m 柱廊，下班人潮带 1/4 秒快门拖影像水一样绕流，只有她和 Lyra 静止；沿路线指向的画右，远处真实的 Exit B 扶梯亮着暖光。</div><div><b>设备</b>Gateway V2（86 寸竖屏，218×114×60 cm，整机首次完整亮相）：落地立在柱廊间 Exit B 方向那根柱旁，4 个万向脚轮锁定，宽大黑色矩形底板压在浅灰水磨石上，屏幕朝她。哑光黑粉末喷涂钢机身，侧面竖向打孔散热格栅；header 横梁略宽于机身、向前微挑，正中黑色玻璃摄像头对着她举起的字条；细黑边框 + 内框线。整机 2.18 m 比她高 60 cm；可视区约 107×190 cm，Lyra 1:1 等身。</div>
+<div><b>Lyra</b>全身写实：白色短袖小立领针织上衣（左胸小蓝 X）、黑皮带金扣、炭灰高腰阔腿裤、黑色尖头高跟鞋，白色影棚背景右侧柔和投影。生成版右手指向画右；代码版双手腰前轻握。</div><div><b>UI</b>屏幕 UI 完整可见：状态栏 y 52–108（[X] Harbour Interchange ｜ 18:31 ● 钴蓝在场点呼吸）；Lyra 腰部以上无遮挡；卡片区 y ≥ 1160 路线卡「Exit B → Market Hall → Gate C · 9 min」，钴蓝路线指向画右，Step-free 开关为开；语音线 y 1790 平静。影片层 25.5 站牌字卡。</div>
+<div><b>声音</b>20.0 Boom（62→28 Hz）+ 宽 Pad（Cmaj9 → G/B），直立贝斯拨弦与 35 Hz 低频第一次进入，毛毡钢琴旋律，无鼓，漂浮。20.0 Lyra 动机再响一次，干声起步，尾音混响随后拉从 0 s 长到站厅的 3 s。25.5 第一声公交铃「叮」（E6 1318.5 Hz，非谐泛音 1/2.76/5.40）落在第 13 小节第 4 拍，与字卡同帧。人潮声随画面变宽；26.0–27.0 木质点击铺垫下一段（音乐 C 段延续到 28.0 小节线）。</div><div><b>转场</b>27.0 硬切：从最宽的海报帧切回 Gateway 屏幕近景，开始第一次 Handoff。</div></div></div></div><div class="shotrow"><img src="stills/S10.jpg" alt="S10 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">27.00–30.00</span> S10 · Gateway 屏幕近景 → Harbour Line 通往 Market Hall 的白墙步行通道（→ Exit B），尽头上行扶梯，18:34</h3>
+<div class="facts"><div><b>尺度</b>PLACE · JOURNEY</div><div><b>景别 / 运镜</b>屏幕近景 → 蓝色墙晕特写 → 中景（白墙上的 55 寸 Portal）→ 深处扶梯上的她（全景）；27.0–27.767 Gateway 屏幕近景锁定；27.767–28.0 Handoff 8 帧（出框 3 + 光斑甩镜 2 + 入框 3）；28.0–30.0 通道内 35mm 缓推 5%（settle），蓝色墙晕先占左 2/3，28.5 起焦点落到 Portal 屏幕。</div>
+<div><b>动作</b>27.0 Gateway 屏幕里的 Lyra（生成版转身，从左边框走出）。28.0「叮」，箭头卡「→ Exit B」。第一眼是白色混凝土墙上一圈柔和蓝色墙晕（Portal 光形），然后是墙上的 55 寸 Portal：Lyra 从右边框走进来，（生成版）抬手向上一指；屏幕显示「Exit B ↑ · Market Hall 120 m」。29.0–30.0 画面深处，扶梯把陈师傅送向上方暖光，一点红围巾。</div><div><b>设备</b>Gateway V2 → Portal 55 寸：Portal 55 寸（约 73×125 cm）壁挂在通道白色清水混凝土墙上，屏幕中心离地约 150 cm；超薄机身，拉丝银色铝合金细边框 + 黑色内边框，顶部正中梯形银色摄像头模组（小 X 标志、镜头、指示灯），背后柔和蓝色墙晕。位于她行进方向左侧墙上，扶梯在其右后方。</div>
+<div><b>Lyra</b>同一个 Lyra（白底），约 0.6 倍真人；生成版从右边框走入、抬手向上指；代码版侧移入框后静立。</div><div><b>UI</b>Portal 画布（light）：状态栏「[X] Exit B passage ｜ 18:34 ●」；卡片区（y ≥ 1160）：大号「Exit B ↑」（Geist 84/500，↑ 为钴蓝），副行「Market Hall 120 m」（Geist 29）；一条钴蓝竖线从卡片顶端向上画出 120 px。</div>
+<div><b>声音</b>27.8 高跟鞋 heel click（出框）；27.87–27.93 甩镜 = 立体声呼啸（带通扫频，声像右→左）；28.0「叮」+ 入框 heel click 同帧。D 段半速有机律动从 28.0 起：底鼓 1、2&amp;、4&amp;，拍手 3，沙锤八分，木鱼切分，Sub 八分，刷鼓；28.5 Lyra 动机在新地点重现；扶梯机械声渐远。</div><div><b>转场</b>29.767–30.0 第二次 Handoff 8 帧：Lyra 从 Portal 左边框侧移出框 → 光斑甩镜 → 30.0 从 Market Hall Gateway 右边框入框，「叮」。</div></div></div></div><div class="shotrow"><img src="stills/S11.jpg" alt="S11 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">30.00–33.00</span> S11 · 06 · Market Hall：旧菜市场铁骨玻璃顶下的商业连廊，俱乐部球迷摊位 Stall 4 前，18:41</h3>
+<div class="facts"><div><b>尺度</b>PLACE · JOURNEY</div><div><b>景别 / 运镜</b>中景：Gateway（画左）与 Stall 4（画右）、陈师傅同框 → 32.0 近景：两条围巾叠在一起；40mm f/2.8，30.0–32.0 缓慢横移（cine）从 Gateway 屏幕移向摊位；32.0 动作切近景（她把新围巾绕上脖子）。</div>
+<div><b>动作</b>30.0「叮」，字卡「06 · Market Hall」。摊位旁 Gateway 里，Lyra 从右边框走进来，屏幕是商品推荐卡「No. 7 · Home scarf · Last 3 · Stall 4」，卡上是藏青白条围巾的产品图。陈师傅照着卡片看向 Stall 4，买下一条，把藏青白条 7 号围巾叠在自己织的红围巾上（红色仍从领口露出）。摊位上的年轻女孩冲她竖起大拇指。</div><div><b>设备</b>Gateway V2（零售推荐）：Gateway 落地立在 Stall 4 左侧的陶土地砖上，4 个脚轮锁定，底板与摊位木台基平行，屏幕朝向连廊人流；2.18 m 机身略低于木摊位顶棚。两条白色 LED 竖灯条在地砖上拖出竖直倒影（再教一次 Gateway 光形）。</div>
+<div><b>Lyra</b>同一个 Lyra（白底），1:1 等身；生成版入框后侧身示意摊位；代码版侧移入框后 makeRoom(0.5, −1) 为商品卡让位。</div><div><b>UI</b>Gateway 画布（light）：状态栏「[X] Market Hall ｜ 18:41 ●」；商品卡（y ≥ 1160）：眉标「PICKED FOR TONIGHT」（Geist Mono 21）；标题「No. 7 · Home scarf」（Geist 50/600）；藏青白条针织围巾产品图；「Last 3」（数字 Geist 84/500）；行动行「Stall 4 →」（钴蓝箭头）。</div>
+<div><b>声音</b>30.0「叮」+ 入框 heel click；Lyra 动机重现；摊贩叫卖（听不清）、塑料袋窸窣、毛线摩擦；D 段律动继续，刷鼓渐密；卡片入场一声木质轻点。</div><div><b>转场</b>33.0 动作剪辑：一个背包球迷从画右闯进她的去路。</div></div></div></div><div class="shotrow"><img src="stills/S12.jpg" alt="S12 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">33.00–37.50</span> S12 · 06 · Market Hall 连廊中段，玻璃顶下，人流中的一小块空地</h3>
+<div class="facts"><div><b>尺度</b>PLACE · JOURNEY</div><div><b>景别 / 运镜</b>中景双人（33.0–34.5）→ 陈师傅近景（34.5–37.5）；50mm f/2，33.0 手持跟随球迷闯入；34.5 切 85mm 近景锁定，36.5–37.5 极慢推 3%。背景深处保留 Gateway 两道白色竖光的焦外。</div>
+<div><b>动作</b>一个背双肩包、盯着手机地图的年轻外国球迷拦住她：「Gate C?」她不假思索抬手指向前方：「Past the clock tower. Follow the scarves.」球迷跑开了。她自己愣了一下，笑了——31 年的反射还在，她又成了回答问题的人。</div><div><b>设备</b>无（背景深处 Gateway 两道白色竖光虚焦）：Market Hall 的 Gateway 在她身后约 15 m，只以两道白色竖光与地面倒影出现在焦外，继续教光形。</div>
+<div><b>Lyra</b>不入画。</div><div><b>UI</b>无。</div>
+<div><b>声音</b>球迷的「Gate C?」带铁与玻璃连廊混响（约 1.8 s）；她的回答干脆无停顿；刷鼓加密到十六分；36.5 一声轻笑；37.5 年长女声无词哼唱的前四个音首次出现（E–G–B–A，未完成）。</div><div><b>转场</b>37.5 切到她的背影跟拍（人流方向连续）。</div></div></div></div><div class="shotrow"><img src="stills/S13.jpg" alt="S13 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">37.50–42.00</span> S13 · 06 · Market Hall 连廊尽头 → 通往广场的自动玻璃门</h3>
+<div class="facts"><div><b>尺度</b>PLACE · JOURNEY</div><div><b>景别 / 运镜</b>中全景背影跟拍 → 41.0 门缝光特写；35mm 斯坦尼康，在她身后 2 m 与人流同速跟拍（37.5–40.5），步频与四分音符同步；40.5 起略快于她，越肩推向门；41.0–42.0 门缝光占满画面中心（push 加速进入剪辑点）。</div>
+<div><b>动作</b>连廊里的条纹围巾越来越多，她的步子第一次跟上了人潮。39.0 玻璃顶外，体育场钢结构屋顶一圈圈亮起。41.0 尽头的自动玻璃门向两侧打开：风、雨丝和球迷的齐唱一起涌进来。</div><div><b>设备</b>无：无设备入画。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无。</div>
+<div><b>声音</b>脚步渐与律动对齐；39.0 屋顶泛光亮起时一声远处低频 Boom；41.0 门开：400 Hz 低通在 6 帧内（41.0–41.2）打开到全频，风、雨、齐唱涌入；41.5–42.0 能量上冲进 E 段。</div><div><b>转场</b>42.0 光的匹配剪辑：门缝里的光 → 广场上 Paragon 上灯箱（同位置同亮度），「叮」同帧。</div></div></div></div><div class="shotrow"><img src="stills/S14.jpg" alt="S14 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">42.00–47.00</span> S14 · 07 · Harbour Depot：Harbour Stadium 前广场（旧 7 路总站原址），1978 年红砖钟楼旁，湿花岗岩，18:52 蓝调细雨</h3>
+<div class="facts"><div><b>尺度</b>PLACE · CITY</div><div><b>景别 / 运镜</b>全景（42.0–43.0）→ 中近景：手掌贴砖 + Paragon 屏幕（43.0–45.0）→ 中景：Paragon 与屏幕里的 Lyra（45.0–46.0）→ 中景：Paragon 背面（46.0–47.0）；42.0 28mm 低位全景：钟楼与 Paragon 并立，条纹围巾人潮穿过；43.0 切 50mm 中近景（她画左、红砖墙画中、Paragon 屏幕画右）；45.0 切 Paragon 中景（上下灯箱都在画内）；46.0 她出画，摄影机左→右横移 1.8 m 掠过钟楼砖角，借前景遮挡做隐形剪辑，擦除后机位已在 Paragon 背面（cine，1.0 s）。</div>
+<div><b>动作</b>42.0「叮」，字卡「07 · Harbour Depot」。蓝调细雨，旧总站只剩一座红砖钟楼，钟面指向 6:52。Paragon Outdoor 立在钟楼旁：顶棚檐口雨水连成一条线滴落，上下两个灯箱在湿花岗岩上拉出两道长倒影。她走到钟楼前，把手掌贴上红砖：「I drove this route for thirty years.」Paragon 里的 Lyra（黑底）：「Then you know the way.」她挺直背，汇入人潮出画。摄影机留下，绕到 Paragon 背面：黑色点阵面板中央亮着 X 和 LIVEX.AI。46.5 字卡「rrrrt」一声，数字从 07 倒翻回 01。</div><div><b>设备</b>Paragon Outdoor 65 寸（正面 → 背面）：落地固定在钟楼东侧 2 m 的花岗岩铺地上（无脚轮），高 2.46 m，比她高近 90 cm，与钟楼底层拱门同高。缎面拉丝不锈钢图腾柱体（非镜面）；平直薄银雨棚由两根短深色立柱托起，雨水沿檐口滴成一线；正面整块黑色玻璃；屏幕上下各一个白色点阵打孔灯箱，银色边框 + 明亮白色 LED 边缘光；屏幕上下各两条深色圆角扬声器格栅；屏幕正上方居中摄像头；侧板竖向打孔散热。背面：黑色点阵面板，中央发光 X + LIVEX.AI，同样有上下灯箱。屏幕约 81×143 cm，Lyra 约 0.75 倍真人。</div>
+<div><b>Lyra</b>同一个 Lyra，纯黑背景夜间模式，约 0.75 倍真人，3200 nits 在雨夜里清楚。生成版说话时轻轻点头；代码版 lyra_black 静帧微呼吸。</div><div><b>UI</b>Paragon 画布（dark）：状态栏「[X] Harbour Depot ｜ 18:52 ●」；深色卡片 rgba(18,22,30,.62)（y ≥ 1160）：眉标「TONIGHT」；标题「Harbour FC Women」；「Kick-off 19:30」（数字 Geist 84/500）；行动行「Gate C → 120 m · short queue」（→ 钴蓝）。说话时字幕区 y 1030–1150 出 Geist 字幕，语音线 y 1790 起伏。</div>
+<div><b>声音</b>42.0「叮」+ E 段全速起步，但对白期间只留底鼓和球迷整齐的拍手（2、4 拍，实录 120 BPM，城市自己在演奏）；雨打不锈钢顶棚的高频「嗒嗒」对比砖砌钟楼的低沉共鸣；43.0 手掌贴砖一记 90 Hz 闷响；43.2–44.8 她的台词（广场混响 1.2 s）；45.0 Lyra 动机重现 + 台词（干声）；46.0 起 Bass 十六分与十六分踩镲进入，滤波逐小节打开；46.5 卷帘倒卷的机械「rrrrt」（即 00.0 那一声的倒放）。</div><div><b>转场</b>47.0「叮」硬切：字卡已翻到 01，进入上游四站蒙太奇。</div></div></div></div><div class="shotrow"><img src="stills/S15.jpg" alt="S15 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">47.00–52.00</span> S15 · 同一分钟（18:53）的旧 7 路上游四站 + Gate C：47.0 01 · St. Mary&#x27;s 病房走廊 ｜ 48.0 02 · Western Univ 草坪 Quad ｜ 49.0 03 · Harbour Hotel 大堂 ｜ 50.0 04 · Pier Tower 电梯厅 ｜ 51.0 → Gate C 检票闸机 → 看台隧道</h3>
+<div class="facts"><div><b>尺度</b>NETWORK · CITY</div><div><b>景别 / 运镜</b>五格各 1.0 s 中景，Center-Lock：每格 Lyra 双眼落在画面同一坐标；每格锁定 + 3% 推进（settle）；焦距按设备大小换算，使五台屏幕里 Lyra 双眼都注册在影片坐标 (960, 405)、双眼间距恒为 20 px；剪辑点全部在整秒；51.5–52.0 穿过隧道向泛光推进（push）。</div>
+<div><b>动作</b>47.0 01 · St. Mary&#x27;s：病房走廊墙上的 55 寸 Portal 处于夜间模式（亮度约 30%），护士推着围条纹围巾的轮椅老人去休息厅看比赛，Lyra（生成版）食指轻放唇前；走廊尽头休息厅里 Gateway 的两道竖光在焦外。48.0 02 · Western Univ：草坪边的 Paragon Outdoor，学生披着条纹旗从它前面跑过。49.0 03 · Harbour Hotel：大堂 Gateway 前，一家三口换上球衣。50.0 04 · Pier Tower：电梯厅胡桃木墙板上的 43 寸 Portal，加班的女人把西装外套换成球衣；玻璃门外 Paragon 的两块白矩形在焦外。51.0 回到她：箭头卡「→ Gate C」，闸机旁墙上的 32 寸 Portal；她过闸，51.5 闸机「咔嗒」，隧道尽头碗形看台在泛光里展开。</div><div><b>设备</b>Portal 55 寸 → Paragon Outdoor → Gateway V2 → Portal 43 寸 → Portal 32 寸：01 Portal 55 寸壁挂在病房走廊木饰面墙上，屏幕中心约 150 cm，蓝色墙晕是暖黄夜灯里唯一冷色；02 Paragon 落地固定在 Quad 草坪边石材步道上，雨棚与上下灯箱清晰，背后校舍窗灯；03 Gateway 落地立在接待台一侧石材地面，脚轮锁定，LED 竖灯条在抛光地面拖出倒影；04 Portal 43 寸（约 57×99 cm）壁挂在胡桃木墙板上，屏幕中心约 150 cm；Gate C Portal 32 寸（约 43×74 cm）壁挂在闸机旁清水混凝土墙上，屏幕中心约 150 cm，高于约 100 cm 的三辊闸。</div>
+<div><b>Lyra</b>五格同一个 Lyra、同一坐标：01 黑底夜间模式（生成版食指放唇前）；02 黑底；03 白底 1:1 等身；04 白底；Gate C 白底。代码版全部静帧微呼吸，不做手势。</div><div><b>UI</b>同一栅格、同一位置（y ≥ 1160），状态栏时间都是 18:53（同一分钟）：01「Match on · Lounge 2F · Quiet volume」（dark，屏幕亮度 30%，音量滑杆滑向低档）；02「Fan Zone · Quad · 19:30」（dark）；03「Welcome · Late checkout tonight」（light）；04「Your ride · Door B · 3 min」（light）；Gate C「Section 114 · Lift 3 · Step-free」（light，19:02）。</div>
+<div><b>声音</b>E 段推进（底鼓更密、十六分踩镲、拍手 2/4、Bass 十六分、滤波逐小节打开）；47.0/48.0/49.0/50.0/51.0 各一声「叮」+ 4 帧真实环境声（轮椅轮子、校园欢呼、行李车滚轮、写字楼闸机翼门气动声）+ 一声短玻璃音；01 格音乐瞬间压低 6 dB 0.5 s（安静的一拍）；49.75 噪声上升音；51.5 闸机「咔嗒」；51.75 一拍静默；52.0 接球场轰鸣。</div><div><b>转场</b>52.0 硬切：隧道尽头的泛光 → 看台 12 排 7 号，Boom 同帧。</div></div></div></div><div class="shotrow"><img src="stills/S16.jpg" alt="S16 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">52.00–54.00</span> S16 · Harbour Stadium 114 区 12 排 7 号 ↔ 草坪（Harbour FC Women 热身），19:08，泛光灯，细雨在光里发亮</h3>
+<div class="facts"><div><b>尺度</b>PERSON · AI CITY</div><div><b>景别 / 运镜</b>四个 0.5 s：52.0 中近景她坐进 7 号座 ｜ 52.5 林的 POV 长焦看台（人海里一张白纸一点红）｜ 53.0 中景林拍胸口 ｜ 53.5 近景她收回字条微笑；剪辑点全在拍上：52.0 50mm 侧前方；52.5 300mm 从草坪仰拍看台，压缩空间；53.0 200mm 林的中景（泛光逆光，看台焦外）；53.5 85mm 回到陈师傅锁定，下一镜摄影机从她身边升起。</div>
+<div><b>动作</b>52.0 她在 12 排 7 号坐下，左下角字卡翻成「07 · Last stop」。52.5 草坪上热身的林抬头扫视看台，陈师傅把铅笔字条高高举起当标语——满场人海里一张白纸、一点红。53.0 林看见了，笑着用右手拍了两下胸口的 7。53.5 她把字条收回胸前，笑了；城市另一头响起一声铃。</div><div><b>设备</b>无：无设备入画。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无 LiveX UI；影片层站牌字卡与节点标签。</div>
+<div><b>声音</b>52.0 Boom + E 大调绽放（Emaj9）+ Sub E1 长音 + 钢琴；字卡翻牌细碎 split-flap 声；53.0 林拍胸口两记闷响（53.0/53.25）的同时所有乐器抽空，看台声浪推远到 −20 dB，只剩风声和年长女声哼唱的最后两个音（第一次唱完整，落在 E）；53.5 七声铃第一声（01 · St. Mary&#x27;s，B5）从城市另一头穿过静默——先闻其声。</div><div><b>转场</b>54.0 连续运动：摄影机从她身边升起接航拍，节点铃声继续。</div></div></div></div><div class="shotrow"><img src="stills/S17.jpg" alt="S17 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">54.00–57.00</span> S17 · Harbour Stadium 上空 → 约 100 m → 约 500 m：蓝调中的真实港城，雨刚停，地面湿亮</h3>
+<div class="facts"><div><b>尺度</b>AI CITY · AI CITY</div><div><b>景别 / 运镜</b>从她身边升起 → 100 m 俯视体育场与四个入口广场 → 500 m 城市大全景（地平线入画）；54.0–54.5 从她身边垂直升起越过看台顶棚（crane 缓动 (.45,0,.1,1)）；54.5–55.5 在约 100 m 减速近乎悬停，俯角 −40°；55.5–56.5 升到约 500 m，俯角抬到 −22°，地平线入画；56.5–57.0 缓慢上升 + 0.5° 漂移。</div>
+<div><b>动作</b>100 m：四个入口广场上四台 Paragon 的上下灯箱像一圈白色表盘刻度；钟楼旁那台最近，两块白矩形光形清楚；Market Hall 玻璃顶下 Gateway 的两道白色竖光也认得出。七声下车铃沿旧 7 路由远及近依次点亮七个节点：01 St. Mary&#x27;s → 02 Western Univ → 03 Harbour Hotel → 04 Pier Tower → 05 Harbour Interchange → 06 Market Hall → 07 Harbour Depot，每个节点旁闪现 0.6 秒站号——这条线路从城市另一头一路「开」到她所在的体育场。全程不画线。56.5 起数百个节点以随机延迟静静亮起。</div><div><b>设备</b>Paragon Outdoor / Gateway V2 / Portal（仅以各自光形出现）：节点按真实街角与建筑手工布点：Paragon 只在室外广场与草坪（体育场四个入口、钟楼旁、Western Univ），Gateway 在室内大堂与连廊（透过玻璃见两道竖光），Portal 在走廊与电梯厅窗内（一圈蓝晕）。亮度 ≤ 周围窗灯的 1.3 倍，5600K 中性白（窗灯 2700K），竖向形状，与铃声同步。</div>
+<div><b>Lyra</b>不入画（太远）；每个节点里都是她。</div><div><b>UI</b>无屏幕 UI；影片层节点标签（Geist Mono 13 px，0.18em，1 px 竖向引线），每个 0.6 s。</div>
+<div><b>声音</b>七声铃每 0.5 s 一声（第一声 53.5 已在上一镜）：53.5 01 B5 · 54.0 02 C#6 · 54.5 03 E6 · 55.0 04 F#6 · 55.5 05 G#6 · 56.0 06 B6 · 56.5 07 E7——沿 E 大调五声音阶上行，由远及近（远处的铃更窄更湿）；Pad 展开，Sub E1，无鼓；56.5–57.0 数百节点亮起时一层极轻的玻璃颗粒声；风声，远处球场声浪。</div><div><b>转场</b>57.0 城市画面在 0.15 s 内压到全黑，接 End Card，只剩雨声与远处球场声浪尾音。</div></div></div></div><div class="shotrow"><img src="stills/S18.jpg" alt="S18 代码影片画面" loading="lazy"><div>
+<h3><span class="tc">57.00–60.00</span> S18 · 黑场（End Card）</h3>
+<div class="facts"><div><b>尺度</b>AI CITY · AI CITY</div><div><b>景别 / 运镜</b>品牌卡：居中锁定组合；无摄影机运动；58.5「AI City」一次轻微对焦（blur 6→0）。</div>
+<div><b>动作</b>城市压到全黑。一道铅笔石墨质感的回旋笔画从左下向右上画出（来自字条上 Seat 7 下的那道线），一道钴蓝 #2F5BEA 发光笔画从右下向左上画出（来自 Lyra 路线卡上的路线）。两笔在中心交叉的那一帧同时转为纯白，成为 LiveX 的 X。随后 X 右侧出现 LIVEX.AI 字标，下方大字 AI City，再下方 Instrument Serif 斜体 Ask the city.，句号从暖红过渡到钴蓝。</div><div><b>设备</b>无（LiveX 品牌标志）：无设备。</div>
+<div><b>Lyra</b>无。</div><div><b>UI</b>无。</div>
+<div><b>声音</b>57.0 音乐与城市声在 0.15 s 内压掉，只剩雨声和远处球场声浪尾音；57.5 Sonic Logo 第一声「叮」：原始公交铃 E6（与 X 交叉同帧）；58.0 第二声「叮」：玻璃 + 钢质合成铃 B6（上行纯五度）+ 40 Hz 低频，落在第 30 小节强拍；58.5 起大调动机 G#5–B5–E6 轻声收尾；尾音 2.5 s，59.6–60.0 只剩雨声。成片 −14 LUFS / −1 dBTP。</div><div><b>转场</b>60.0 结束，最后一帧静止，不淡出。</div></div></div></div></div></section>
+<section><div class="eyebrow">Storyboard</div><h2>GPT-image-2.5 分镜提示词</h2><div class="read md"></div></section>
+<section><div class="eyebrow">Video</div><h2>Seedance 2.5 视频提示词</h2><div class="read md"></div></section>
+<section><div class="eyebrow">Claude Code · Motion / UI</div><h2>一套系统，所有节点</h2><div class="stills"><img src="stills/ui_a.jpg" alt="" loading="lazy"><img src="stills/ui_b.jpg" alt="" loading="lazy"><img src="stills/ui_c.jpg" alt="" loading="lazy"></div><div class="md"></div></section>
+<section><div class="eyebrow">Music + Sound</div><h2>从小调到大调：孤独到连接</h2><div class="md"></div></section>
+<section><div class="eyebrow">Code Film</div><h2>这支片的代码版</h2><div class="md"><h1>07 · Claude Code 动态影片：《7 路 / Route 7》代码版</h1>
+<p>这是整支片的"代码版"：1920×1080、30 fps、60.0 秒。每一帧画面、每一个声音都由 <code>film/</code> 里的代码确定性地生成，没有使用任何 AI 生成的图片或视频。它和 <code>01</code>–<code>06</code> 的实拍/生成版共用同一份主剧本（<code>master.json</code>）、同一套时间码和同一套 UI，可以当作成片级动态分镜（animatic），也可以直接作为最终片里的 Motion Graphic 与 Screen UI 层。</p>
+<h2>素材只有三类</h2>
+<ol>
+<li><strong>客户产品图</strong>：Gateway 正/背、Paragon Outdoor 正/背、Portal 32/43/55，全部从规格单上抠像。背景复杂的银色机身用了点提示 SAM，黑色机身用亮度蒙版，底座和阴影单独处理。每台设备的屏幕四角都由图像分析测得（<code>assets/cut/screens.json</code>），UI 通过单应矩阵（CSS <code>matrix3d</code>）贴进真实屏幕的真实透视。</li>
+<li><strong>Lyra 的两张全身照</strong>（白底/黑底）和它们的抠像。</li>
+<li><strong>代码</strong>：环境、人物剪影、字条、卷帘牌、城市、字体、UI、声音全部由代码生成。</li>
+</ol>
+<h2>镜头对照（主剧本 → 代码版）</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>镜号</th>
+<th>时间</th>
+<th>主剧本</th>
+<th>代码版做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S01</td>
+<td>0.0–1.5</td>
+<td>1985 年驾驶座，卷帘牌 7 HARBOUR DEPOT</td>
+<td>16mm 模块：4:3 遮幅，每秒 24 个独立颗粒场，±1.5 px 片门抖动，halation 光晕，暖青调色，灰尘划痕。卷帘牌是背光布带在滚筒上滚动，带机械回弹；镜头推向"7"</td>
+</tr>
+<tr>
+<td>S02</td>
+<td>1.5–4.5</td>
+<td>2026 年铅笔字条，翻盖手机"啪"地合上</td>
+<td>匹配剪辑：两个"7"的位置和大小是在浏览器里实测后对齐的。纸纹是程序化生成的（纤维加折痕），铅笔字用石墨噪点纹理填充手写字形。翻盖机上半部 3D 翻转合上，这一声就是剪辑点</td>
+</tr>
+<tr>
+<td>S03–S04</td>
+<td>4.5–10</td>
+<td>新换乘大厅，找不到旧站名；左缘一道冷白竖光；"May I?"</td>
+<td>2.5D 柱廊，导向牌在对焦平面上出现 1 秒（Exit A / Exit B / Stadium · Gate C，没有 Harbour Depot）。人潮是方向性运动模糊的剪影，陈师傅是真实比例剪影加唯一的红围巾。Gateway 的 LED 灯条是画左一道虚焦冷光</td>
+</tr>
+<tr>
+<td>S05–S06</td>
+<td>10–15</td>
+<td>过肩与反打，"Route 7's last stop. I know it."</td>
+<td>近景使用与屏幕同源的正面画面板，完全看不到边框，Lyra 读作真人。前景是虚焦的陈师傅头部和红围巾。人说的话用 Instrument Serif 斜体，Lyra 用 Geist</td>
+</tr>
+<tr>
+<td>S07</td>
+<td>15–17.5</td>
+<td>镜片反光里铅笔字变印刷体</td>
+<td>椭圆镜片遮罩加冷光扫过，每行手写字模糊淡出，Geist 印刷体从模糊中聚焦</td>
+</tr>
+<tr>
+<td>S08</td>
+<td>17.5–20</td>
+<td>路线卡与 Step-free</td>
+<td>屏幕下 22% 的路线卡（Exit B → Market Hall → Gate C · 9 min），开关用 snap 曲线点亮，箭头向画右轻推</td>
+</tr>
+<tr>
+<td>S09</td>
+<td>20–27</td>
+<td>一镜到底拉远揭示</td>
+<td>2.5D 摄影机沿对数距离单调样条后拉：脸 → 全身 → 边框 → header 与 LED → 底板与脚轮 → 陈师傅 → 30 m 柱廊。对焦始终跟随设备，焦外光斑按弥散圆计算。25.5 第一声铃加站牌"05 · Harbour Interchange"</td>
+</tr>
+<tr>
+<td>S10</td>
+<td>27–30</td>
+<td>Handoff，→ Exit B，Portal 55</td>
+<td>Lyra 带水平运动模糊从 Gateway 左边框滑出，再从 Portal 右边框滑入（代码版不做步行）。开场先教"Portal 光形"：白色混凝土墙上的钴蓝墙晕</td>
+</tr>
+<tr>
+<td>S11</td>
+<td>30–33</td>
+<td>06 · Market Hall，No. 7 Home scarf</td>
+<td>铸铁拱、暖色摊位灯、Gateway 零售推荐卡。织物特写：藏青白条针织围巾落在红色粗针围巾上</td>
+</tr>
+<tr>
+<td>S12–S13</td>
+<td>33–42</td>
+<td>"Gate C?"，指路，条纹围巾，门开</td>
+<td>透过人群拍的双人镜头（逆光剪影 + 暖色轮廓光）。侧向跟拍时围巾在前景流过，39.0 体育场屋顶灯由中间向两侧逐盏点亮。门滑开，闪白</td>
+</tr>
+<tr>
+<td>S14</td>
+<td>42–47</td>
+<td>07 · Harbour Depot，钟楼，Paragon，雨</td>
+<td>蓝调广场、雨丝粒子、湿地面倒影、1978 年红砖钟楼（暖光钟面指向 6:52）。Paragon 夜间模式，"Then you know the way."。绕到背面露出发光的 X，split-flap 从 07 倒翻到 01</td>
+</tr>
+<tr>
+<td>S15</td>
+<td>47–52</td>
+<td>上游四站（同一分钟）加 Gate C</td>
+<td>四站各 1.0 秒。frameScreen 把四块不同尺寸的屏幕注册到同一个矩形，所以 Lyra 的眼睛在画面里始终不动（Center-Lock）。Gate C：柱上的 Portal 32、闸机、冲向泛光</td>
+</tr>
+<tr>
+<td>S16</td>
+<td>52–54</td>
+<td>12 排 7 号，Last stop</td>
+<td>泛光灯组、看台人群光带、真实透视的虚焦草坪，前景举起的铅笔字条，站牌从"Harbour Depot"翻成"Last stop"</td>
+</tr>
+<tr>
+<td>S17</td>
+<td>54–57</td>
+<td>100 m → 500 m，七声铃</td>
+<td>程序化夜城光图（路灯链、窗光、主干道、河、公园、泛光层）加 CSS 3D 真透视。100 m 时四台 Paragon 以两块白矩形的光形出现；七声铃按八分音符由远及近点亮 01–07，节点旁出现 1px 引线加站号。随后数百个节点静静亮起。不画任何连线</td>
+</tr>
+<tr>
+<td>S18</td>
+<td>57–60</td>
+<td>End Card</td>
+<td>铅笔石墨笔画（feTurbulence 纹理）与钴蓝发光笔画交叉，同一帧转为白色 X。随后依次出现 LIVEX.AI 字标、AI City、<em>Ask the city.</em>，句号从 #C8372D 过渡到 #2F5BEA</td>
+</tr>
+</tbody>
+</table></div>
+<h2>系统（<code>film/src</code>）</h2>
+<ul>
+<li><code>engine.js</code>：时间轴、命名缓动（glide / settle / cine / crane / push / exit / snap）、单调三次样条、单应矩阵、种子随机。</li>
+<li><code>devices.js</code>、<code>space.js</code>：真实尺寸的设备、屏幕透视贴图、2.5D 摄影机（F = 1150，薄透镜景深）、接触阴影、抛光地面反射、屏幕辉光、Portal 墙晕、<code>frameScreen</code>（屏幕锚定构图，用于中心锁定与匹配剪辑）。</li>
+<li><code>ui.js</code>：Lyra OS（状态栏、在场呼吸点、语音线、字幕胶囊、卡片、路线图、让出空间 makeRoom、Handoff slide）。</li>
+<li><code>env.js</code>、<code>city.js</code>：3D 点光源焦外光斑（光斑大小由弥散圆决定，能量守恒）、雨、城市光图、体育场、节点。</li>
+<li><code>route7.js</code>：站牌字卡、双字体字幕、16mm 模块、卷帘牌、铅笔字条、翻盖手机、钟楼、split-flap、织物、人物剪影。</li>
+<li><code>s1_human.js</code> … <code>s5_final.js</code>：五幕。</li>
+</ul>
+<h2>声音（<code>film/audio</code>）</h2>
+<p><code>synth.py</code>（从零合成的乐器与拟音）加 <code>route7_score.py</code>（逐帧对齐的总谱）。120 BPM，E 调，调性来自 1980 年代公交下车铃基频 E6。0–1.5 秒是单声道、带磁带嘶声的 1985 年；Lyra 的"声音"是三音玻璃钟动机；Sonic Logo 是"叮—叮"：E6 公交铃加 B6 玻璃钢铃，外加 40 Hz 低频。成片用两遍 EBU R128 响度归一到 -14 LUFS / -1 dBTP。</p>
+<h2>复现</h2>
+<pre><code class="language-bash">pip install numpy scipy pillow imageio-ffmpeg numba
+cd film
+node render.mjs --video --workers 3            # 画面 → out/film_silent.mp4
+python3 audio/route7_score.py ../out/score.wav # 声音
+python3 finish.py                              # 混合：master / X / web 三个版本
+</code></pre>
+<h2>代码版与实拍/生成版的区别</h2>
+<ul>
+<li>代码版没有真人表演。陈师傅由剪影、红围巾、字条、字幕和声音代表；Lyra 是静态照片，只有呼吸、缩放和侧移，所以镜像指向、步行、手势都由 UI 箭头和 Handoff 滑动替代。</li>
+<li>1985 年的手握方向盘在代码版里换成了卷帘牌：钩子依然是"7"的时空匹配剪辑。</li>
+<li>林在草坪上拍胸口的镜头，代码版不表现，由举起的字条和"Last stop"字卡承载。</li>
+<li>片尾有一行小字说明：这是一支 spec film，画面、UI、动效与声音全部由 Claude 用代码生成。要去掉它，删除 <code>s5_final.js</code> 中的 <code>this.credit</code> 即可。</li>
+</ul></div></section>
+<footer>LiveX AI City · 概念、导演 Treatment、分镜、提示词、动态影片（画面 / UI / 动效 / 声音）全部由 Claude 生成；影片每一帧与每一个声音都由代码渲染。</footer></div>
+<script>
+document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', () => {
+  const pre = b.parentElement.querySelector('pre');
+  const done = () => { b.textContent = '已复制'; setTimeout(() => b.textContent = '复制提示词', 1600); };
+  if (navigator.clipboard) navigator.clipboard.writeText(pre.textContent).then(done, () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '已选中，请按复制'; });
+}));
+</script>

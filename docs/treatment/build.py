@@ -87,7 +87,7 @@ def page(video='LiveX_AI_City_60s_web.mp4', poster='stills/poster.jpg', stills_d
             last = s['section']
         strip.append(f'<div class="shot" style="left:{L}%;width:{Wd}%;background-image:url({stills_dir}/{s["id"]}.jpg)"><span>{esc(s["id"])}</span></div>')
     strip.append('<div class="ticks">' + ''.join(f'<i style="left:{t / 60 * 100}%"><b>{t}</b></i>' for t in range(0, 61, 5)) + '</div></div></div>')
-    out.append(f'<section><div class="eyebrow">60 秒故事</div><h2>{esc(M["title_zh"])}</h2><div class="read md"><p>{esc(M["story_zh"])}</p></div>{"".join(strip)}</section>')
+    out.append(f'<section><div class="eyebrow">60 秒故事</div><h2>{esc(M["title_zh"])}</h2><div class="read md">{"".join(f"<p>{esc(x)}</p>" for x in M["story_zh"].split(chr(10)) if x.strip())}</div>{"".join(strip)}</section>')
     # shot list
     rows = []
     for s in M['shots']:
@@ -97,7 +97,7 @@ def page(video='LiveX_AI_City_60s_web.mp4', poster='stills/poster.jpg', stills_d
 <div><b>动作</b>{esc(s['action_zh'])}</div><div><b>设备</b>{esc(s['device'])}：{esc(s['device_placement_zh'])}</div>
 <div><b>Lyra</b>{esc(s['lyra_zh'])}</div><div><b>UI</b>{esc(s['ui_zh'])}</div>
 <div><b>声音</b>{esc(s['sound_zh'])}</div><div><b>转场</b>{esc(s['transition_out_zh'])}</div></div></div></div>''')
-    out.append(f'<section><div class="eyebrow">分镜表 · Shot List</div><h2>{len(M["shots"])} 个镜头，一条尺度阶梯</h2><div class="shots">{"".join(rows)}</div></section>')
+    out.append(f'<section><div class="eyebrow">分镜表 · Shot List</div><h2>{len(M["shots"])} 个镜头，一条尺度阶梯</h2><p class="note">每一行左侧的画面取自代码版影片的对应时刻；文字是实拍 / 生成版的主剧本。</p><div class="shots">{"".join(rows)}</div></section>')
     # prompts
     for name, title, eb in [('03_GPT-image-2.5_分镜提示词.md', 'GPT-image-2.5 分镜提示词', 'Storyboard'), ('04_Seedance-2.5_视频提示词.md', 'Seedance 2.5 视频提示词', 'Video')]:
         head, blocks = split_prompts(name)
@@ -108,6 +108,7 @@ def page(video='LiveX_AI_City_60s_web.mp4', poster='stills/poster.jpg', stills_d
                ''.join(f'<img src="{stills_dir}/{n}" alt="" loading="lazy">' for n in ('ui_a.jpg', 'ui_b.jpg', 'ui_c.jpg')) +
                f'</div><div class="md">{md("05_ClaudeCode_Motion_UI_Brief.md")}</div></section>')
     out.append(f'<section><div class="eyebrow">Music + Sound</div><h2>从小调到大调：孤独到连接</h2><div class="md">{md("06_音乐与声音设计.md")}</div></section>')
+    out.append(f'<section><div class="eyebrow">Code Film</div><h2>这支片的代码版</h2><div class="md">{md("07_Claude_Code_动态影片说明.md")}</div></section>')
     out.append('<footer>LiveX AI City · 概念、导演 Treatment、分镜、提示词、动态影片（画面 / UI / 动效 / 声音）全部由 Claude 生成；影片每一帧与每一个声音都由代码渲染。</footer></div>')
     out.append('''<script>
 document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', () => {
