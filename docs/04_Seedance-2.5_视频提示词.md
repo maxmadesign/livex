@@ -47,7 +47,7 @@
 | **KF-Sxx-PLATE** | 由 KF-Sxx 在 ChatGPT 里编辑的合成底板版（= 03 的「B 合成底板版」，底板颜色以本条为准）：屏幕可视区按模式换成底板——**浅色模式**（Gateway、日间 Portal）= 均匀发光的**浅灰白**平面（线性光约为成片 UI 白 `--paper #f4f5f7` 的 85%，sRGB 约 #e3e4e6），保留 3–5% 玻璃反光；**深色模式**（Paragon、医院夜间 Portal）= **纯黑玻璃**，保留很淡的环境反光。删除画面里所有文字、字卡、UI | Seedance 的输入帧一律用 PLATE 版（原名 KF-Sxx-BLK，已全部改名）。理由与键控方法见 1.6 |
 | **KF-Sxx-END / -START / -…** | 由对应 KF 派生的首帧 / 尾帧（同一对话、同一参考图，改机位或动作状态） | 每镜「Start Frame / End Frame」写明画面要求；编辑话术与附图见 03 附录「派生帧提示词」；与 03 文件名的对应见下方 0.2.1 |
 | **CS-CHEN-A / -B** | 陈师傅角色设定板（03 图 6）：正面、3/4、侧面、背面。A = 站厅 5600K 冷白光那组；B = 广场蓝调雨夜 + 钠灯那组 | 锁银灰齐下巴短发、玳瑁圆框眼镜、藏蓝及膝大衣、红色粗针围巾针法 |
-| **CS-HANDS** | 手部设定板（03 图 7）：1985 年 **31 岁**的手（左半）/ 2026 年 72 岁的手（右半），同一枚细金戒（右手无名指）、同一道左手拇指根的疤。左半：年轻、皮肤紧致，有少量生活痕迹，指节已经有职业司机的粗壮，**不是皮肤紧致的少女手**；疤是 1983 年受伤、到 1985 年已两年的旧疤：约 2 cm，淡粉偏白、已平整 | S01、S02、S07 必用。旧版左半若按更年轻的「少女手」和「刚愈合的淡粉色小疤」生成，须按本条重新生成 |
+| **CS-HANDS** | 手部设定板（03 图 7）：1985 年 **31 岁**的手（左半）/ 2026 年 72 岁的手（右半），同一枚细金戒（右手无名指）、同一道左手拇指根的疤。左半：年轻、皮肤紧致，有少量生活痕迹，指节已经有职业司机的粗壮，**不是皮肤紧致的少女手**；疤是 1983 年受伤、到 1985 年已两年的旧疤：约 2 cm，淡粉偏白、已平整 | S01、S02、S07 必用。旧版左半若是「少女手」，或疤看起来像新伤，须按本条重新生成 |
 | **CS-LIN** | 林的设定板（03 图 8；19 岁，藏青 #1c2a4a + 白竖条球衣，胸口号码区留白） | S16 |
 | **PROP-NOTE** | 米白便签 10.5×7.5 cm，对折压痕，**纸面留白**（只有纸纹、压痕和极淡的铅笔擦痕） | 字由后期贴真实手写扫描。S12–S14 字条一直在她**左手**（S14 贴砖用右手） |
 | **PROP-SCARF** | 红色粗针围巾 #C8372D + 藏青白条 7 号主场围巾（无队徽、无文字） | **32.0（J11b）起**两条叠戴 |
@@ -80,7 +80,7 @@
 | KF-S12-START · KF-S12 | J12a | 派生 / `S12_A.png` | 派生 / 直接 |
 | KF-S12-CU · -END | J12b | `S12_A_var.png`（「S12 变体」）/ 派生 | 直接 / 派生 |
 | KF-S13-START · KF-S13-END | J13a、J13b | 派生（03 无 ★） | 派生 |
-| KF-S14-WIDE-PLATE | J14a | `S14_B_varA.png`（「S14 变体 A」的底板版；原 04 名 KF-S14-BLK） | 直接 |
+| KF-S14-WIDE-PLATE | J14a | `S14_B_varA.png`（「S14 变体 A」的底板版） | 直接 |
 | KF-S14-B-START-PLATE · KF-S14-PLATE | J14b 首 / 尾 | 派生（手正抬向砖墙）/ `S14_B.png`（43.8 主帧，手掌已贴砖） | 派生 / 直接 |
 | KF-S14-C-PLATE · -C-END-PLATE · -D1-END | J14c、J14d1 | 派生 | 派生 |
 | KF-S14-BACK | J14d2 尾 | 由 `S14_A_varB.png`（「S14 变体 B」背面）派生：中央标志区改为未点亮的黑色点阵 | 派生 |
@@ -196,14 +196,14 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 | 23.5 | header 横梁与正中黑色玻璃摄像头完整入画，两条 LED 灯条几乎全长入画；23.5–24.0 降速到 15%，在灯条上多停半拍 | ≈ 4.2 m · 1.45 m · 0° | 90% | J09B（该段光流慢放 ≤ 2×） |
 | 24.5 | 宽大的黑色底板与 4 个锁定脚轮落在水磨石上，两道竖直倒影出现；陈师傅从前景左侧以 3/4 背影入画 | ≈ 5.0 m · 1.45 m · −3° | ≈ 75% | J09B + J09C 投影 |
 | 25.5 | 升 0.6 m；「叮」+ 字卡 05；陈师傅完整入画 | ≈ 6.0 m · 2.1 m · −5° | 62% | J09B + J09C 投影 |
-| 26.4 | 升 3 m、俯 9°；30 m 柱廊；画右远处 Exit B 扶梯暖光（x ≤ 1350） | ≈ 12.5 m · 4.7 m · −9° | 30% | J09B 尾帧（= KF-S09-CLEAN-PLATE） |
+| 26.4 | 升 3 m、俯 9°；30 m 柱廊；画右远处 Exit B 斜坡自动人行道暖光（x ≤ 1350） | ≈ 12.5 m · 4.7 m · −9° | 30% | J09B 尾帧（= KF-S09-CLEAN-PLATE） |
 | 26.4–27.0 | 落幅静止 0.6 s（海报帧） | 同上 | 30% | J09B 尾帧冻结 + J09C 原片人潮 |
 
 - 其余段落按 glide（0.16,1,0.3,1）做「开头快、结尾长收」的时间重映射。
 - 21.5 的「全身充满画高」和 22.5 的「矩形闭合」之间只有约 0.4 m 的后拉，这 1 秒里摄影机要慢；主要的尺度变化放在 22.5 之后（header → 底板 → 大厅）。
 - 机高从 20.6 的 1.5 m 降到 21.5 的约 1.05 m（画框中心从 Lyra 胸口移到全身中心，镜轴始终垂直屏幕、没有梯形），再随后拉缓慢升起。这是一条「先微降、再升起」的连续摇臂运动。
 
-**备选 1（段 B 生成不过关时）**：用 GPT-image 出一张 8K 站厅母版（柱廊、水磨石、Exit B 扶梯、Gateway 与陈师傅分层），做 2.5D 多层后拉升起；人潮仍用 J09C 按长快门风格单独生成、加重运动模糊，陈师傅和 Gateway 作为静止层合成，避免出现「融化的人」。
+**备选 1（段 B 生成不过关时）**：用 GPT-image 出一张 8K 站厅母版（柱廊、水磨石、Exit B 斜坡自动人行道、Gateway 与陈师傅分层），做 2.5D 多层后拉升起；人潮仍用 J09C 按长快门风格单独生成、加重运动模糊，陈师傅和 Gateway 作为静止层合成，避免出现「融化的人」。
 **备选 2（只在 master 坚持「22.5 之前看不到任何边框」时使用，不推荐）**：保留白色外延。至少做到三点：21.5 画布里的 Lyra 约为画高 100%；21.5→22.5 画布从 1.1× 缩到 1.0×；第 673–677 帧的「退潮」藏进一次大幅的焦外光斑变化里。即便如此，它仍会被读成擦除转场。
 
 ### 1.6 屏幕底板（浅色屏浅灰白 / 深色屏纯黑），逐镜平面追踪贴入 Lyra 与 UI
@@ -211,7 +211,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 1. **生成**：所有看得见设备的镜头，按屏幕模式写 Prompt，并在 KF-…-PLATE 输入帧里预先换好同样的底板。
    - **浅色模式**（Gateway、日间 Portal：S09、S10、S11、S15 ③④⑤、J10a）："the display area is an evenly glowing, featureless light grey-white panel, slightly dimmer than paper white, with a faint glass reflection"。底板线性光约为 `--paper #f4f5f7` 的 85%（sRGB 约 #e3e4e6），均匀、无纹理、无图像，保留 3–5% 玻璃反光。
    - **深色模式**（Paragon、医院夜间 Portal：S14、S15 ①②）："the display area is pure solid black glass with a faint reflection"。
-   - master world_bible 里「屏幕生成纯黑后期贴 UI」一句，建议同步为「浅色屏生成浅灰白、深色屏生成纯黑，后期贴 UI」；本文与 03 的 B 底板版、05 §11.2(5) 的键控方法按这一口径统一。
+   - 这一口径与 master world_bible 一致：浅色屏生成浅灰白（sRGB 约 #e3e4e6），深色屏生成纯黑，UI 与屏幕里的 Lyra 一律后期合成。本文与 03 的 B 底板版、05 §11.2(5) 的键控方法都按这一口径，全套文档只用 #e3e4e6 这一个底板值。
    - **浅色屏为什么不能生成黑的**：亮屏是场景里真实的中性白光源。S09 里屏幕是陈师傅身上的主光，S11 里屏幕在她左侧勾出一道冷边，屏幕还会照亮字条、在水磨石上留下倒影。黑屏不会产生这些光，成片贴上白底 Lyra 以后，光照和倒影对不上，一眼就能看出是合成。浅灰白底板比 UI 白暗约 15%，贴入后 UI 仍是画面里最亮的面，发光关系正确。
    - LED 灯条、灯箱、墙晕照常点亮；浅色屏对人脸和地面的溢光写进 Prompt（"soft cool-white spill from the display"），素材里已有，合成只校亮度；深色屏的溢光很弱，由合成按设计系统的 glow / spill 参数补足。
 2. **比例校验（正视真实尺寸）**：`screens.json` 的四角来自客户产品渲染图（斜角视图）的抠像，带渲染透视（例如 gateway_front 上边 tl(93,60)→tr(435,94) 明显倾斜），原表里的屏幕高宽比 2.22 / 1.93 / 2.15 / 2.00 / 1.95 都是透视造成的。这些像素坐标和比例**不能**拿到 GPT-image 或 Seedance 生成的画面里去初始化追踪或检查透视。生成画面按下表的正视真实比例校验：所有屏幕都是 16:9 竖屏，高宽比约 1.78；设备正对镜头时（例如 S15，偏转 ≤ 5°），屏幕在画面里的高宽比应接近 1.78，斜看时按透视变化。
@@ -284,7 +284,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 ### 1.8 人物与道具一致性
 
 - **陈师傅**：每条有她的生成都带 CS-CHEN-A 或 -B（按光环境选），首帧来自 KF。Prompt 每次都写全外形锚点：72 岁、1.58 m、银灰齐下巴短发、玳瑁圆框眼镜、藏蓝及膝羊毛大衣、米色帆布托特包、黑色轻便运动鞋、自织红色粗针围巾（#C8372D，全片唯一暖红）；**32.0（S11 变体 / J11b）起**外面叠一条藏青白条 7 号围巾，红色仍从领口露出约 40%。32.0 之前的任何首帧里都只有红围巾，不要出现两条围巾。
-- **手**：CS-HANDS 锁右手无名指磨薄细金戒、左手拇指根旧疤。1985 年只拍 31 岁时的手（按 2026 年 72 岁推算，与 master S01 一致）：年轻、皮肤紧致，有少量生活痕迹，指节已有职业司机的粗壮，不是少女手。疤是 1983 年被车门夹伤的，到 1985 年已两年：约 2 cm，淡粉偏白、已平整；到 2026 年褪成浅色。master S01 写的「新愈小疤」建议同步改为「两年的旧疤」。
+- **手**：CS-HANDS 锁右手无名指磨薄细金戒、左手拇指根旧疤。1985 年只拍 31 岁时的手（按 2026 年 72 岁推算，与 master S01 一致）：年轻、皮肤紧致，有少量生活痕迹，指节已有职业司机的粗壮，不是少女手。疤是 1983 年被车门夹伤的，到 1985 年已两年：约 2 cm，淡粉偏白、已平整（与 master S01 一致）；到 2026 年褪成浅色。
 - **字条**：PROP-NOTE 留白生成；后期四角追踪贴入真实铅笔手写扫描（「奶奶 — Gate C · 114 · Row 12 · Seat 7」「19:30 ♡ 林」，Seat 7 下一道略弯的下划线）。字条在哪只手：S02 双手捏着；S03 左手攥着；S04 双手展开；S07、S09 右手举起；**S12–S14 一直在左手**（S12 右手指路，S14 右手贴砖）；S16 右手举过头顶。每条有她的 Prompt 都写明字条在哪只手，不能凭空消失，也不要塞进托特包或口袋。
 - **Lyra**：只用两张定妆照及其派生姿态帧（派生规则见 1.7）。每条 L 任务都把 `lyra_white.jpg`（或 `lyra_black.jpg`）和对应抠像放进 `image_references`；所有「指向」只用 LYRA-POINT。
 - **产品**：每条有设备的任务都把对应抠像放进 `image_references`。放不下时，优先级：人物设定板 > 产品抠像 > 环境参考（张数上限以面板为准，一般 2–4 张最稳）。
@@ -459,7 +459,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 **Character Action**：扶梯把她送进大厅：藏蓝大衣、银灰齐下巴短发、玳瑁眼镜、米色帆布托特包，左手攥着字条，红围巾是唯一的暖色。踏上平台后抬头四下找站名，看到的只有箭头和图形。7.0 脚步第一次犹豫：半步停住，重心后移，下一秒又回正。人潮从两侧穿过，带运动模糊。
 
-**Product Position**：无设备入画。Gateway 在世界坐标里立在她前方约 12 m、Exit B 方向那根柱子旁，被柱子完全挡住，本镜看不到任何设备的光。
+**Product Position**：无设备入画。Gateway 在世界坐标里立在 Exit B 方向那根柱子旁，在她前方约 2.5 m，被她前方的柱子完全挡住，本镜看不到任何设备的光。7.5 她向柱旁走两步，第二步跨过剪辑点，停下时 Gateway 在她左侧约 0.8 m（接 S04）。
 
 **Lyra**：无。
 
@@ -469,9 +469,9 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 **Start Frame**：= KF-S03-START。梯级在画面下缘，她的头肩在画面中下部升入，落在 4:5 安全列内。
 
-**End Frame**：= KF-S03。3/4 侧身全身在左三分线（x 约 640，仍在 x 528–1392 内），柱廊纵深，人潮拖影。
+**End Frame**：= KF-S03。3/4 侧身全身在左三分线（x 约 640，仍在 x 528–1392 内），她前方约 2.5 m 是那根挡住 Gateway 的柱子，柱廊纵深，人潮拖影。
 
-**Continuity**：左手攥着字条（S02 的同一张）；红围巾在大衣领口外；没有 7 号条纹围巾（32.0 才叠戴）。7.5 动作连续剪辑：她走向柱子的一步跨过剪辑点，接 S04。
+**Continuity**：左手攥着字条（S02 的同一张）；红围巾在大衣领口外；没有 7 号条纹围巾（32.0 才叠戴）。7.5 动作连续剪辑：她向前方柱旁走两步，第二步跨过剪辑点；S04 里她靠柱停下时，Gateway 在她左侧约 0.8 m。
 
 **Negative Prompt**：NEG-BASE + readable wayfinding signs, advertising screens, any display unit or screen visible, crowded faces in focus, striped scarf on her, escalator brand plates.
 
@@ -746,22 +746,22 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 **UI**：屏幕 UI 完整可见（段 A 后半起）：状态栏 y 52–108（[X] Harbour Interchange ｜ 18:31 ●，钴蓝在场点呼吸）；Lyra 腰部以上无遮挡；卡片区 y ≥ 1160 路线卡「Exit B → Market Hall → Gate C · 9 min」，钴蓝路线指向画右，「Step-free route」开关为开；语音线 y 1790 平静。影片层：25.5 站牌字卡「05 · Harbour Interchange / Route 7 · 18:31」（x 96 / y 940；4:5 版 x 564），从左 16 px 滑入 320 ms，停 0.8 s，模糊淡出，与「叮」同帧。追踪：段 A′ 在静帧的设备层上直接贴画布（与设备层同一变换）；段 B 以 Gateway 内框线逐镜平面追踪（Mocha 或四边拟合求交，不用 `screens.json`），贴入 L5 + UI 画布；遮挡（陈师傅的肩、发丝、举起的字条）按「比浅色底板暗」差值键控 + roto；玻璃层的站厅反光从接缝起渐入，22.5 达到 4%；随后拉逐步校正屏幕辉光（0.35）与地面冷白溢光（0.25，素材里已有）；景深按后拉逐步加深，对焦始终跟随 Gateway。
 
-**Lighting**：段 A：白色影棚柔光。段 B：05 · Harbour Interchange，18:31 晚高峰。5600K 线性吊灯阵列，白色清水混凝土柱廊（模板木纹、蜂窝气孔），浅灰抛光水磨石反射吊灯和 LED 灯条；Gateway 的两条 LED 竖灯条是画面里最亮的竖向光；画右远处 Exit B 扶梯口 2700K 暖光，正是屏幕里路线卡钴蓝箭头所指的方向（指向即现实）。Gateway 的浅色屏幕是陈师傅身上的主光：浅灰白底板真实地照亮她的肩、发丝和举起的字条（字条背光透亮），并在水磨石上留下一片冷白溢光和屏幕倒影；红围巾是画面里唯一的暖红。
+**Lighting**：段 A：白色影棚柔光。段 B：05 · Harbour Interchange，18:31 晚高峰。5600K 线性吊灯阵列，白色清水混凝土柱廊（模板木纹、蜂窝气孔），浅灰抛光水磨石反射吊灯和 LED 灯条；Gateway 的两条 LED 竖灯条是画面里最亮的竖向光；画右远处 Exit B 斜坡自动人行道入口的 2700K 暖光（平滑踏面、无梯级，与 Step-free 一致），正是屏幕里路线卡钴蓝箭头所指的方向（指向即现实）。Gateway 的浅色屏幕是陈师傅身上的主光：浅灰白底板真实地照亮她的肩、发丝和举起的字条（字条背光透亮），并在水磨石上留下一片冷白溢光和屏幕倒影；红围巾是画面里唯一的暖红。
 
 **Start Frame**：段 A = LYRA-POINT-MASTER 在 20.0 的取景（可选 L1 = LYRA-ECU）；段 A′ 与段 B = KF-S09-SEAM-PLATE。
 
-**End Frame**：段 B = KF-S09-CLEAN-PLATE（J09C 用带人潮的 KF-S09-PLATE）：机位在 Gateway 正前方约 12.5 m、离地约 4.7 m、俯 9°（全画幅等效 35mm），30 m 柱廊纵深，Gateway 约占画高 30%，陈师傅在它前方约 1.2 m、偏左（3/4 背影、举着字条、红围巾），画右远处 Exit B 扶梯暖光。Gateway 与陈师傅落在 4:5 安全列内，Exit B 暖光在 **x ≤ 1350**：它在安全列内，4:5 版不能把「指向即现实」裁掉。
+**End Frame**：段 B = KF-S09-CLEAN-PLATE（J09C 用带人潮的 KF-S09-PLATE）：机位在 Gateway 正前方约 12.5 m、离地约 4.7 m、俯 9°（全画幅等效 35mm），30 m 柱廊纵深，Gateway 约占画高 30%，陈师傅在它前方约 1.2 m、偏左（3/4 背影、举着字条、红围巾），画右远处 Exit B 斜坡自动人行道的暖光。Gateway 与陈师傅落在 4:5 安全列内，Exit B 暖光在 **x ≤ 1350**：它在安全列内，4:5 版不能把「指向即现实」裁掉。
 
-**Continuity**：S08 尾帧、LYRA-POINT-9x16、LYRA-POINT-MASTER、L5、S10 的 L6 首帧是同一个 LYRA-POINT 姿态。接缝（≈ 20.6）是「屏幕宽 = 画宽」的那一帧，屏幕内容逐像素连续，没有白色外延，也没有退潮；第 675 帧（22.5，屏幕矩形闭合）叠 1 帧 3% 亮度脉冲（master 已写入）。陈师傅的字条、眼镜、红围巾、托特包与 S03–S07 一致，此时还没有条纹围巾。27.0 硬切：从最宽的海报帧切回 Gateway 屏幕近景，开始第一次 Handoff。
+**Continuity**：S08 尾帧、LYRA-POINT-9x16、LYRA-POINT-MASTER、L5、S10 的 L6 首帧是同一个 LYRA-POINT 姿态。接缝（≈ 20.6）是「屏幕宽 = 画宽」的那一帧，屏幕内容逐像素连续，没有白色外延，也没有退潮；第 675 帧（22.5，屏幕矩形闭合）叠 1 帧 3% 亮度脉冲（master 已写入）。陈师傅的字条、眼镜、红围巾、托特包与 S03–S07 一致，此时还没有条纹围巾。距离：S04–S06 她离屏幕约 0.8 m，S07 举字条时前倾到约 0.6 m，本镜她已后退半步，约 1.2 m。27.0 硬切：从最宽的海报帧切回 Gateway 屏幕近景，开始第一次 Handoff。
 
-**Negative Prompt**：NEG-BASE + (J09B) image, text or gradient on the screen, Lyra in the scene, glowing UI, crowd, walking people, device moving or rotating, orbit, extra LED strips, curved screen, landscape screen, wheels missing or more than four, no base plate, glossy plastic body, logo on the front; (J09C) camera movement, sharp crowd faces, people frozen, melted people, running; (L1 / L5) bezel, UI, arm movement, pose change, arm crossing the body.
+**Negative Prompt**：NEG-BASE + (J09B) image, text or gradient on the screen, Lyra in the scene, glowing UI, crowd, walking people, device moving or rotating, orbit, extra LED strips, curved screen, landscape screen, wheels missing or more than four, no base plate, glossy plastic body, logo on the front, escalator steps on the Exit B route; (J09C) camera movement, sharp crowd faces, people frozen, melted people, running; (L1 / L5) bezel, UI, arm movement, pose change, arm crossing the body.
 
 **English Prompt:**
 > L1 (optional) — 16:9 locked extreme close-up of the reference woman's eyes and warm smile, matching the start image exactly, soft seamless white studio light. Only tiny living details: the gaze softens slightly, the smile deepens a little, gentle breathing. No head movement, no camera movement. Avoid: bezel, screen edge, UI, head turn, pose change.
 >
 > L5 — 9:16 full-length shot matching the reference photo framing: the same woman in the white mock-neck knit top with the small blue X on her left chest, black belt with gold buckle, charcoal wide-leg trousers and black pointed heels. Her left hand, on the right side of the frame, is opened outward to the right at hip height, the arm about 30 to 40 degrees from her body, palm up, fingers together; her right hand rests at her waist. She holds this pose with subtle breathing for the whole shot, seamless white studio with a soft shadow to the right. Locked camera. Avoid: walking, extra gestures, arm crossing the body, text.
 >
-> J09B — One continuous dolly-back and crane move in a 30 m long white board-formed concrete colonnade in the evening, cool 5600K linear pendants, polished light-grey terrazzo. Start close on the LiveX Gateway V2 display unit so that its portrait screen fills about 60% of the frame width: a 2.18 m tall freestanding portrait 86-inch touchscreen in matte black powder-coated steel, thin black bezel with an inner frame line, two thin full-height white LED light bars on its front edges; its display area is an evenly glowing, featureless light grey-white panel with a faint glass reflection, casting soft cool-white light forward; the hall behind is deep out of focus and dim. As the camera pulls back, the top and bottom bezels come into frame, then the slightly wider black header beam overhanging forward with a black-glass camera module at its center (the move slows for a beat on the light bars), perforated side vents, then a wide flat black base plate on four locked casters, and the two light bars cast vertical reflections on the floor. A 72-year-old grandmother (1.58 m) in a navy coat and red knitted scarf stands perfectly still about 1.2 m in front of it on the left, seen three-quarters from behind, holding a small note up toward the camera module, lit by the screen; the Gateway display unit is clearly about 60 cm taller than her. Finally the camera rises about three metres and tilts down slightly, revealing the long colonnade; far right, a warm-lit escalator glows. No crowd, at most a few distant blurred figures. The device never moves. Avoid: image or text on the screen, crowd, walking people, device rotation, orbit, extra LED strips, curved or landscape screen, plastic look.
+> J09B — One continuous dolly-back and crane move in a 30 m long white board-formed concrete colonnade in the evening, cool 5600K linear pendants, polished light-grey terrazzo. Start close on the LiveX Gateway V2 display unit so that its portrait screen fills about 60% of the frame width: a 2.18 m tall freestanding portrait 86-inch touchscreen in matte black powder-coated steel, thin black bezel with an inner frame line, two thin full-height white LED light bars on its front edges; its display area is an evenly glowing, featureless light grey-white panel with a faint glass reflection, casting soft cool-white light forward; the hall behind is deep out of focus and dim. As the camera pulls back, the top and bottom bezels come into frame, then the slightly wider black header beam overhanging forward with a black-glass camera module at its center (the move slows for a beat on the light bars), perforated side vents, then a wide flat black base plate on four locked casters, and the two light bars cast vertical reflections on the floor. A 72-year-old grandmother (1.58 m) in a navy coat and red knitted scarf stands perfectly still about 1.2 m in front of it on the left, seen three-quarters from behind, holding a small note up toward the camera module, lit by the screen; the Gateway display unit is clearly about 60 cm taller than her. Finally the camera rises about three metres and tilts down slightly, revealing the long colonnade; far right, the warm-lit entrance of an inclined moving walkway glows, a smooth step-free travelator with no steps. No crowd, at most a few distant blurred figures. The device never moves. Avoid: image or text on the screen, crowd, walking people, device rotation, orbit, extra LED strips, curved or landscape screen, plastic look, escalator steps on the Exit B route.
 >
 > J09C — Locked wide shot, identical framing to the start image: the concrete colonnade, the black Gateway display unit with its evenly glowing light grey-white screen, and the still old woman stay perfectly still; only the rush-hour crowd flows around them at natural walking speed with heavy quarter-second long-exposure motion blur, like water. Avoid: camera movement, sharp faces, people merging, running.
 
@@ -779,7 +779,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 | J10a（可选） | omni_reference | 4 s | 1080p | 16:9 | true（C 档） | false | 27.0–27.767 的 Gateway 屏幕近景底板 |
 | J10b | omni_reference | 4 s | 1080p | 16:9 | true | false | 素材 0.0–2.0 → 成片 28.0–30.0 |
 
-参数理由：上片时长决定表演内容，不压缩表演（1.4）。原方案要把「放下手臂 → 转身 → 走出左边框」（自然约 3–4 s）塞进 0.767 s，把「走入 → 停 → 转向 → 上指 → 放下 → 走出」（约 5 s）塞进 1.87 s，分别是约 4–5 倍和 2.7 倍速，Lyra 会像快进。现在：L6 只做「放下手臂 + 起步转身」（自然约 0.8 s），出框交给 L7 的 3 帧；L8 删掉入框和出框（由 L7 承担），只保留「站定 → 抬手上指 → 放下」（自然约 1.5 s）；两条都只锁首帧，让动作按自然速度发生，从素材里挑自然速度段，变速 ≤ 1.15×。L8 因此从 5 s 改为 4 s。备选：如果 L8 的上指手部不过关，按代码版删掉手势，Lyra 站定微呼吸，「↑」完全交给 UI（钴蓝箭头上弹 + 竖线向上画出）。J10a 是锁定机位的静止设备，视频模型的增益只在背景人潮，省预算时可用 KF 静帧 + 后期人潮拖影层替代。`generate_audio=false`：27.8 高跟鞋 heel click（出框）；27.87–27.93 甩镜 = 立体声呼啸（带通扫频，声像右→左）；28.0「叮」+ 入框 heel click 同帧；D 段半速有机律动从 28.0 起（底鼓 1、2&、4&，拍手 3，沙锤八分，木鱼切分，Sub 八分，刷鼓）；28.5 Lyra 动机在新地点重现；扶梯机械声渐远。
+参数理由：上片时长决定表演内容，不压缩表演（1.4）。原方案要把「放下手臂 → 转身 → 走出左边框」（自然约 3–4 s）塞进 0.767 s，把「走入 → 停 → 转向 → 上指 → 放下 → 走出」（约 5 s）塞进 1.87 s，分别是约 4–5 倍和 2.7 倍速，Lyra 会像快进。现在：L6 只做「放下手臂 + 起步转身」（自然约 0.8 s），出框交给 L7 的 3 帧；L8 删掉入框和出框（由 L7 承担），只保留「站定 → 抬手上指 → 放下」（自然约 1.5 s）；两条都只锁首帧，让动作按自然速度发生，从素材里挑自然速度段，变速 ≤ 1.15×。L8 因此从 5 s 改为 4 s。备选：如果 L8 的上指手部不过关，按代码版删掉手势，Lyra 站定微呼吸，「↑」完全交给 UI（钴蓝箭头上弹 + 竖线向上画出）。J10a 是锁定机位的静止设备，视频模型的增益只在背景人潮，省预算时可用 KF 静帧 + 后期人潮拖影层替代。`generate_audio=false`：27.8 高跟鞋 heel click（出框）；27.87–27.93 甩镜 = 立体声呼啸（带通扫频，声像右→左）；28.0「叮」+ 入框 heel click 同帧；D 段半速有机律动从 28.0 起（底鼓 1、2&、4&，拍手 3，沙锤八分，木鱼切分，Sub 八分，刷鼓）；28.5 Lyra 动机在新地点重现；自动人行道低沉的机械嗡声渐远（没有梯级咔嗒）。
 
 **输入媒体**
 
@@ -789,29 +789,29 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 | L7 | LYRA-WALK-START：21:9 白色无缝影棚，Lyra 全身侧身，刚从画右边缘迈入（向画左走），头顶和脚的留白与定妆照一致 | — | `lyra_white.jpg`、`lyra_white_cut.png` |
 | L8 | L7-F8-A：从 L7 定稿导出的第一次 Handoff 入框 f8 那一帧，放在 9:16 画布中央（她侧身向画左，正在最后一步） | — | `lyra_white.jpg`、`lyra_white_cut.png` |
 | J10a | KF-S10-GW-PLATE：Gateway 屏幕近景，画面高约为屏幕高的 70%，左右边框和左侧 LED 灯条在画内，**屏幕为浅色底板**（均匀发光的浅灰白），背后是站厅冷白虚焦 | — | `gateway_front.png` |
-| J10b | KF-S10-PLATE：白墙步行通道，画左墙上一台 55 寸 Portal（**屏幕为浅色底板**），它背后的蓝色墙晕占画面左 2/3，焦点在墙晕上；深处右侧是上行扶梯与暖光 | KF-S10-END-PLATE：同机位推近约 5%，焦点在 Portal 屏幕；深处扶梯上一个小小的藏蓝身影，领口一点红 | `portal_55.png`、CS-CHEN-A |
+| J10b | KF-S10-PLATE：白墙步行通道，画左墙上一台 55 寸 Portal（**屏幕为浅色底板**），它背后的蓝色墙晕占画面左 2/3，焦点在墙晕上；通道尽头右侧是上行的斜坡自动人行道（平滑踏面、无梯级）与暖光 | KF-S10-END-PLATE：同机位推近约 5%，焦点在 Portal 屏幕；深处斜坡自动人行道上一个小小的藏蓝身影，领口一点红 | `portal_55.png`、CS-CHEN-A |
 
 **Duration**：成片 3.0 s（帧 810–900）。27.0–27.767 Gateway 屏幕近景（L6 贴屏）；27.767–28.0 第一次 Handoff 8 帧（帧 833–840）；28.0–30.0 Portal 通道（J10b + L8 贴屏，28.0–29.767）；29.767–30.0 第二次 Handoff 8 帧（帧 893–900）的出框部分。
 
 **Camera Movement**：27.0–27.767 锁定。27.767–28.0 Handoff：f1–f3 出框（L7 步行帧在画布内 translateX 0→−760 px，push 缓动，x 向模糊 0→36 px）→ f4–f5 光斑甩镜（环境焦外光斑整体左移 1400 px 拉成横向光条，全画面 +0.3 EV 一帧）→ f6–f8 在 Portal 画布里从右边框入框（L7 紧接的步行帧，+760→0，glide，模糊 36→0），第 840 帧 = 28.0「叮」+ 箭头卡。28.0–30.0 通道内 35mm 缓推 5%（settle），蓝色墙晕先占左 2/3，28.0–28.5 焦点从墙晕拉到屏幕。
 
-**Character Action**：Lyra：27.0 从 LYRA-POINT 放下左手，自然地向画左转身并迈出第一步（L6，约 0.77 s 自然速度）；27.767 起由 L7 的 3 帧 + 2D slide 出框。28.0 在 Portal 画布中央收住最后一步站定（L8 首帧 = L7-F8-A），转向镜头，右手（画面左侧那只，不遮左胸 X）抬起向上一指，再放下（约 1.5 s）；29.767 起再由 L7 出框。陈师傅：29.0–30.0 在画面深处，被扶梯送向上方的暖光，只看得到一点红围巾。
+**Character Action**：Lyra：27.0 从 LYRA-POINT 放下左手，自然地向画左转身并迈出第一步（L6，约 0.77 s 自然速度）；27.767 起由 L7 的 3 帧 + 2D slide 出框。28.0 在 Portal 画布中央收住最后一步站定（L8 首帧 = L7-F8-A），转向镜头，右手（画面左侧那只，不遮左胸 X）抬起向上一指，再放下（约 1.5 s）；29.767 起再由 L7 出框。陈师傅：29.0–30.0 在画面深处，斜坡自动人行道把她平稳地送向上方的暖光，只看得到一点红围巾。
 
-**Product Position**：Portal 55 寸壁挂在通道白色清水混凝土墙上：机身约 73 × 125 cm，屏幕约 68 × 121 cm（高宽比 1.78），屏幕中心离地约 150 cm；超薄机身，拉丝银色铝合金细边框 + 黑色内边框，顶部正中梯形银色摄像头模组（小 X 标志、镜头、指示灯），背后柔和的蓝色墙晕（Portal 光形）。位于她行进方向的左侧墙上，扶梯在它的右后方。设备静止，机位只缓推。
+**Product Position**：Portal 55 寸壁挂在通道白色清水混凝土墙上：机身约 73 × 125 cm，屏幕约 68 × 121 cm（高宽比 1.78），屏幕中心离地约 150 cm；超薄机身，拉丝银色铝合金细边框 + 黑色内边框，顶部正中梯形银色摄像头模组（小 X 标志、镜头、指示灯），背后柔和的蓝色墙晕（Portal 光形）。位于她行进方向的左侧墙上，斜坡自动人行道在它的右后方。设备静止，机位只缓推。
 
 **Lyra**：同一个 Lyra（白底）。Gateway 里 1:1 等身；Portal 55 里约 0.6 倍真人（画布相同，比例来自屏幕尺寸）。生成版：入框靠 L7，站定后抬手向上指（L8）。
 
 **UI**：Portal 画布（light）：状态栏「[X] Exit B passage ｜ 18:34 ●」；卡片区（y ≥ 1160）：大号「Exit B ↑」（Geist 84/500，↑ 为钴蓝），副行「Market Hall 120 m」（Geist 29）；一条钴蓝竖线从卡片顶端向上画出 120 px（0.4 s），与她抬手同步（L8 备选去掉手势时，箭头 28.6 snap 上弹 12 px）。影片层箭头卡「→ Exit B」（StopCard 组件，无副行）与 28.0「叮」同帧。追踪：Gateway 近景以内框线逐镜平面追踪；Portal 以黑色内边框逐镜平面追踪（Mocha 或四边拟合，不用 `screens.json`），缓推与焦点变化带来的尺度与虚化都要跟随；两块浅色屏的遮挡按「比屏幕暗」差值键控。
 
-**Lighting**：27.0 段同 S09 站厅冷白，Gateway 的浅色屏幕是画面里最亮的面。通道：白色清水混凝土墙，冷白顶光；Portal 浅色屏幕在墙面和地面上有微弱的冷白溢光；Portal 的蓝色墙晕是画面里唯一的冷色饱和光；深处扶梯口 2700K 暖光，陈师傅是那里唯一的暖红。
+**Lighting**：27.0 段同 S09 站厅冷白，Gateway 的浅色屏幕是画面里最亮的面。通道：白色清水混凝土墙，冷白顶光；Portal 浅色屏幕在墙面和地面上有微弱的冷白溢光；Portal 的蓝色墙晕是画面里唯一的冷色饱和光；深处斜坡自动人行道入口 2700K 暖光，陈师傅是那里唯一的暖红。
 
 **Start Frame**：J10a = KF-S10-GW-PLATE；J10b = KF-S10-PLATE（墙晕特写，焦点在墙上）。L6 = LYRA-POINT-9x16；L8 = L7-F8-A。
 
-**End Frame**：J10b = KF-S10-END-PLATE（焦点在 Portal，深处扶梯上的她）。L6 / L8 不锁尾帧：L6 取到她转身迈出第一步为止，L8 取到手臂放下、重新站定为止，之后都交给 L7 出框。
+**End Frame**：J10b = KF-S10-END-PLATE（焦点在 Portal，深处斜坡自动人行道上的她）。L6 / L8 不锁尾帧：L6 取到她转身迈出第一步为止，L8 取到手臂放下、重新站定为止，之后都交给 L7 出框。
 
 **Continuity**：L6 的起始姿态 = S09 的 LYRA-POINT。两次 Handoff 的出框 / 入框帧都取自 L7 的连续步行：f1–f3 与 L6（或 L8）末帧的脚步相位对接，f6–f8 紧接其后；接点藏在 36 px 的横向运动模糊里（1.7）。方向：Lyra 始终向画左走，陈师傅始终向画面深处（上行）走。镜像检查：L6 / L7 侧身向画左时，左胸 X 在靠近镜头的一侧。29.767–30.0 第二次 Handoff：Lyra 从 Portal 左边框侧移出框 → 光斑甩镜 → 30.0 从 Market Hall Gateway 右边框入框，「叮」。
 
-**Negative Prompt**：NEG-BASE + (J10a / J10b) image, text or gradient on the screen, Portal on a stand, thick bezel, missing trapezoid camera module, halo in a color other than soft blue, neon sign; (L6 / L7 / L8) moonwalking, sliding feet, floating, changing outfit, camera tracking her, background change, shadow disappearing, rushed or sped-up movement, X logo on the far side.
+**Negative Prompt**：NEG-BASE + (J10a / J10b) image, text or gradient on the screen, Portal on a stand, thick bezel, missing trapezoid camera module, halo in a color other than soft blue, neon sign, (J10b) escalator steps on the Exit B route; (L6 / L7 / L8) moonwalking, sliding feet, floating, changing outfit, camera tracking her, background change, shadow disappearing, rushed or sped-up movement, X logo on the far side.
 
 **English Prompt:**
 > L6 — 9:16 locked, seamless white studio with a soft shadow to the right, framing identical to the reference photo. The reference woman starts in her guiding pose (left hand, on the right side of the frame, opened outward at hip height, palm up; right hand at her waist). At a natural, unhurried pace she lowers the left hand, turns toward the left of frame and takes the first step; she keeps walking left; her shadow moves with her. Avoid: camera movement, sliding feet, outfit change, sped-up motion.
@@ -822,7 +822,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 >
 > J10a — Locked close shot of the upper screen of the LiveX Gateway V2 display unit in a cool-lit concrete metro hall: thin matte black bezel with an inner frame line, one full-height white LED light bar on the left edge; the display area is an evenly glowing, featureless light grey-white panel with a faint reflection of ceiling lights; commuters pass as motion-blurred shapes far behind. Avoid: image or text on the screen, device movement.
 >
-> J10b — 35mm slow push-in along a white board-formed concrete pedestrian passage. On the left wall hangs a LiveX Portal 55-inch ultra-slim wall-mounted portrait touchscreen (body about 73 × 125 cm), brushed-silver thin aluminum bezel with a black inner border, a small trapezoid silver camera module centered on top, screen center at eye level; its screen is an evenly glowing, featureless light grey-white panel, and a soft blue ambient halo glows on the wall behind it. The shot opens focused on the blue halo filling the left two thirds, then focus racks onto the screen. Deep in the right background an up-escalator rises into warm light, carrying a tiny figure in a navy coat with a red scarf. Avoid: image or text on the screen, Portal on a stand, harsh neon, readable signs.
+> J10b — 35mm slow push-in along a white board-formed concrete pedestrian passage. On the left wall hangs a LiveX Portal 55-inch ultra-slim wall-mounted portrait touchscreen (body about 73 × 125 cm), brushed-silver thin aluminum bezel with a black inner border, a small trapezoid silver camera module centered on top, screen center at eye level; its screen is an evenly glowing, featureless light grey-white panel, and a soft blue ambient halo glows on the wall behind it. The shot opens focused on the blue halo filling the left two thirds, then focus racks onto the screen. Deep in the right background an inclined moving walkway, a smooth step-free travelator with no steps, rises gently into warm light, carrying a tiny figure in a navy coat with a red scarf. Avoid: image or text on the screen, Portal on a stand, harsh neon, readable signs, escalator steps on the Exit B route.
 
 ---
 
@@ -1062,7 +1062,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 | J15-02 | KF-S15-02-PLATE（03「S15 B ②」，02 · Western Univ）：Quad 草坪边石材步道上的 Paragon（深色模式，屏幕纯黑）位于 Center-Lock 框，雨棚与上下灯箱清晰，背后校舍 2700K 窗灯 | `paragon_front.png` |
 | J15-03 | KF-S15-03-PLATE（03「S15 B ③」，03 · Harbour Hotel）：胡桃木与黄铜大堂，接待台一侧的 Gateway（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框，LED 竖灯条在抛光石材地面拖出倒影；一家三口在前景侧边 | `gateway_front.png` |
 | J15-04 | KF-S15-04-PLATE（03「S15 B ④」，04 · Pier Tower）：胡桃木墙板电梯厅，43 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；玻璃门外 Paragon 的两块白矩形在焦外；加班的女人在画左 | `portal_43.png`、`paragon_front.png` |
-| J15-GC | KF-S15-05-PLATE（03「S15 B ⑤」，→ Gate C）：清水混凝土墙上的 32 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；三辊闸紧贴墙面（离墙 ≤ 0.5 m）排在 Portal 右侧，按 Center-Lock 的取景，墙面在画内只有离地约 0.95–2.2 m，所以**画面下缘只露出闸机顶部与白色状态灯**；陈师傅离镜头约 2 m，从画右走向闸机，在 Portal 右侧（x ≥ 1150）以胸像以上入画，不遮挡屏幕 | `portal_32.png`、CS-CHEN-B |
+| J15-GC | KF-S15-05-PLATE（03「S15 B ⑤」，→ Gate C）：清水混凝土墙上的 32 寸 Portal（浅色模式，屏幕为浅灰白底板）位于 Center-Lock 框；三辊闸紧贴墙面（离墙 ≤ 0.5 m）排在 Portal 右侧，按 Center-Lock 的取景，墙面在画内只有离地约 0.95–2.2 m，所以**画面下缘只露出闸机顶部与白色状态灯**；陈师傅离镜头约 2 m，从画右走向闸机，在 Portal 右侧（x ≥ 1150）以胸像以上入画，不遮挡屏幕；闸机另一侧的球场内廊在焦外深处：一个挂满与 Stall 4 同款藏青白条围巾的球迷商店摊位（暖色灯泡），旁边两道白色竖光（Gateway 光形），落在 4:5 安全列内，她入画时不把它完全挡住 | `portal_32.png`、CS-CHEN-B、`gateway_front.png` |
 | J15-TN | KF-S15-TN：看台隧道，尽头是泛光灯下展开的碗形看台（逆光，人群为剪影） | — |
 
 **Duration**：成片 5.0 s（帧 1410–1560），剪辑点全部在整秒：47.0 / 48.0 / 49.0 / 50.0 / 51.0；51.5 闸机咔嗒切隧道。
@@ -1071,21 +1071,21 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 **Character Action**：01：护士推着围条纹围巾的轮椅老人去休息厅看比赛（Lyra 食指轻放唇前）。02：学生披着条纹旗从 Paragon 前跑过。03：一家三口在大堂换上球衣。04：加班的女人把西装外套换成球衣。Gate C：陈师傅从画右入画，在 Portal 右侧（x ≥ 1150）推闸通过，左手攥着字条，51.5 闸杆转动（画面下缘只露闸机顶部与白色状态灯）。所有人都为同一场比赛出发。
 
-**Product Position**：01 Portal 55 寸（机身约 73 × 125 cm，屏幕约 68 × 121 cm）壁挂在病房走廊木饰面墙上，屏幕中心约 150 cm；02 Paragon 落地固定在 Quad 草坪边石材步道上，无脚轮；03 Gateway 落地立在接待台一侧的石材地面，脚轮锁定；04 Portal 43 寸（机身约 57 × 99 cm，屏幕约 53 × 95 cm）壁挂在胡桃木墙板上，屏幕中心约 150 cm；Gate C Portal 32 寸（机身约 43 × 74 cm，屏幕约 40 × 71 cm）壁挂在闸机旁清水混凝土墙上，屏幕中心约 150 cm，屏幕下缘约 1.15 m，高于约 100 cm 的三辊闸。Gate C 格的取景：屏幕 71 cm 高占 571 px，墙面在画内只有离地约 0.95–2.2 m，三辊闸紧贴墙面排在 Portal 右侧，画面下缘露出闸机顶部与白色状态灯；陈师傅离镜头约 2 m，比墙近约 0.3 m 以上，所以在画面里更大，从 Portal 右侧以胸像以上过闸。因为 Center-Lock 要求屏幕在画面里一样大，小尺寸 Portal 的机位更近，大设备机位更远，设备与环境的比例由此自然不同。
+**Product Position**：01 Portal 55 寸（机身约 73 × 125 cm，屏幕约 68 × 121 cm）壁挂在病房走廊木饰面墙上，屏幕中心约 150 cm；02 Paragon 落地固定在 Quad 草坪边石材步道上，无脚轮；03 Gateway 落地立在接待台一侧的石材地面，脚轮锁定；04 Portal 43 寸（机身约 57 × 99 cm，屏幕约 53 × 95 cm）壁挂在胡桃木墙板上，屏幕中心约 150 cm；Gate C Portal 32 寸（机身约 43 × 74 cm，屏幕约 40 × 71 cm）壁挂在闸机旁清水混凝土墙上，屏幕中心约 150 cm，屏幕下缘约 1.15 m，高于约 100 cm 的三辊闸。Gate C 格的取景：屏幕 71 cm 高占 571 px，墙面在画内只有离地约 0.95–2.2 m，三辊闸紧贴墙面排在 Portal 右侧，画面下缘露出闸机顶部与白色状态灯；陈师傅离镜头约 2 m，比墙近约 0.3 m 以上，所以在画面里更大，从 Portal 右侧以胸像以上过闸。因为 Center-Lock 要求屏幕在画面里一样大，小尺寸 Portal 的机位更近，大设备机位更远，设备与环境的比例由此自然不同。Gate C 格焦外深处（51.0–51.5）：闸机后的球场内廊里有一个挂满与 Stall 4 同款藏青白条围巾的球迷商店摊位，旁边一台 Gateway，只以两道白色竖光与地面倒影出现。它立在摊位旁，是零售角色（与 S11 同一种用法），不属于负向词里要排除的「走廊里的 Gateway」。
 
 **Lyra**：五格同一个 Lyra、同一坐标：01 黑底夜间模式（生成版食指放唇前，L11）；02 黑底（L12）；03 白底 1:1 等身（L13）；04 白底（L13，另取一段）；Gate C 白底（L13，再取一段）。后期先对每段 Lyra 素材做以双眼为基准的稳定，再贴屏。
 
 **UI**：同一栅格、同一位置（y ≥ 1160），状态栏时间都是 18:53（同一分钟），UI 快速 reveal 0.35 s：01「Match on · Lounge 2F · Quiet volume」（dark，整屏亮度约 30%，音量滑杆 0.4 s 从 60% 滑到 20%）；02「Fan Zone · Quad · 19:30」（dark）；03「Welcome · Late checkout tonight」（light）；04「Your ride · Door B · 3 min」（light）；Gate C「Section 114 · Lift 3 · Step-free」（light，19:02）。影片层字卡 split-flap 逐格翻：01 · St. Mary's → 02 · Western Univ → 03 · Harbour Hotel → 04 · Pier Tower → 箭头卡 → Gate C（每片 40 ms）。追踪：各设备逐镜平面追踪屏幕边缘（Mocha 或四边拟合，不用 `screens.json`），五格屏幕的高宽比都应接近 1.78；遮挡键控按模式：①② 深色屏取「比屏幕亮」，③④⑤ 浅色屏取「比屏幕暗」。Center-Lock 在贴屏后校验双眼中点与间距，误差 > 2 px 时以缩放和平移微调整个贴屏层。
 
-**Lighting**：01 病房走廊暖黄夜灯、木饰面，Portal 蓝晕是唯一冷色，屏幕只有 30% 亮度；02 蓝调草坪，校舍 2700K 窗灯，Paragon 灯箱冷白；03 胡桃木黄铜暖焦外，Gateway LED 竖灯条；04 胡桃木电梯厅暖光，玻璃门外两块白矩形焦外；Gate C 清水混凝土冷白 + 三辊闸不锈钢与白色状态灯；隧道尽头 5600K 泛光。
+**Lighting**：01 病房走廊暖黄夜灯、木饰面，Portal 蓝晕是唯一冷色，屏幕只有 30% 亮度；02 蓝调草坪，校舍 2700K 窗灯，Paragon 灯箱冷白；03 胡桃木黄铜暖焦外，Gateway LED 竖灯条；04 胡桃木电梯厅暖光，玻璃门外两块白矩形焦外；Gate C 清水混凝土冷白 + 三辊闸不锈钢与白色状态灯，闸机后的内廊深处是球迷商店摊位的暖色灯泡（#ffcf9a，焦外）和旁边 Gateway 的两道 5600K 白色竖光；隧道尽头 5600K 泛光。
 
 **Start Frame**：各格 KF（见输入表），屏幕都在 Center-Lock 框内。
 
 **End Frame**：不锁尾帧；每格取动作最清楚的 1.0 s（Gate C 与隧道各 0.5 s）。
 
-**Continuity**：五格同一分钟（18:53），Lyra 双眼坐标不动，地点在她周围换掉。01 与 04 格的焦外里能看到该站主节点（01 休息厅 Gateway 两道竖光、04 门外 Paragon 两块白矩形），字卡标的是站本身。陈师傅在 Gate C 格戴两条围巾。52.0 硬切：隧道尽头的泛光 → 看台 12 排 7 号，Boom 同帧。
+**Continuity**：五格同一分钟（18:53），Lyra 双眼坐标不动，地点在她周围换掉。01 与 04 格的焦外里能看到该站主节点（01 休息厅 Gateway 两道竖光、04 门外 Paragon 两块白矩形），字卡标的是站本身。陈师傅在 Gate C 格戴两条围巾。Gate C 格焦外的球迷商店摊位与 Gateway 竖光是零售在城市段的回声，靠与 Stall 4 同款的围巾和 Gateway 光形被认出，不加时间、文案和声音。52.0 硬切：隧道尽头的泛光 → 看台 12 排 7 号，Boom 同帧。
 
-**Negative Prompt**：NEG-BASE + image, text or gradient on any screen, off-center screens, tilted devices, mirror chrome, Paragon on wheels, missing canopy posts, Portal on a stand, no wall halo, round camera module, Gateway without base plate or casters, Gateway without header beam, Paragon indoors, Gateway in a corridor, hospital signage text, patient faces in focus, real university crest, hotel brand names, elevator floor numbers, turnstile brand plates, stadium sponsor boards, sharp faces in the stands.
+**Negative Prompt**：NEG-BASE + image, text or gradient on any screen, off-center screens, tilted devices, mirror chrome, Paragon on wheels, missing canopy posts, Portal on a stand, no wall halo, round camera module, Gateway without base plate or casters, Gateway without header beam, Paragon indoors, Gateway in a corridor, hospital signage text, patient faces in focus, real university crest, hotel brand names, elevator floor numbers, turnstile brand plates, fan-shop signs or price tags with text, stadium sponsor boards, sharp faces in the stands.
 
 **English Prompt:**
 > L11 — 9:16 locked, pure black background, black-reference framing: the reference woman gently raises her index finger to her lips, kind eyes, head steady, then holds. Avoid: camera movement, head turning.
@@ -1100,7 +1100,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 >
 > J15-04 — Walnut-panelled office elevator lobby, a LiveX Portal 43-inch ultra-slim wall-mounted portrait touchscreen centered at eye level, facing the camera: brushed-silver thin aluminum bezel, black inner border, a small trapezoid silver camera module centered on top, a soft blue halo washing the wall behind it; its screen is an evenly glowing, featureless light grey-white panel. A woman working late swaps her blazer for a striped jersey; through the glass doors two white rectangular light boxes glow out of focus. Locked. Avoid: floor numbers, text, image on the screen, Portal on a stand.
 >
-> J15-GC — Stadium gate: a LiveX Portal 32-inch ultra-slim wall-mounted portrait touchscreen centered at eye level on a board-formed concrete wall, facing the camera: brushed-silver thin aluminum bezel, black inner border, a small trapezoid silver camera module centered on top, a soft blue halo on the wall; its screen is an evenly glowing, featureless light grey-white panel. Stainless tripod turnstiles stand close to the wall to the right of the screen; only their tops and white status lights show along the bottom edge of the frame. The grandmother in a navy coat with striped and red scarves, a small note in her left hand, walks in from the right, chest-up and larger in the foreground, and pushes through the turnstile to the right of the screen without covering it. Locked. Avoid: sponsor boards, text, image on the screen, Portal on a stand.
+> J15-GC — Stadium gate: a LiveX Portal 32-inch ultra-slim wall-mounted portrait touchscreen centered at eye level on a board-formed concrete wall, facing the camera: brushed-silver thin aluminum bezel, black inner border, a small trapezoid silver camera module centered on top, a soft blue halo on the wall; its screen is an evenly glowing, featureless light grey-white panel. Stainless tripod turnstiles stand close to the wall to the right of the screen; only their tops and white status lights show along the bottom edge of the frame. The grandmother in a navy coat with striped and red scarves, a small note in her left hand, walks in from the right, chest-up and larger in the foreground, and pushes through the turnstile to the right of the screen without covering it. Beyond the turnstiles, deep in the stadium's inner concourse and far out of focus, a small fan-shop stall hung with navy-and-white striped scarves glows under warm bulbs, with two soft vertical white light bars beside it. Locked. Avoid: sponsor boards, text, shop signs, image on the screen, Portal on a stand.
 >
 > J15-TN — Fast push through a dark stadium tunnel toward a blinding wall of floodlight; the bowl of the stands opens up at the end, crowd only as backlit silhouettes. Avoid: logos, sponsor boards, sharp faces.
 
@@ -1167,7 +1167,7 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 | 任务 | mode | duration | resolution | aspect_ratio | draft | generate_audio | extension_mode | 上片 |
 |---|---|---|---|---|---|---|---|---|
-| J17a | omni_reference | 4 s | 1080p | 16:9 | true（A 档） | false | — | 约 1.0 s 素材压到 0.5 s → 54.0–54.5 |
+| J17a | omni_reference | 4 s | 1080p | 16:9 | true（A 档） | false | — | 约 1.0 s 素材压到 0.5 s → 54.0–54.5（取钟楼广场已入画、她仍可辨为一点红的那一段，供 54.0–54.3「一个设备」） |
 | J17b | omni_reference | 4 s | 1080p | 16:9 | true | false | — | **最后 1.0 s（3.0–4.0）** → 54.5–55.5（出点 = 末帧，J17c 从这里续接） |
 | J17c | video_extension（输入 = J17b 定稿） | 5 s | 1080p | 16:9 | 视面板而定 | false | forward | 续接段 0.0–4.0 压到 1.5 s → 55.5–57.0（约 2.7×，航拍 ≤ 3×）；4.0–4.4 → 57.0–57.15 压黑用 |
 
@@ -1177,21 +1177,21 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 | 任务 | start_image | end_image | image_references |
 |---|---|---|---|
-| J17a | KF-S17-RISE：从她座位正上方约 5 m 俯视，她是人海里一点红和一张白纸，看台顶棚边缘在画面上方 | KF-S17-ROOF：机位刚越过看台顶棚边缘，碗形看台与草坪在下方展开 | CS-CHEN-B |
-| J17b | KF-S17-100-PLATE（由 03「S17 变体」100 m 派生，**不是**「S17 B」500 m 底板）：约 100 m 高、俯角 −40°，蓝调中的体育场与四个入口广场（12 / 3 / 6 / 9 点方向，湿花岗岩），钟楼在其中一个广场旁，Market Hall 的玻璃顶在附近；**画面里去掉所有节点光，只保留真实城市光** | — | KF-S17-100-PLATE；`S17_B.png`（500 m 的城市面貌参考） |
+| J17a | KF-S17-RISE：从她座位正上方约 5 m 俯视，她是人海里一点红和一张白纸，看台顶棚边缘在画面上方 | KF-S17-ROOF：机位刚越过看台顶棚边缘（约 40 m），朝向与之后 100 m 悬停段一致（朝 02–04 所在的方向）；碗形看台与草坪在下方展开；看台外 Gate C 一侧的钟楼广场在画面一侧清楚可见，钟楼旁那台 Paragon 是画面里唯一近处的设备（只有机身，灯箱不点亮）；远处 02 Western Univ 的校园留在画内 | CS-CHEN-B、KF-S14（锁钟楼广场） |
+| J17b | KF-S17-100-PLATE（由 03「S17 变体」100 m 派生，**不是**「S17 B」500 m 底板；该变体若仍是 −40°，按本条重出）：约 100 m 高、俯角约 −28°（全画幅等效约 20–22mm），蓝调中的体育场与四个入口广场（12 / 3 / 6 / 9 点方向，湿花岗岩），钟楼在其中一个广场旁、离摄影机最近，Market Hall 的玻璃顶在附近；摄影机朝向 02–04 所在的方向，体育场外 1.5 km 内的街区一直铺到画面上沿，地平线刚好不入画；**画面里去掉所有节点光，只保留真实城市光** | — | KF-S17-100-PLATE；`S17_B.png`（500 m 的城市面貌参考） |
 | J17c | — | — | 输入视频 = J17b 定稿片段 |
 
 **Duration**：成片 3.0 s（帧 1620–1710）：54.0–54.5 升起越过顶棚；54.5–55.5 约 100 m 近乎悬停；55.5–56.5 升到约 500 m；56.5–57.0 缓慢上升 + 0.5° 漂移。
 
-**Camera Movement**：54.0–54.5 从她身边垂直升起越过看台顶棚（crane 缓动 0.45,0,0.1,1）；54.5–55.5 在约 100 m 减速到近乎悬停，俯角 −40°；55.5–56.5 升到约 500 m，俯角抬到 −22°，地平线入画；56.5–57.0 缓慢上升 + 0.5° 漂移。J17a 起点与 S16 最后一格（她的近景）位置连续，她随上升缩小并被顶棚遮挡。
+**Camera Movement**：54.0–54.5 从她身边垂直升起越过看台顶棚（crane 缓动 0.45,0,0.1,1），摄影机始终朝向 02–04 所在的方向；54.5–55.5 在约 100 m 减速到近乎悬停，俯角约 −28°（由 −40° 放缓，让摄影机朝向上、距体育场 ≤ 1.5 km 的 02–04 在铃响同帧可见）；55.5–56.5 升到约 500 m，俯角抬到 −22°，地平线入画；56.5–57.0 缓慢上升 + 0.5° 漂移。航拍段按全画幅等效约 20–22mm（16:9 竖向视场约 49–54°）：100 m、俯角 −28° 时画面上沿约在水平线下 1–3°，体育场外 1.5 km 内的街区都在画面上部，地平线刚好不入画；500 m、俯角 −22° 时地平线进入画面上部。若按 35mm（竖向视场 32°），−28° 时画面上沿只看到约 0.5 km，02–04 会出画。J17a 起点与 S16 最后一格（她的近景）位置连续，她随上升缩小并被顶棚遮挡。
 
 **Character Action**：无可辨识的人物动作；看台上的人群是逆光的点阵，她只是一点红和一张白纸。
 
-**Product Position**：节点按真实街角与建筑手工布点（后期）：Paragon 只在室外广场与草坪（体育场四个入口、钟楼旁、Western Univ），Gateway 在室内大堂与连廊（透过玻璃见两道竖光），Portal 在走廊与电梯厅窗内（一圈蓝晕）。100 m 时四个入口广场上四台 Paragon 的上下灯箱像一圈白色表盘刻度，钟楼旁那台最近，两块白矩形光形清楚；Market Hall 玻璃顶下 Gateway 的两道白色竖光也认得出。生成素材里这些位置只要是空的广场、玻璃顶和窗户。
+**Product Position**：节点按真实街角与建筑手工布点（后期）：Paragon 只在室外广场与草坪（体育场四个入口、钟楼旁、Western Univ），Gateway 在室内大堂与连廊（透过玻璃见两道竖光），Portal 在走廊与电梯厅窗内（一圈蓝晕）。100 m 时四个入口广场上四台 Paragon 的上下灯箱像一圈白色表盘刻度，钟楼旁那台最近，两块白矩形光形清楚；Market Hall 玻璃顶下 Gateway 的两道白色竖光也认得出。54.0–54.3 升起的前 0.3 s，钟楼旁那台 Paragon 是画面里唯一近处的设备（上下两块白矩形清楚可辨）——「一个设备」这一级；同帧远处 02 点亮。生成素材里这些位置只要是空的广场、玻璃顶和窗户（J17a 里钟楼旁那台 Paragon 可以有机身，灯箱不点亮）；所有光形由后期挂接。
 
 **Lyra**：不入画（太远）；每个节点里都是她。
 
-**UI**：无屏幕 UI。后期合成：① 节点光：Gateway / Paragon 节点为 5600K 中性白的竖向光形，Portal 节点为柔和蓝晕；三者亮度上限同为周围 2700K 窗灯的 1.3 倍。100 m 时画成三种真实光形（Gateway 两道白竖条、Paragon 上下两块白矩形、Portal 一圈蓝晕），升到 500 m 时收成光点（settle 0.5 s；Portal 节点仍是蓝色的小晕点）；② 七站点亮：每声铃同帧，对应节点 120 ms 升亮到峰值、900 ms 余辉回落到常亮（峰值 60%），由远（近地平线）到近（体育场旁）：01 St. Mary's → 02 Western Univ → 03 Harbour Hotel → 04 Pier Tower → 05 Harbour Interchange → 06 Market Hall → 07 Harbour Depot；③ 节点标签（Geist Mono 13 px，0.18em，1 px 竖向引线），每个 0.6 s：「01 · St. Mary's」｜「02 · Western Univ」｜「03 · Harbour Hotel」｜「04 · Pier Tower」｜「05 · Harbour Interchange」｜「06 · Market Hall」｜「07 · Harbour Depot」；④ 56.5 起其余约 420 个节点以 20–60 ms 随机延迟逐个亮起，随后与 Sub 拍点同步呼吸 ±6%。**全程不画任何连线。** 追踪：对航拍素材做 3D 摄影机反求，节点作为地面上的 3D 点挂接，保证视差正确。
+**UI**：无屏幕 UI。后期合成：① 节点光：Gateway / Paragon 节点为 5600K 中性白的竖向光形，Portal 节点为柔和蓝晕；三者亮度上限同为周围 2700K 窗灯的 1.3 倍。100 m 时画成三种真实光形（Gateway 两道白竖条、Paragon 上下两块白矩形、Portal 一圈蓝晕），升到 500 m 时收成光点（settle 0.5 s；Portal 节点仍是蓝色的小晕点）；② 七站点亮：每声铃同帧，对应节点 120 ms 升亮到峰值、900 ms 余辉回落到常亮（峰值 60%），由远（近地平线）到近（体育场旁）：01 St. Mary's → 02 Western Univ → 03 Harbour Hotel → 04 Pier Tower → 05 Harbour Interchange → 06 Market Hall → 07 Harbour Depot。七个站号全部可见：01 的铃（53.5）落在 S16，先闻其声，55.5 地平线入画时补显 0.6 s「01 · St. Mary's」（此时 01 节点已是常亮）；02（54.0，J17a 远处）、03（54.5）、04（55.0）布在摄影机朝向、距体育场 ≤ 1.5 km 处，铃响同帧在画内；③ 节点标签（Geist Mono 13 px，0.18em，1 px 竖向引线），每个 0.6 s：「01 · St. Mary's」｜「02 · Western Univ」｜「03 · Harbour Hotel」｜「04 · Pier Tower」｜「05 · Harbour Interchange」｜「06 · Market Hall」｜「07 · Harbour Depot」；④ 56.5 起其余约 420 个节点以 20–60 ms 随机延迟逐个亮起，随后与 Sub 拍点同步呼吸 ±6%。**全程不画任何连线。** 追踪：对航拍素材做 3D 摄影机反求，节点作为地面上的 3D 点挂接，保证视差正确。
 
 **Lighting**：蓝调中的真实港城，雨刚停，地面湿亮；街道钠灯与 2700K 暖黄窗灯；体育场外环冷白泛光；黑色的河与港湾；地平线雾气。Gateway / Paragon 节点的 5600K 中性白、Portal 节点的柔和蓝晕，都与窗灯的暖黄形成色温对比（后期）。
 
@@ -1199,14 +1199,14 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 
 **End Frame**：J17a = KF-S17-ROOF；J17c 结束在约 500 m、俯角 −22°、地平线入画的城市大全景。
 
-**Continuity**：七声铃、七站、七个「叮」一一对应，落点见声音行。钟楼、Market Hall、体育场的相对地理与 S12 / S13 / S14 一致。57.0 城市画面在 0.15 s 内压到全黑，接 End Card，只剩雨声与远处球场声浪尾音。
+**Continuity**：七声铃、七站、七个「叮」一一对应，落点见声音行；七个站号都在画面里出现过（01 在 55.5 补显）。钟楼、Market Hall、体育场的相对地理与 S12 / S13 / S14 一致；02–04 在摄影机朝向、距体育场 ≤ 1.5 km 处。57.0 城市画面在 0.15 s 内压到全黑，接 End Card，只剩雨声与远处球场声浪尾音。
 
 **Negative Prompt**：NEG-BASE + glowing network lines, light trails connecting buildings, holographic city, blue data grid, bright screens on rooftops, billboards, drone-show lights, fireworks, daytime sky, sunset orange, fake miniature tilt-shift look, repeating copy-paste buildings.
 
 **English Prompt:**
-> J17a — Fast vertical crane rising from directly above a stadium seat: a packed stand of backlit spectators below, one tiny spot of red and a small white paper among them; the camera rises past the edge of the stand roof and the floodlit bowl and pitch open up below. Blue hour, wet surfaces. Avoid: logos, sponsor boards, light trails.
+> J17a — Fast vertical crane rising from directly above a stadium seat: a packed stand of backlit spectators below, one tiny spot of red and a small white paper among them; the camera rises past the edge of the stand roof, heading toward the distant city, and the floodlit bowl and pitch open up below; to one side, outside the stand, the wet plaza with a small red-brick clock tower comes into clear view, the LiveX Paragon outdoor display pillar standing unlit beside it, and far away a university campus lawn stays in frame. Blue hour, wet surfaces. Avoid: logos, sponsor boards, light trails, glowing screens, lit light boxes.
 >
-> J17b — Aerial at about 100 metres, looking down at 40 degrees on a real harbour city stadium at blue hour after rain: the floodlit bowl, four wet granite entrance plazas around it at twelve, three, six and nine o'clock, a small red-brick clock tower beside one plaza, the glass roof of an old market hall nearby, sodium streetlights and warm windows. Nearly hovering, very slow drift. Avoid: glowing lines, holograms, screens, billboards, fireworks.
+> J17b — Wide-angle aerial (about 20mm) at about 100 metres, looking down at about 28 degrees on a real harbour city stadium at blue hour after rain: the floodlit bowl, four wet granite entrance plazas around it at twelve, three, six and nine o'clock, a small red-brick clock tower beside the nearest plaza, the glass roof of an old market hall nearby; beyond the stadium, city blocks with a campus lawn, a hotel and an office tower stretch up to the top edge of the frame, the horizon just out of frame; sodium streetlights and warm windows. Nearly hovering, very slow drift. Avoid: glowing lines, holograms, screens, billboards, fireworks.
 >
 > J17c (extension, forward) — Continue smoothly: the camera climbs to about 500 metres and tilts up until the horizon enters the frame, revealing the whole real harbour city in blue hour, warm windows, sodium streets, dark river and harbour, light mist on the horizon; ends with a slow rise and a slight drift. Avoid: network lines, holographic city, drone lights, daylight.
 
@@ -1355,6 +1355,9 @@ Seedance 2.5 的参数表里没有独立的 negative 字段。每条英文 Promp
 - S09：镜头口径为全画幅等效 35mm，距离与占画高一致（90% ↔ 4.2 m，62% ↔ 6.0 m，30% ↔ 12.5 m）；接缝是「屏幕宽 = 画宽」的那一帧（约 20.6），屏幕内容逐像素连续，没有白色外延或退潮；左右边框约 20.6 起从两侧进入，22.5 上下边框扫入、屏幕矩形闭合。
 - S15 五格 Lyra 双眼中点在 (960, 405)、间距 20 px，误差 ≤ 2 px；Gate C 格画面下缘可见闸机顶部与白色状态灯，陈师傅在 Portal 右侧过闸，不遮挡屏幕。
 - 光的匹配：S13 门缝光 = S14 上灯箱（约 x 1040 / y 400）。
+- Step-free 路线：S09 画右的暖光与 S10 通道尽头都是斜坡自动人行道（平滑踏面、无梯级）；只有 S02→S03 进站那段是扶梯。
+- S15 Gate C 格：闸机后内廊深处的球迷商店摊位（藏青白条围巾、暖色灯泡）与旁边 Gateway 的两道竖光在焦外可辨，没有文字。
+- S17：100 m 悬停段俯角约 −28°（等效 20–22mm），02–04 铃响同帧在画内，01 在 55.5 补显站号；54.0–54.3 近处只有钟楼旁那台 Paragon；Gateway / Paragon 节点是 5600K 中性白竖向光形，Portal 节点是柔和蓝晕，三者亮度上限都是周围窗灯的 1.3 倍。
 - 连续性：J13a 取 1.0–4.0，J13b 从 J13a 的末帧接上；J17b 取 3.0–4.0，J17c 从它的末帧续接；40.5 与 55.5 没有跳帧。
 - 变速：有人物动作的片段 0.9–1.15×（L6、L8、L9、J02b、J01 都取自然速度段）；纯摄影机或环境 ≤ 1.8×（光流慢放 ≤ 2×，只用于静止场景）；航拍 ≤ 3×。
 - S14 的 Paragon 正面画布贴到 46.35，46.0–46.35 没有黑屏。

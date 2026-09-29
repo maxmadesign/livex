@@ -21,7 +21,7 @@ def run(args):
     subprocess.run([FF, '-hide_banner', '-loglevel', 'error', '-y', *args], check=True)
 
 
-# loudness: gain to -14 LUFS integrated, then a 4x-oversampled true-peak limiter at -1.6 dBTP, iterated until the
+# loudness: gain to -14 LUFS integrated, then a 4x-oversampled true-peak limiter at -2.3 dBTP (AAC adds ~1 dB of overs), iterated until the
 # integrated loudness settles (ffmpeg's loudnorm falls back to dynamic mode here and flattens the film's arc)
 import json
 import numpy as np
@@ -38,7 +38,7 @@ def measure(path):
     return float(m['input_i']), float(m['input_tp']), float(m['input_lra'])
 
 
-def tp_limit(x, sr, ceiling_db=-1.6, look=0.004, release=0.12):
+def tp_limit(x, sr, ceiling_db=-2.3, look=0.004, release=0.12):
     ceil = 10 ** (ceiling_db / 20)
     for _ in range(3):
         up = np.abs(resample_poly(x, 4, 1, axis=1)).max(axis=0)
