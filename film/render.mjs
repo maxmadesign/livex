@@ -4,6 +4,7 @@
 //   node render.mjs --stills 3,12.5,24          -> out/stills/t_XX.png
 //   node render.mjs --video [--from 0 --to 60]  -> out/frames segments -> out/film_silent.mp4
 //   node render.mjs --entry test --stills 0
+//   node render.mjs --entry gen_overlay --video --alpha --fps 24 --post 0   -> out/gen_overlay_alpha.webm
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -20,6 +21,7 @@ const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? (args[
 const entry = opt('entry', 'film');
 const fps = +opt('fps', 30);
 const workers = +opt('workers', 3);
+const alpha = !!opt('alpha', false);   // transparent PNG frames -> VP9 with alpha (overlay layers)
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
@@ -66,13 +68,16 @@ if (opt('stills')) {
   const segs = await Promise.all(Array.from({ length: workers }, async (_, w) => {
     const a = n0 + w * per, b = Math.min(n1, a + per);
     if (a >= b) return null;
-    const file = join(OUT, 'seg', `${entry}_${String(w).padStart(2, '0')}.mp4`);
-    const ff = spawn(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
-      '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-pix_fmt', 'yuv420p', '-r', String(fps), file], { stdio: ['pipe', 'inherit', 'inherit'] });
+    const file = join(OUT, 'seg', `${entry}_${String(w).padStart(2, '0')}.${alpha ? 'webm' : 'mp4'}`);
+    const enc = alpha
+      ? ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '30', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '4']
+      : ['-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-pix_fmt', 'yuv420p'];
+    const ff = spawn(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', alpha ? 'png' : 'mjpeg', '-i', '-',
+      ...enc, '-r', String(fps), file], { stdio: ['pipe', 'inherit', 'inherit'] });
     const { page } = await openPage();
     for (let n = a; n < b; n++) {
       await renderFrame(page, n / fps);
-      const buf = await page.screenshot({ type: 'jpeg', quality: 96 });
+      const buf = alpha ? await page.screenshot({ type: 'png', omitBackground: true }) : await page.screenshot({ type: 'jpeg', quality: 96 });
       if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once('drain', r));
       if ((n - a) % 60 === 0) console.log(`w${w} frame ${n}/${b} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     }
@@ -83,7 +88,7 @@ if (opt('stills')) {
   const list = join(OUT, 'seg', `${entry}_list.txt`);
   const { writeFile } = await import('node:fs/promises');
   await writeFile(list, segs.filter(Boolean).map(f => `file '${f}'`).join('\n'));
-  const outFile = join(OUT, `${entry}_silent.mp4`);
+  const outFile = join(OUT, alpha ? `${entry}_alpha.webm` : `${entry}_silent.mp4`);
   execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', outFile]);
   console.log('video', outFile, `${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }

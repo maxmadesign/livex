@@ -26,6 +26,9 @@ def _release_env(need, look=0.004, release=0.08):
     return _release(minimum_filter1d(need, size=T(look) * 2 + 1), np.exp(-1 / (release * SR)))
 
 E6 = 1318.5
+# ROUTE7_VO=1: the generated cut has real voices (narration + dialogue), so the glass
+# stand-ins for Lyra's lines and Chen's hums are left out and her motif sits under the dialogue
+VO = os.environ.get('ROUTE7_VO') == '1'
 B = {k: Bus(k) for k in ('era', 'amb', 'foley', 'ui', 'trans', 'piano', 'glass', 'pad', 'bass', 'drums', 'perc', 'fx', 'voice', 'rain', 'logo')}
 KICKS = []
 
@@ -75,7 +78,7 @@ B['voice'].add(8.85, glass(note('B5'), 2.5, 0.45), 0.45, pan=0.2)     # "May I?"
 # ================================================================== 10–20  Lyra
 B['pad'].add(10.0, pad(chord(['E2', 'B2', 'E3', 'G3', 'B3', 'D4', 'F#4']), 6.4, attack=2.2, release=1.4, cutoff=(300, 1100), vol=0.075))
 B['pad'].add(16.0, pad(chord(['C3', 'E3', 'G3', 'B3', 'D4']), 4.4, attack=1.0, release=1.2, cutoff=(500, 1500), vol=0.075))
-glass_motif(12.8, vol=0.75)                                            # "Route 7's last stop. I know it."
+glass_motif(12.8, vol=0.3 if VO else 0.75)                             # "Route 7's last stop. I know it."
 for t in np.arange(14.0, 20.0, 1.0):
     KICKS.append(t)
     B['drums'].add(t, kick(0.26, pitch=(80, 42), tau=0.26, click=0.03))
@@ -244,7 +247,7 @@ def render(out_wav):
     t = np.arange(N) / SR
     drop = np.interp(t, [57.0, 57.15], [1.0, 0.1])      # 57.0: the city goes quiet in 0.15 s; only rain and tails
     for k, bus in B.items():
-        x = bus.x
+        x = bus.x if not (VO and k == 'voice') else bus.x * 0
         amt, ir = send[k]
         if ir is not None and amt > 0:
             x = x + convolve(x, ir) * amt
