@@ -13,3 +13,5 @@ out/LiveX_AI_City_60s_preview.mp4
 out/lookdev*.mp4
 out/render_log.txt
 out/*_log.txt
+out/*.webm
+out/score_gen.wav
