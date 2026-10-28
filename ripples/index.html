@@ -190,6 +190,7 @@ h1 {
   font: 400 56px/0.9 var(--font-display);
   font-variant-numeric: tabular-nums;
 }
+.readout .big i { display: inline-block; width: 1ch; text-align: center; font-style: normal; }   /* Instrument Serif has no tabular figures */
 .readout .unit { font: 400 26px/1 var(--font-display); color: var(--ink-2); }
 .readout .mono { margin-left: auto; font: 400 12px/1 var(--font-mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .bar { position: relative; height: 3px; background: var(--rule-2); border-radius: 2px; overflow: hidden; }
@@ -341,7 +342,7 @@ input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border-radius
 <body>
 <main class="app">
   <section class="stage" id="stage" data-i18n-label="a.stage" aria-label="Sphere ripple canvas">
-    <p class="stage-cap">1080 × 1080 · p5.js 1.9.4 · WEBGL · ADD</p>
+    <p class="stage-cap" id="stage-cap">1080 × 1080 · p5.js 1.9.4 · WEBGL · ADD</p>
     <div class="drop" id="drop" data-i18n="drop" hidden>Drop to drive the ripples with this audio</div>
   </section>
 
@@ -386,7 +387,7 @@ input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border-radius
 
     <section class="mode-panel" id="panel-loading" role="tabpanel" aria-labelledby="tab-loading" hidden>
       <div class="readout">
-        <span class="big" id="ld-pct">0</span><span class="unit">%</span>
+        <span class="big" id="ld-pct"><i>0</i></span><span class="unit">%</span>
         <span class="mono" id="ld-time">0.0 / 10.0 s</span>
       </div>
       <div class="bar" role="progressbar" data-i18n-label="a.progress" aria-label="Loading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="ld-bar-wrap"><i id="ld-bar"></i></div>
@@ -490,6 +491,7 @@ input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border-radius
       'c.blue': 'Blue', 'c.red': 'Red', 'c.yellow': 'Yellow', 'c.white': 'White', 'c.orange': 'Orange',
       clock: 't {t} s · frame {f}', keys: 'Space pause · 1 2 3 switch effect',
       drop: 'Drop to drive the ripples with this audio',
+      'ctx.lost': 'The graphics card reset. Restoring the animation…',
       'cv.loading': 'LOADING', 'cv.complete': 'COMPLETE',
       'st.idle': 'Pick a source. The demo beat is a 120 BPM track the page synthesizes itself, so no file is needed.',
       'st.demo': 'Playing: demo beat · 120 BPM · Am F C G',
@@ -524,6 +526,7 @@ input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border-radius
       'c.blue': '蓝', 'c.red': '红', 'c.yellow': '黄', 'c.white': '白', 'c.orange': '橙',
       clock: 't {t} s · 第 {f} 帧', keys: '空格 暂停 · 1 2 3 切换效果',
       drop: '松开鼠标，用这段音频驱动涟漪',
+      'ctx.lost': '显卡被重置了，正在恢复动画…',
       'cv.loading': '载入中', 'cv.complete': '完成',
       'st.idle': '选一个声源。示例节拍是页面自己合成的 120 BPM 电子乐，不用任何文件。',
       'st.demo': '正在播放：示例节拍 · 120 BPM · Am F C G',
@@ -1170,14 +1173,14 @@ void main() {
   }
 
   // ------------------------------------------------------------------ the percentage, drawn into the canvas
-  let PG = null;
+  let PG = null, PGK = 1;    // a p5.Image, so p5 re-uploads it only when it is repainted (a p5.Graphics uploads every frame)
   const PG_W = 640, PG_H = 300;
   const NUM_FONT = '400 168px "Instrument Serif", "Noto Serif SC", Georgia, serif';
   const PCT_FONT = '400 64px "Instrument Serif", Georgia, serif';
   function paintPercent(n, label) {
-    const g = PG;
-    g.clear();
-    const c = g.drawingContext;
+    const c = PG.drawingContext;
+    c.setTransform(PGK, 0, 0, PGK, 0, 0);
+    c.clearRect(0, 0, PG_W, PG_H);
     c.save();
     // a soft dark lens behind the readout: rings, gauge lines and the level ring dim around the digits instead of cutting them
     c.save();
@@ -1215,6 +1218,7 @@ void main() {
     c.textAlign = 'center';
     c.fillText(label, PG_W / 2 + (LANG === 'zh' ? 5 : 3.5), base + 58);
     c.restore();
+    PG.setModified(true);
   }
 
   // ------------------------------------------------------------------ drawing
@@ -1237,9 +1241,13 @@ void main() {
       if (!S.rays) return;
       const p = e / rp.rayDur;
       const tail = p * Rs, head = Math.sqrt(p) * Rs;  // head runs ahead (√p), tail catches up (p)
+      const len = head - tail, u = rp.u, v = rp.v;
       stroke(rp.col[0], rp.col[1], rp.col[2]);
       strokeWeight(Math.max(1, rp.w * 0.32));
-      line(d[0] * tail, d[1] * tail, d[2] * tail, d[0] * head, d[1] * head, d[2] * head);
+      push();
+      applyMatrix(u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, d[0] * len, d[1] * len, d[2] * len, 0, d[0] * tail, d[1] * tail, d[2] * tail, 1);
+      model(SEGMENT);   // unit segment (0,0,0)→(0,0,1): the same line, with its stroke geometry cached on the GPU
+      pop();
       return;
     }
     const k = (e - rp.rayDur) / rp.ringDur;
@@ -1252,12 +1260,26 @@ void main() {
     const ws = Math.max(1, w), f = w / ws;               // under 1 px: stay 1 px and dim, instead of breaking into dots
     stroke(rp.col[0] * f, rp.col[1] * f, rp.col[2] * f);
     strokeWeight(ws);
-    beginShape();
-    for (let i = 0; i < SEG; i++) {
-      const cu = COS[i] * sa, sv = SIN[i] * sa;
-      vertex(d[0] * ca + u[0] * cu + v[0] * sv, d[1] * ca + u[1] * cu + v[1] * sv, d[2] * ca + u[2] * cu + v[2] * sv);
-    }
-    endShape(CLOSE);
+    // the 36-vertex closed unit ring (cos, sin, 1) mapped by [sa·u | sa·v | ca·d]: the same points as building it
+    // vertex by vertex, but p5 keeps its stroke geometry on the GPU instead of rebuilding it every frame
+    push();
+    applyMatrix(u[0] * sa, u[1] * sa, u[2] * sa, 0, v[0] * sa, v[1] * sa, v[2] * sa, 0, d[0] * ca, d[1] * ca, d[2] * ca, 0, 0, 0, 0, 1);
+    model(RING);
+    pop();
+  }
+
+  let RING = null, SEGMENT = null;
+  function makeGeometry() {
+    RING = new p5.Geometry(1, 1, function () {
+      for (let i = 0; i < SEG; i++) this.vertices.push(createVector(COS[i], SIN[i], 1));
+      for (let i = 0; i < SEG; i++) this.edges.push([i, (i + 1) % SEG]);
+    });
+    RING.gid = 'sphere-ripples-unit-ring';
+    SEGMENT = new p5.Geometry(1, 1, function () {
+      this.vertices.push(createVector(0, 0, 0), createVector(0, 0, 1));
+      this.edges.push([0, 1]);
+    });
+    SEGMENT.gid = 'sphere-ripples-unit-segment';
   }
 
   function latRing(h, Rs, n) {
@@ -1328,10 +1350,23 @@ void main() {
   // ------------------------------------------------------------------ p5 entry points
   let meterCtx = null;
 
+  // backing-store density from the canvas's on-screen size, 1–2×, in quarter steps
+  function pickDensity() {
+    const stage = document.getElementById('stage');
+    const c = window.drawingContext && drawingContext.canvas;
+    const css = c && c.parentNode === stage ? c.getBoundingClientRect().width : Math.min(stage.clientWidth, stage.clientHeight || stage.clientWidth);
+    return Math.max(1, Math.min(2, Math.round((css * (window.devicePixelRatio || 1) / W) * 4) / 4));
+  }
+  window.windowResized = function windowResized() {
+    const pd = pickDensity();
+    if (Math.abs(pd - pixelDensity()) < 0.01) return;
+    pixelDensity(pd);          // the auto-sized scene framebuffer follows the canvas
+    FX.pd = pd;
+  };
+
   window.setup = function setup() {
     const stage = document.getElementById('stage');
-    const shown = Math.min(stage.clientWidth, stage.clientHeight || stage.clientWidth) * (window.devicePixelRatio || 1);
-    const pd = Math.max(1, Math.min(2, Math.round((shown / W) * 4) / 4));
+    const pd = pickDensity();
     pixelDensity(pd);
     createCanvas(W, H, WEBGL);
     setAttributes({ antialias: true });            // recreates the GL canvas, so place the live one afterwards
@@ -1339,10 +1374,20 @@ void main() {
     stage.appendChild(el);
     el.setAttribute('role', 'img');
     el.setAttribute('data-i18n-label', 'a.canvas');
+    // p5 can't rebuild its shaders and buffers after a lost context, so say so, and reload once the GPU is back
+    el.addEventListener('webglcontextlost', e => {
+      e.preventDefault();
+      noLoop();
+      const cap = document.getElementById('stage-cap');
+      cap.dataset.i18n = 'ctx.lost';
+      cap.textContent = tr('ctx.lost');
+    });
+    el.addEventListener('webglcontextrestored', () => location.reload());   // the #mode hash survives the reload
     frameRate(60);
     initFX(pd);
-    PG = createGraphics(PG_W, PG_H);
-    PG.pixelDensity(Math.min(2, pd * 1.5));
+    makeGeometry();
+    PGK = Math.min(2, pd * 1.5);
+    PG = createImage(Math.round(PG_W * PGK), Math.round(PG_H * PGK));
     if (document.fonts) {
       Promise.all([NUM_FONT, '500 22px "Geist Mono"'].map(f => document.fonts.load(f)))
         .then(() => { LD.key = ''; }).catch(() => {});
@@ -1350,6 +1395,7 @@ void main() {
     for (let i = 0; i < S.count; i++) pool.push(new Ripple().spawn(0, rand(0, 4)));   // staggered start over 0–4 s
     meterCtx = document.getElementById('meter').getContext('2d');
     initUI();
+    requestAnimationFrame(() => window.windowResized());   // re-measure once the canvas sits in its final place
   };
 
   // read-only handle for debugging from the console
@@ -1610,7 +1656,7 @@ void main() {
     if (S.mode === 'loading') {
       const el = $('ld-pct');
       if (el.textContent !== String(LD.n)) {
-        el.textContent = LD.n;
+        el.innerHTML = String(LD.n).replace(/\d/g, '<i>$&</i>');
         $('ld-bar-wrap').setAttribute('aria-valuenow', LD.n);
       }
       $('ld-bar').style.clipPath = `inset(0 ${(100 - LD.P * 100).toFixed(2)}% 0 0)`;
