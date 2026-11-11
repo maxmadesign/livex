@@ -234,7 +234,7 @@ footer.credit { font-size: 0.84rem; line-height: 1.75; color: var(--ink-2); bord
       <img src="img/hero.webp" width="1920" height="1080" alt="蓝色发光的头部轮廓里叠着头骨、粉色大脑、红色肌肉和黄色眼球，下颌半张；右侧是一只由单独骨块拼成的手骨。">
       <span class="tag bl">斜位 OBL · 全部图层 · jawOpen 0.42</span>
     </div>
-    <figcaption><b>图 1</b>　页面内嵌的全部解剖网格叠在一起：皮肤轮廓、头骨（下颌张开 42%）、大脑、肌肉、眼球，右侧是按 21 个手部关节点摆出来的手骨。本页所有配图都由我按原作的配色和着色参数重绘内嵌数据得到，不是原页面的运行截图。</figcaption>
+    <figcaption><b>图 1</b>　页面内嵌的全部解剖网格叠在一起：皮肤轮廓、头骨（下颌张开 42%）、大脑、肌肉、眼球，右侧是按 21 个手部关节点摆出来的手骨。除图 8 外，本页配图都由我按原作的配色和着色参数重绘内嵌数据得到，不是原页面的运行截图。</figcaption>
   </figure>
 
   <dl class="spec">
@@ -243,7 +243,7 @@ footer.credit { font-size: 0.84rem; line-height: 1.75; color: var(--ink-2); bord
     <div><dt>解剖数据</dt><dd><b>23</b> 个网格，<b>225,499</b> 个三角形</dd></div>
     <div><dt>追踪</dt><dd>MediaPipe：脸 <b>478</b> 点，手 <b>21</b> 点 × 2</dd></div>
     <div><dt>渲染</dt><dd>three.js 0.160，每帧最多 <b>254,498</b> 个三角形</dd></div>
-    <div><dt>上传</dt><dd>代码里 <b>0</b> 处上传（静态核对）</dd></div>
+    <div><dt>上传</dt><dd><b>0</b> 处上传（读码并实际运行核对）</dd></div>
   </dl>
 
   <h2 id="summary">结论</h2>
@@ -253,6 +253,7 @@ footer.credit { font-size: 0.84rem; line-height: 1.75; color: var(--ink-2); bord
     <li><strong>X 光质感只用了十几行着色器。</strong>表面越侧对视线越亮，颜色相加混合，不做深度测试。另有一层近黑色的“面纱”先把真实的脸压暗，发光的线条才读得出来。</li>
     <li><strong>会动的只有两处。</strong>下颌按 MediaPipe 的 <code>jawOpen</code> 系数绕铰点转 0 到 20.6°。手骨是 15 节单位长度的指骨网格，被拉伸到相邻两个关节点之间，手掌是一整块仿射变形的骨块。</li>
     <li><strong>帖子的说法基本属实，两处要加前提。</strong>首次启动要联网下载约 22.6 MB 的库和模型。“视频不离开电脑”在代码里成立，但第三方脚本是运行时从 CDN 取的，没有完整性校验。</li>
+    <li><strong>实际运行与读码一致。</strong>我把文件跑了起来，用样例照片代替摄像头。流程、网络请求和二维修正的作用都和上面的描述吻合。另外发现一个小问题：左右手标签判反了，对画面影响很小。</li>
   </ol>
   <p>把解剖模型叠到镜像画面上这个点子不新，2014 年巴黎就有用 Kinect 深度相机做的互动装置，约翰·霍普金斯大学 2017 年有教学用的 magic mirror。这一版的不同在于只用普通摄像头、只有一个 HTML 文件，而且范围选得很克制：只做头和手，只让下颌动，其余全靠对齐精度和画面质感。</p>
 
@@ -415,7 +416,7 @@ t = q̄ − s·p̄
       <p><strong>指骨。</strong>15 节指骨各是一个独立网格，预先归一化成沿 x 轴 1 个单位长。运行时，方向取两个关节点的连线，长度取两点距离，绕自身轴的滚转由食指根到小指根的连线决定。指尖那一节的长度乘 0.8，因为追踪点落在指尖皮肤上，比骨头末端更远。</p>
       <p><strong>掌块。</strong>腕骨和四根掌骨合成一块，存成一种斜坐标：手腕是原点，食指根是 (1, 0, 0)，小指根是 (0, 1, 0)。运行时用图里的 e1、e2 和它们的法向组成基矩阵，一次仿射变换就把整块手掌骨摆好并撑到合适的大小。</p>
       <p><strong>遮住真手。</strong>WebGL 画布下面还有一层二维画布，用粗圆头线条沿关节点画出手的暗色剪影，线宽约为指根跨度的三分之一。</p>
-      <p><strong>左右手。</strong>MediaPipe 的左右手标签假设输入是镜像画面。页面送进去的是未镜像的原始帧，所以代码把标签反过来用，否则掌骨会被镜像成另一只手的样子。</p>
+      <p><strong>左右手。</strong>左右手标签只决定骨块沿厚度方向是否镜像，也就是手心面和手背面哪个朝外。代码在这里把追踪器给的标签反过来用，实测这一步是错的，见下文。</p>
     </div>
     <figure>
       <div class="film">
@@ -426,6 +427,7 @@ t = q̄ − s·p̄
     </figure>
   </div>
   <p>代价是手骨只有二维半的精度。深度用的是 MediaPipe 给的相对值，相机是正交的，手和头之间也没有遮挡关系：手举到脸前时，头骨照样画在最上面。</p>
+  <p><strong>左右手判反了。</strong>代码注释认为追踪器的左右手标签是按镜像画面命名的，于是取了反。我用同一版本的 MediaPipe 单独测了 5 张未镜像的样例照片：6 只手的标签都和真实的左右手一致，把照片水平翻转后标签全部互换。所以取反是多余的，实测中举起的左手在调试面板里显示为 right。后果比听起来小。骨块的位置和朝向只由关节点决定，标签只影响手心面和手背面哪个朝外，在 X 光模式下几乎看不出来。</p>
 
   <h2 id="stack">四层画布、镜像和镜片</h2>
   <div class="tbl">
@@ -488,13 +490,43 @@ t = q̄ − s·p̄
   </div>
   <p>所以它不需要安装，但需要联网，离线打不开。第二次打开时这些文件通常来自浏览器缓存。</p>
 
+  <h2 id="run">实际运行</h2>
+  <p>我把委托附带的文件原样加载进无头浏览器。它要下载的运行库和模型换成本地的同版本文件，其余网络请求一律拦截并记录。摄像头用浏览器的假摄像头功能代替，画面是 MediaPipe 文档里的几张公开样例照片。</p>
+
+  <figure class="wide">
+    <div class="film">
+      <img src="img/app-demo.webp" width="2880" height="2462" alt="原页面的界面：左侧深色舞台上是发光的头骨和手骨，带解剖名称标签；右侧是图层、外观、混合现实、调试数据和贴合微调五组控件。">
+    </div>
+    <figcaption><b>图 8</b>　原页面在内置演示场景下的真实界面，打开了解剖标签。右侧依次是图层、外观、混合现实、调试数据和贴合微调。手部的标签在舞台右缘被裁掉了一截。</figcaption>
+  </figure>
+
+  <div class="tbl">
+    <table class="grid">
+      <thead><tr><th>样例照片</th><th>脸</th><th>转头 / 点头 / 歪头</th><th class="num">jawOpen</th><th class="num">修正缩放</th><th class="num">纵向平移</th><th class="num">手</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">举起食指</th><td>478 点</td><td>−6° / 16° / −12°</td><td class="num">0.13</td><td class="num">0.948</td><td class="num">0.029</td><td class="num">1</td></tr>
+        <tr><th scope="row">竖起拇指</th><td>478 点</td><td>28° / 14° / −11°</td><td class="num">0.04</td><td class="num">0.955</td><td class="num">0.022</td><td class="num">1</td></tr>
+        <tr><th scope="row">手持眼镜</th><td>478 点</td><td>7° / 17° / 5°</td><td class="num">0.00</td><td class="num">0.928</td><td class="num">0.042</td><td class="num">2</td></tr>
+        <tr><th scope="row">手臂遮住半张脸</th><td>未检出</td><td>无</td><td class="num">无</td><td class="num">无</td><td class="num">无</td><td class="num">2</td></tr>
+      </tbody>
+      <caption>数值读自页面自己的调试面板。平移的单位是归一化设备坐标，整幅画面高为 2，所以 0.029 约等于画面高度的 1.5%。</caption>
+    </table>
+  </div>
+
+  <ul class="plain">
+    <li><strong>流程与读码一致。</strong>依赖都在本地时，点下 Start camera 后约 8 秒开始追踪。脸和手分别被识别，头骨、轮廓和手骨叠在正确的位置。脸被手臂遮住时，状态栏提示先把脸对准镜头，手骨照常显示。</li>
+    <li><strong>二维修正确实在起作用。</strong>三张照片上它都把投影缩小了 4.5% 到 7%，并向上平移画面高度的 1% 到 2%。没有这一步，头骨会比脸大一圈。</li>
+    <li><strong>没有上传。</strong>每次运行页面发出 8 个请求，全部是下载，没有请求体：three.js 1 个，MediaPipe 的脚本和 WASM 5 个，模型 2 个。此外没有出现任何请求。</li>
+    <li><strong>离不开 GPU。</strong>这个沙箱没有显卡，WebGL 由软件渲染，推理在 CPU 上，页面自报每秒 1 帧。这个数字只是下限，不代表普通电脑上的表现。</li>
+  </ul>
+
   <h2 id="claims">帖子的说法逐条核对</h2>
   <div class="tbl">
     <table class="claims">
       <thead><tr><th>帖子的说法</th><th>代码里的事实</th><th>判断</th></tr></thead>
       <tbody>
         <tr><td>一个网页，无需安装</td><td>仓库里只有一个 HTML（另一个文件名不同、内容逐字节相同）。运行库和模型在启动时从 jsDelivr 和 Google 存储下载。</td><td><span class="chip cond">◐ 属实，需联网</span></td></tr>
-        <tr><td>视频永远不会离开电脑</td><td>脚本里没有 <code>fetch</code>、XHR、WebSocket、WebRTC 或录制接口。对外只有取库、取 WASM、取模型三类下载。设置存在 <code>localStorage</code>。第三方脚本在运行时加载，没有 SRI 校验和 CSP 限制，这条保证依赖两个 CDN 上的文件不被改动。</td><td><span class="chip cond">◐ 属实，有前提</span></td></tr>
+        <tr><td>视频永远不会离开电脑</td><td>脚本里没有 <code>fetch</code>、XHR、WebSocket、WebRTC 或录制接口。对外只有取库、取 WASM、取模型三类下载。设置存在 <code>localStorage</code>。实际运行时页面只发出 8 个下载请求，没有带数据的请求。第三方脚本在运行时加载，没有 SRI 校验和 CSP 限制，这条保证依赖两个 CDN 上的文件不被改动。</td><td><span class="chip cond">◐ 属实，有前提</span></td></tr>
         <tr><td>看到你头部内部的头骨、大脑和肌肉，实时跟踪</td><td>每个视频帧更新一次姿态。显示的是同一套通用模型，按你的脸缩放和摆放。页面自己写了“不是你的扫描，不是医疗工具”。</td><td><span class="chip ok">✓ 属实</span></td></tr>
         <tr><td>张开嘴，下巴就会张开</td><td><code>jawOpen</code> 系数驱动下颌铰链，0 到 20.6°。</td><td><span class="chip ok">✓ 属实</span></td></tr>
         <tr><td>举起一只手，就能看到它的骨头</td><td>最多两只手，每只 1 个掌块加 15 节指骨，按 21 个关节点摆放。</td><td><span class="chip ok">✓ 属实</span></td></tr>
@@ -525,7 +557,9 @@ t = q̄ − s·p̄
     <li><strong>只跟一张脸。</strong>多人同时入镜时只有一个人有效果。</li>
     <li><strong>依赖在线 CDN。</strong>没有离线包，没有完整性校验。</li>
     <li><strong>授权。</strong>代码没有许可证。模型是 CC BY-SA 2.1 Japan，改过的模型再分发时要署名并沿用同一许可。</li>
-    <li><strong>性能没有实测。</strong>每帧最多两次神经网络推理，外加约 25 万个双面、相加混合的三角形。不同设备上的实际帧率我没有数据。</li>
+    <li><strong>左右手标签判反。</strong>调试面板里的左右手是反的，骨块的手心面和手背面互换。见手骨一节。</li>
+    <li><strong>标签会被画面边缘裁掉。</strong>手靠近画面边缘时，手部的解剖名称有一部分落在舞台之外。</li>
+    <li><strong>性能只有下限数据。</strong>每帧最多两次神经网络推理，外加约 25 万个双面、相加混合的三角形。无显卡的沙箱里是每秒 1 帧，普通电脑和手机上的帧率我没有数据。</li>
   </ul>
 
   <h2 id="remake">如果要做自己的版本</h2>
@@ -537,16 +571,17 @@ t = q̄ − s·p̄
     <li><strong>放到线下屏幕上。</strong>需要先确认设备有前置摄像头和可用的 GPU，再处理竖屏构图、离线依赖和无人值守时的自动开始与重置。</li>
   </ul>
 
-  <h2 id="method">方法，以及没做到的事</h2>
+  <h2 id="method">方法，以及还没验证的事</h2>
   <ul class="plain">
-    <li><strong>读了什么。</strong>GitHub 仓库 <code>MasterOfVFX2070/xray-mirror</code>，提交 <code>41e2413</code>（2026-11-10）。仓库里的 <code>index.html</code> 和 <code>X-Ray Mirror.html</code> 逐字节相同。我读完了全部 777 行。</li>
+    <li><strong>读了什么。</strong>委托附带的 <code>X-Ray Mirror.html</code>：2,762,056 字节，777 行，SHA-256 以 <code>b5e12cd0755ac097</code> 开头。它与 GitHub 仓库 <code>MasterOfVFX2070/xray-mirror</code> 提交 <code>41e2413</code>（2026-11-10）里的 <code>index.html</code> 逐字节相同。我读完了全部代码。</li>
     <li><strong>量了什么。</strong>用自己的脚本解出内嵌网格，统计顶点、三角形和字节；和 MediaPipe 仓库里的标准脸模型、face geometry 源码逐项对照；测量了对齐误差、下颌枢轴和手部骨骼的归一化方式。</li>
-    <li><strong>配图怎么来的。</strong>我写了一个独立的 three.js 场景，把内嵌网格当数据读入，按原作的颜色和着色参数重绘。重绘时下颌和手骨都按上文描述的算法摆放，结果正确，这也反过来验证了我对算法的理解。</li>
+    <li><strong>跑了什么。</strong>原页面的演示场景；4 张样例照片经假摄像头送入的实时模式；另用自己的测试页单独核对了 MediaPipe 的左右手标签。运行库和模型都是原页面指定的版本：three.js 0.160.0，tasks-vision 0.10.14。</li>
+    <li><strong>配图怎么来的。</strong>图 1 到图 7 出自我写的一个独立的 three.js 场景：把内嵌网格当数据读入，按原作的颜色和着色参数重绘。重绘时下颌和手骨都按上文描述的算法摆放，结果与原页面的实际渲染一致。图 8 是原页面的截图。</li>
   </ul>
   <div class="note">
-    <h3>两件没做到的事</h3>
-    <p><strong>参考文件没读到。</strong>委托里附的 Google Drive 文件我打不开：Drive 连接器缺少读取权限，<code>drive.google.com</code> 又被这次会话的网络策略拦截。本页分析的是同一作品的公开源码。Drive 里的文件如果是视频或另一个版本，这里没有覆盖。</p>
-    <p><strong>原页面没有实际运行。</strong>沙箱的安全策略不允许执行这个外部页面。帧率、真实人脸上的贴合误差、不同光线下的稳定性都没有实测，相关结论来自读代码和测数据。</p>
+    <h3>还没验证的事</h3>
+    <p><strong>真实摄像头下的动态表现。</strong>样例照片是静止的。转头和张嘴过程中的延迟、抖动，以及不同光线下的稳定性，我没有数据。</p>
+    <p><strong>真实设备上的帧率。</strong>有显卡的电脑和手机上能跑到多少帧，要在实机上打开调试面板看 speed 一项。</p>
   </div>
 
   <h3>来源</h3>
@@ -558,7 +593,7 @@ t = q̄ − s·p̄
   </ul>
 
   <footer class="credit">
-    <p>配图中的解剖模型：BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution-Share Alike 2.1 Japan。模型经原作者简化和重新对齐，本页配图由这些模型渲染而来，同样以 CC BY-SA 2.1 Japan 提供。图 3 的绿色点位来自 MediaPipe 的标准脸模型（Apache-2.0）。</p>
+    <p>配图中的解剖模型：BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution-Share Alike 2.1 Japan。模型经原作者简化和重新对齐，本页配图由这些模型渲染而来，同样以 CC BY-SA 2.1 Japan 提供。图 3 的绿色点位来自 MediaPipe 的标准脸模型（Apache-2.0）。图 8 是原页面界面的截图，用于说明和评述。</p>
   </footer>
 
 </div>

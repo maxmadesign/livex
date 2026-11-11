@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>handedness check</title>
+<script type="module">
+// What does MediaPipe's HandLandmarker call each hand in a plain, unmirrored photo?
+import { FilesetResolver, HandLandmarker } from '/mp/vision_bundle.mjs';
+const files = await FilesetResolver.forVisionTasks('/mp/wasm');
+const hl = await HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: '/models/hand_landmarker.task', delegate: 'CPU' }, runningMode: 'IMAGE', numHands: 2 });
+const out = {};
+for (const name of new URLSearchParams(location.search).get('imgs').split(',')) {
+  const img = new Image(); img.src = '/img/' + name; await img.decode();
+  const r = hl.detect(img);
+  out[name] = (r.landmarks || []).map((lm, i) => {
+    const h = (r.handedness || r.handednesses)[i][0];
+    return { label: h.categoryName, score: +h.score.toFixed(3), wrist: [+lm[0].x.toFixed(2), +lm[0].y.toFixed(2)], indexTip: [+lm[8].x.toFixed(2), +lm[8].y.toFixed(2)] };
+  });
+}
+window.__out = out;
+</script>
