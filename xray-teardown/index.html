@@ -1,0 +1,565 @@
+<meta charset="utf-8">
+<title>X 射线镜子拆解</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap">
+<style>
+/* Layout: 阅片室。冷色灯箱底上的单栏报告（正文 43rem），深色胶片配图破栏到 70rem；等宽小字只承担数据、点位编号和出处。 */
+:root {
+  --bg: #f0f3f6;        /* 灯箱面板 */
+  --surface: #fbfcfd;   /* 表格、公式块 */
+  --ink: #0f1b28;
+  --ink-2: #3f4d5b;
+  --ink-3: #5d6a78;
+  --rule: #d3dae2;
+  --rule-2: #b3bfcb;
+  --accent: #0a5fa3;    /* X 光蓝：链接、图里被讨论的那一步 */
+  --mark: #96560a;      /* 标注琥珀：步骤序号、测量值 */
+  --ok: #0a6e45;
+  --cond: #96560a;
+  --unk: #5d6a78;
+  --bar: #2a78d6;
+  --bar-mute: #8794a1;
+  --code-bg: #e3e9ef;
+  --film: #05080f;      /* 胶片底色，两种主题下都不变 */
+  --film-dim: #9db3c9;
+  --font-body: "Geist", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", monospace;
+  --col: 43rem;
+  --wide: 70rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0f15; --surface: #121924; --ink: #e7edf4; --ink-2: #b3bfcc; --ink-3: #8b98a6;
+    --rule: #232f3d; --rule-2: #3a4a5a; --accent: #7cc4ff; --mark: #ffcf7a;
+    --ok: #58d6a2; --cond: #ffcf7a; --unk: #8b98a6; --bar: #3987e5; --bar-mute: #5b6b7c; --code-bg: #1a2431;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0f15; --surface: #121924; --ink: #e7edf4; --ink-2: #b3bfcc; --ink-3: #8b98a6;
+  --rule: #232f3d; --rule-2: #3a4a5a; --accent: #7cc4ff; --mark: #ffcf7a;
+  --ok: #58d6a2; --cond: #ffcf7a; --unk: #8b98a6; --bar: #3987e5; --bar-mute: #5b6b7c; --code-bg: #1a2431;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 44px 80px;
+}
+.flow { display: flex; flex-direction: column; gap: 1.15rem; }
+.flow > * { width: 100%; max-width: var(--col); margin: 0 auto; min-width: 0; }
+.flow > .wide { max-width: var(--wide); }
+
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+p, ul, ol, dl, figure, table { margin: 0; }
+strong { font-weight: 600; }
+code {
+  font-family: var(--font-mono); font-size: 0.86em;
+  background: var(--code-bg); padding: 0.1em 0.36em; border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 标题 ---------- */
+.eyebrow {
+  font: 500 0.74rem/1.6 var(--font-mono);
+  letter-spacing: 0.08em; color: var(--ink-3);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(2.1rem, 6vw, 3.3rem); line-height: 1.2; letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+.lede { font-size: 1.16rem; line-height: 1.8; }
+h2 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 1.62rem; line-height: 1.35; letter-spacing: 0.01em;
+  text-wrap: balance;
+  border-top: 1px solid var(--rule-2);
+  padding-top: 1.7rem; margin-top: 2.4rem !important;
+}
+h3 { font-size: 1.06rem; font-weight: 600; line-height: 1.5; margin-top: 0.7rem !important; }
+h1, h2, h3 { margin-bottom: 0; }
+
+/* ---------- 规格条 ---------- */
+.spec {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem 1.6rem;
+  border-top: 1px solid var(--rule-2);
+  padding-block: 1.15rem 0;
+}
+.spec div { min-width: 0; }
+.spec dt { font: 500 0.72rem/1.5 var(--font-mono); letter-spacing: 0.08em; color: var(--ink-3); }
+.spec dd { margin: 0.15rem 0 0; font-size: 0.95rem; line-height: 1.55; }
+.spec dd b { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .spec { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 440px) { .spec { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 胶片配图 ---------- */
+.film {
+  position: relative; display: block;
+  background: var(--film); border-radius: 4px; overflow: hidden; line-height: 0;
+}
+.film img { display: block; width: 100%; max-width: 100%; height: auto; }
+.film .tag, .film .side {
+  position: absolute; top: 9px;
+  font: 500 0.66rem/1.3 var(--font-mono); letter-spacing: 0.06em; color: var(--film-dim);
+}
+.film .tag { left: 10px; right: 34px; }
+.film .tag.bl { top: auto; bottom: 9px; }
+.film .side { right: 10px; border: 1px solid var(--film-dim); padding: 0 5px; border-radius: 2px; }
+figcaption { font-size: 0.87rem; line-height: 1.7; color: var(--ink-2); margin-top: 0.65rem; }
+figcaption b { font-weight: 600; color: var(--ink); }
+.flow > .wide > figcaption { max-width: var(--col); margin-inline: auto; }
+.strip { display: grid; gap: 6px; }
+.strip.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.strip.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .strip.six { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .strip.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .film .tag, .film .side { font-size: 0.56rem; letter-spacing: 0; top: 6px; }
+  .film .tag { left: 6px; right: 28px; }
+  .film .tag.bl { top: auto; bottom: 6px; }
+  .film .side { right: 6px; }
+}
+.split {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 1.6rem 2.2rem; align-items: start;
+  padding-left: max(0px, calc((min(100%, var(--wide)) - var(--col)) / 2));
+}
+.split > * { min-width: 0; }
+.split .text { display: flex; flex-direction: column; gap: 1.05rem; }
+@media (max-width: 860px) {
+  .flow > .split.wide { max-width: var(--col); }
+  .split { grid-template-columns: minmax(0, 1fr); padding-left: 0; }
+}
+
+/* ---------- 列表 ---------- */
+ul.plain { padding-left: 1.15em; display: flex; flex-direction: column; gap: 0.5rem; }
+ol.steps { list-style: none; padding: 0; counter-reset: step; display: flex; flex-direction: column; gap: 0.85rem; }
+ol.steps > li { display: grid; grid-template-columns: 2.3rem minmax(0, 1fr); counter-increment: step; }
+ol.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  font: 500 0.78rem/2.3 var(--font-mono); color: var(--mark); font-variant-numeric: tabular-nums;
+}
+ol.steps b { font-weight: 600; }
+ol.findings { padding-left: 1.3em; display: flex; flex-direction: column; gap: 0.75rem; }
+ol.findings > li::marker { font-family: var(--font-mono); font-size: 0.85em; color: var(--mark); }
+
+/* ---------- 公式块 ---------- */
+.eq {
+  background: var(--surface); border: 1px solid var(--rule);
+  padding: 0.9rem 1.05rem; overflow-x: auto;
+  font: 400 0.86rem/1.9 var(--font-mono); white-space: pre; color: var(--ink);
+}
+.eq .c { color: var(--ink-3); }
+
+/* ---------- 表格 ---------- */
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.6; }
+caption { caption-side: bottom; text-align: left; font-size: 0.85rem; color: var(--ink-2); padding-top: 0.65rem; line-height: 1.7; }
+th, td { text-align: left; vertical-align: top; padding: 0.6rem 1rem 0.6rem 0; border-bottom: 1px solid var(--rule); }
+th:last-child, td:last-child { padding-right: 0; }
+thead th { font: 500 0.72rem/1.5 var(--font-mono); letter-spacing: 0.06em; color: var(--ink-3); white-space: nowrap; border-bottom-color: var(--rule-2); }
+tbody th { font-weight: 500; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tfoot td, tfoot th { border-bottom: 0; border-top: 1px solid var(--rule-2); font-weight: 600; }
+.sub { display: block; font: 400 0.74rem/1.5 var(--font-mono); color: var(--ink-3); overflow-wrap: anywhere; }
+.barcell { width: 34%; min-width: 120px; vertical-align: middle; }
+.bar { display: block; height: 12px; width: var(--w); min-width: 2px; background: var(--bar-mute); border-radius: 0 4px 4px 0; }
+.bar.hot { background: var(--bar); }
+tbody tr.row:hover .bar, tbody tr.row:focus-visible .bar { filter: brightness(1.15); }
+tbody tr.row:hover, tbody tr.row:focus-visible { background: var(--surface); }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--film); vertical-align: -2px; margin-right: 0.45em; position: relative; }
+.sw::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--c); }
+.chip {
+  display: inline-flex; align-items: center; gap: 0.35em; white-space: nowrap;
+  font-size: 0.78rem; font-weight: 500; line-height: 1.5;
+  padding: 0.05rem 0.55rem; border: 1px solid currentColor; border-radius: 999px;
+}
+.chip.ok { color: var(--ok); } .chip.cond { color: var(--cond); } .chip.unk { color: var(--unk); }
+.claims td:first-child { width: 24%; min-width: 9.5rem; font-weight: 500; }
+.claims td:last-child { width: 1%; }
+.tbl table.grid { min-width: 35rem; }
+@media (max-width: 640px) {
+  .claims, .claims tbody, .claims tr, .claims td { display: block; }
+  .claims thead { display: none; }
+  .claims tr { padding-block: 0.85rem; border-bottom: 1px solid var(--rule); }
+  .claims td, .claims td:first-child, .claims td:last-child { width: auto; min-width: 0; border: 0; padding: 0; }
+  .claims td + td { margin-top: 0.4rem; }
+}
+
+/* ---------- 流程图 ---------- */
+.dg { overflow-x: auto; }
+.dg svg { display: block; width: 100%; min-width: 540px; max-width: 660px; height: auto; color: var(--ink); }
+.dg text { font-family: var(--font-body); fill: currentColor; }
+.dg .box { fill: var(--surface); stroke: var(--rule-2); stroke-width: 1; }
+.dg .t { font-size: 15px; font-weight: 600; }
+.dg .s { font-size: 12.5px; fill: var(--ink-2); }
+.dg .l { font-size: 12.5px; fill: var(--ink-2); }
+.dg .wire { fill: none; stroke: var(--ink-3); stroke-width: 1.25; }
+.dg marker path { fill: var(--ink-3); }
+.dg .hot .box { stroke: var(--accent); stroke-width: 2; }
+.dg .hot .t { fill: var(--accent); }
+
+.note { border: 1px solid var(--rule-2); padding: 1rem 1.15rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.6rem; }
+.note h3 { margin-top: 0 !important; }
+.src { font-size: 0.9rem; line-height: 1.75; }
+.src li { overflow-wrap: anywhere; }
+footer.credit { font-size: 0.84rem; line-height: 1.75; color: var(--ink-2); border-top: 1px solid var(--rule-2); padding-top: 1.3rem; margin-top: 2.4rem !important; }
+</style>
+
+<div class="page">
+<div class="flow">
+
+  <p class="eyebrow">源码拆解 · MASTEROFVFX2070 / XRAY-MIRROR · 2026-11-11</p>
+  <h1>X 射线镜子拆解</h1>
+  <p class="lede">这个网页并不透视任何东西。画面里的头骨、大脑和肌肉来自一套公开的通用解剖模型，网页做的事情是用普通摄像头把这套模型准确地贴到你的头和手上，再画成 X 光片的样子。整件作品是一个 2.76 MB 的 HTML 文件，逻辑代码 618 行。</p>
+
+  <figure class="wide">
+    <div class="film">
+      <img src="img/hero.webp" width="1920" height="1080" alt="蓝色发光的头部轮廓里叠着头骨、粉色大脑、红色肌肉和黄色眼球，下颌半张；右侧是一只由单独骨块拼成的手骨。">
+      <span class="tag bl">斜位 OBL · 全部图层 · jawOpen 0.42</span>
+    </div>
+    <figcaption><b>图 1</b>　页面内嵌的全部解剖网格叠在一起：皮肤轮廓、头骨（下颌张开 42%）、大脑、肌肉、眼球，右侧是按 21 个手部关节点摆出来的手骨。本页所有配图都由我按原作的配色和着色参数重绘内嵌数据得到，不是原页面的运行截图。</figcaption>
+  </figure>
+
+  <dl class="spec">
+    <div><dt>文件</dt><dd><b>1</b> 个 HTML，<b>2,762,056</b> 字节</dd></div>
+    <div><dt>代码</dt><dd><b>618</b> 行 JavaScript（含着色器），<b>54</b> 行 CSS</dd></div>
+    <div><dt>解剖数据</dt><dd><b>23</b> 个网格，<b>225,499</b> 个三角形</dd></div>
+    <div><dt>追踪</dt><dd>MediaPipe：脸 <b>478</b> 点，手 <b>21</b> 点 × 2</dd></div>
+    <div><dt>渲染</dt><dd>three.js 0.160，每帧最多 <b>254,498</b> 个三角形</dd></div>
+    <div><dt>上传</dt><dd>代码里 <b>0</b> 处上传（静态核对）</dd></div>
+  </dl>
+
+  <h2 id="summary">结论</h2>
+  <ol class="findings">
+    <li><strong>核心是坐标系对齐。</strong>作者把解剖模型预先缩放、对齐到 MediaPipe 的“标准脸”坐标系。MediaPipe 每帧输出的 4×4 姿态矩阵于是可以原样当作头骨的模型矩阵。我测了对齐质量：标准脸的 468 个顶点到内嵌皮肤网格表面的距离，中位数 1.45 mm，约 95% 在 5 mm 以内。</li>
+    <li><strong>稳定感来自一步二维修正。</strong>每帧取 13 个脸部点，比较“模型投影出来的位置”和“追踪器实际看到的位置”，解出一个缩放和一个平移，乘进投影矩阵。头骨因此始终压在脸上，不随镜头视场角或脸型差异漂移。</li>
+    <li><strong>X 光质感只用了十几行着色器。</strong>表面越侧对视线越亮，颜色相加混合，不做深度测试。另有一层近黑色的“面纱”先把真实的脸压暗，发光的线条才读得出来。</li>
+    <li><strong>会动的只有两处。</strong>下颌按 MediaPipe 的 <code>jawOpen</code> 系数绕铰点转 0 到 20.6°。手骨是 15 节单位长度的指骨网格，被拉伸到相邻两个关节点之间，手掌是一整块仿射变形的骨块。</li>
+    <li><strong>帖子的说法基本属实，两处要加前提。</strong>首次启动要联网下载约 22.6 MB 的库和模型。“视频不离开电脑”在代码里成立，但第三方脚本是运行时从 CDN 取的，没有完整性校验。</li>
+  </ol>
+  <p>把解剖模型叠到镜像画面上这个点子不新，2014 年巴黎就有用 Kinect 深度相机做的互动装置，约翰·霍普金斯大学 2017 年有教学用的 magic mirror。这一版的不同在于只用普通摄像头、只有一个 HTML 文件，而且范围选得很克制：只做头和手，只让下颌动，其余全靠对齐精度和画面质感。</p>
+
+  <h2 id="frame">一帧画面是怎么来的</h2>
+  <p>页面每拿到一个新的视频帧就走一遍下面的流程。脸和手是两条独立的线，最后画进同一块 WebGL 画布。</p>
+
+  <figure>
+    <div class="dg">
+      <svg viewBox="0 0 640 650" role="img" aria-label="每帧数据流：摄像头帧分别送入 MediaPipe 的脸部和手部追踪器；脸部结果经过平滑和 13 点二维贴合后驱动透视相机下的头部场景，手部结果生成骨骼基矩阵后驱动正交相机下的手部场景；两个场景先后画进同一块 WebGL 画布，再与视频等四层叠放并水平镜像。">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+        </defs>
+        <!-- camera -->
+        <rect class="box" x="160" y="16" width="320" height="56" rx="5"/>
+        <text class="t" x="320" y="40" text-anchor="middle">摄像头帧</text>
+        <text class="s" x="320" y="59" text-anchor="middle">请求 1280×720 · 推理用未镜像的原始画面</text>
+        <path class="wire" d="M250 72 V100 H170 V128" marker-end="url(#ah)"/>
+        <path class="wire" d="M390 72 V100 H470 V128" marker-end="url(#ah)"/>
+        <text class="l" x="160" y="94" text-anchor="end">每个新视频帧</text>
+        <text class="l" x="480" y="94">手骨、镜片或调试打开时</text>
+        <!-- trackers -->
+        <rect class="box" x="40" y="130" width="260" height="56" rx="5"/>
+        <text class="t" x="170" y="154" text-anchor="middle">FaceLandmarker</text>
+        <text class="s" x="170" y="173" text-anchor="middle">MediaPipe · 只跟 1 张脸</text>
+        <rect class="box" x="340" y="130" width="260" height="56" rx="5"/>
+        <text class="t" x="470" y="154" text-anchor="middle">HandLandmarker</text>
+        <text class="s" x="470" y="173" text-anchor="middle">MediaPipe · 最多 2 只手</text>
+        <path class="wire" d="M170 186 V246" marker-end="url(#ah)"/>
+        <path class="wire" d="M470 186 V246" marker-end="url(#ah)"/>
+        <text class="l" x="182" y="221">478 点 · 4×4 矩阵 · jawOpen</text>
+        <text class="l" x="482" y="221">每只手 21 点</text>
+        <!-- math -->
+        <g class="hot">
+          <rect class="box" x="40" y="248" width="260" height="56" rx="5"/>
+          <text class="t" x="170" y="272" text-anchor="middle">13 点二维贴合</text>
+        </g>
+        <text class="s" x="170" y="291" text-anchor="middle">先平滑姿态，后接 7 个手动滑杆</text>
+        <rect class="box" x="340" y="248" width="260" height="56" rx="5"/>
+        <text class="t" x="470" y="272" text-anchor="middle">骨骼基矩阵</text>
+        <text class="s" x="470" y="291" text-anchor="middle">每只手 1 个掌块 + 15 节指骨</text>
+        <path class="wire" d="M170 304 V364" marker-end="url(#ah)"/>
+        <path class="wire" d="M470 304 V364" marker-end="url(#ah)"/>
+        <text class="l" x="182" y="339">模型矩阵 · 修正后的投影 · 下颌角</text>
+        <text class="l" x="482" y="339">16 个矩阵</text>
+        <!-- scenes -->
+        <rect class="box" x="40" y="366" width="260" height="56" rx="5"/>
+        <text class="t" x="170" y="390" text-anchor="middle">头部场景</text>
+        <text class="s" x="170" y="409" text-anchor="middle">透视相机 63° · 7 个网格</text>
+        <rect class="box" x="340" y="366" width="260" height="56" rx="5"/>
+        <text class="t" x="470" y="390" text-anchor="middle">手部场景</text>
+        <text class="s" x="470" y="409" text-anchor="middle">正交相机 · 像素坐标</text>
+        <path class="wire" d="M170 422 V480" marker-end="url(#ah)"/>
+        <path class="wire" d="M470 422 V480" marker-end="url(#ah)"/>
+        <text class="l" x="182" y="456">先画</text>
+        <text class="l" x="482" y="456">清深度后再画</text>
+        <!-- canvas -->
+        <rect class="box" x="40" y="482" width="560" height="56" rx="5"/>
+        <text class="t" x="320" y="506" text-anchor="middle">同一块 WebGL 画布</text>
+        <text class="s" x="320" y="525" text-anchor="middle">相加混合 · X 光模式不做深度测试</text>
+        <path class="wire" d="M320 538 V582" marker-end="url(#ah)"/>
+        <text class="l" x="332" y="565">CSS 水平镜像</text>
+        <rect class="box" x="40" y="584" width="560" height="50" rx="5"/>
+        <text class="t" x="320" y="614" text-anchor="middle">四层叠放：video · shade · gl · hud</text>
+      </svg>
+    </div>
+    <figcaption><b>图 2</b>　每帧的数据流。蓝框是让头骨“钉住”的那一步，下一节单独讲。</figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li><span><b>取帧。</b><code>&lt;video&gt;</code> 播放前置摄像头的流。只有 <code>currentTime</code> 变了才处理，所以节奏跟着摄像头帧率走，不跟显示器刷新率走。</span></li>
+    <li><span><b>追踪脸。</b>FaceLandmarker 返回 478 个脸部点、一个 4×4 变换矩阵和 52 个表情系数。页面只用了其中一个系数 <code>jawOpen</code>。GPU 初始化失败会自动改用 CPU。</span></li>
+    <li><span><b>追踪手。</b>只有“手骨”图层、镜片模式或调试面板打开时才运行，省掉一次不必要的推理。手部追踪加载失败时头部功能照常可用。</span></li>
+    <li><span><b>平滑。</b>位置、旋转、缩放分别按 0.6、0.55、0.5 的比例向新值靠拢。按 30 帧每秒算，位置约 110 ms 走完 95%，够稳也不拖。</span></li>
+    <li><span><b>二维贴合。</b>用 13 个脸部点解一个缩放和平移，修正投影矩阵。</span></li>
+    <li><span><b>手动微调。</b>7 个滑杆：整体大小、宽、高、深、左右、上下、前后。设置存在浏览器的 <code>localStorage</code> 里。</span></li>
+    <li><span><b>画头。</b>顺序是面纱、轮廓、肌肉、头骨、眼球、大脑。</span></li>
+    <li><span><b>画手。</b>清掉深度缓冲，换正交相机，在像素坐标里画手骨。</span></li>
+    <li><span><b>画标注。</b>最上层的二维画布画镜片圆圈、解剖名称和调试点。脸丢失超过 250 ms，头部模型隐藏。</span></li>
+  </ol>
+
+  <h2 id="pin">头骨是怎么钉在脸上的</h2>
+  <p>MediaPipe 的 face geometry 模块内置一张“标准脸”（canonical face model）：468 个顶点，单位是厘米。它每帧用加权 Procrustes 把这张标准脸拟合到检测出的点上，输出“标准脸坐标到相机空间”的矩阵。这个矩阵是按一台虚拟相机算的：垂直视场角 63°，近平面 1 cm，远平面 100 m。</p>
+  <p>作者做了两件对应的事。第一，把 BodyParts3D 的头整体对齐到这张标准脸上，于是矩阵可以直接用。第二，three.js 的相机参数照抄那台虚拟相机：<code>PerspectiveCamera(63, W / H, 1, 10000)</code>。</p>
+
+  <figure class="wide">
+    <div class="strip two">
+      <div class="film">
+        <img src="img/fit-front.webp" width="1040" height="1200" alt="正面的蓝色头部轮廓上铺满绿色小点，点阵与五官位置吻合；13 个琥珀色圆圈标着编号。">
+        <span class="tag">正位 AP · 468 个标准点 + 13 个贴合点</span><span class="side">L</span>
+      </div>
+      <div class="film">
+        <img src="img/fit-side.webp" width="1040" height="1200" alt="侧面的蓝色头部轮廓，绿色点阵贴在面部表面，从额头到下巴与轮廓线重合。">
+        <span class="tag">侧位 LAT · 标准点贴在皮肤面上</span>
+      </div>
+    </div>
+    <figcaption><b>图 3</b>　绿点是 MediaPipe 标准脸的 468 个顶点，蓝色是页面内嵌的皮肤网格，两者在脸部重合。琥珀色圆圈是用于二维贴合的 13 个点，数字是 MediaPipe 的点位编号：眼角 33、133、362、263，鼻尖 1，鼻下 2，眉心 168，额顶 10，下巴 152，脸侧 234、454，嘴角 61、291。正位图右上角的 L 表示本人的左侧在画面右边，这是模型的 +x 方向。</figcaption>
+  </figure>
+
+  <p>证据有两条。页面元数据里存的 13 个贴合点坐标，和 MediaPipe 仓库里 <code>canonical_face_model.obj</code> 的对应顶点逐一相同（保留三位小数）。我又把全部 468 个标准顶点和内嵌皮肤网格做了点到三角面的最近距离测量：中位数 1.45 mm，90% 分位 4.2 mm，最大 8.6 mm。偏差最大的是下颌缘和下巴，标准脸在那一带比模型的皮肤面更靠外。</p>
+
+  <h3>每帧的二维修正</h3>
+  <p>只靠姿态矩阵还会有残差，原因是真实摄像头的视场角不一定是 63°，每个人的脸也不是标准脸。页面每帧多做一步最小二乘：</p>
+  <div class="eq"><span class="c">p = 13 个标准点经姿态矩阵和 63° 投影后的屏幕位置</span>
+<span class="c">q = 追踪器在这一帧给出的同编号点</span>
+s = Σ (pᵢ − p̄)·(qᵢ − q̄) / Σ |pᵢ − p̄|²      <span class="c">限制在 0.6 到 1.6</span>
+t = q̄ − s·p̄
+投影矩阵 ← [ s 0 0 tₓ ; 0 s 0 t_y ; 0 0 1 0 ; 0 0 0 1 ] × 投影矩阵</div>
+  <p>它只解缩放和平移，不解旋转，旋转完全信任 MediaPipe。修正量本身也做了平滑。这一步很便宜，效果是模型在屏幕上的位置被直接约束到检测结果上，三维估计里的系统误差不会表现为画面上的错位。调试面板里显示的“distance … cm (estimate)”就是姿态矩阵的 −z，它假设你的脸和标准脸一样大。</p>
+
+  <h2 id="look">X 光质感</h2>
+  <p>片元着色器的 X 光分支只有一个公式，三个渲染状态：</p>
+  <div class="eq">透明度 = (0.035 + 0.95 × (1 − |n·v|)^2.1) × 增益
+混合 = 相加     深度测试 = 关     双面绘制 = 开</div>
+  <p><code>n·v</code> 是表面法线和视线的夹角余弦。正对视线的面几乎透明，转到侧面的面变亮，这和真实 X 光片里“射线切过骨皮质的地方最白”的观感一致。因为颜色相加又不做深度测试，前后所有表面的边缘都会透出来，层层叠叠就有了透视片的感觉。</p>
+
+  <figure class="wide">
+    <div class="strip six">
+      <div class="film"><img src="img/layer-outline.webp" width="1040" height="1200" alt="只有蓝色的头部皮肤轮廓。"><span class="tag">皮肤轮廓 · 13,999 △</span></div>
+      <div class="film"><img src="img/layer-skull.webp" width="1040" height="1200" alt="轮廓内的浅蓝白色头骨，下颌微张，颅缝清晰。"><span class="tag">头骨 · 72,000 △</span></div>
+      <div class="film"><img src="img/layer-brain.webp" width="1040" height="1200" alt="轮廓内的粉色大脑和橙色小脑、脑干。"><span class="tag">大脑 · 86,000 △</span></div>
+      <div class="film"><img src="img/layer-muscles.webp" width="1040" height="1200" alt="轮廓内的红色头面部肌肉。"><span class="tag">肌肉 · 36,000 △</span></div>
+      <div class="film"><img src="img/layer-eyes.webp" width="1040" height="1200" alt="轮廓内的两个黄色眼球。"><span class="tag">眼球 · 2,500 △</span></div>
+      <div class="film"><img src="img/look-xray.webp" width="1040" height="1200" alt="所有图层叠加后的效果。"><span class="tag">全部叠加</span></div>
+    </div>
+    <figcaption><b>图 4</b>　五个图层和叠加结果，△ 后面是三角形数。同一张皮肤网格在页面里画两次，一次做面纱，一次做蓝色轮廓。</figcaption>
+  </figure>
+
+  <ul class="plain">
+    <li><strong>面纱。</strong>皮肤网格先用近黑色 <code>#04070d</code> 画一遍，不透明度是 1 减去“Real me showing through”滑杆的值，默认 0.88。真实的脸被压暗，发光线条才有底色可依。脖子在下巴以下约 3 cm 的范围内渐隐，不留硬边。</li>
+    <li><strong>亮度平摊。</strong>相加混合的问题是图层一多就一片白。页面按同时打开的重图层数分配增益：1 层 1.00，2 层 0.63，3 层 0.45。各层还有固定系数，大脑 0.36，肌肉 0.5，轮廓 0.55，小脑和脑干 0.6，眼球 0.9。</li>
+    <li><strong>边缘羽化。</strong>轮廓最外沿再淡出一点，避免模型边缘在真实画面上显得太硬。</li>
+    <li><strong>实体模式。</strong>另一种外观是普通的漫反射加一点轮廓光，打开深度测试，用于对齐时看清楚头骨和脸的相对位置。</li>
+  </ul>
+
+  <figure class="wide">
+    <div class="strip three">
+      <div class="film"><img src="img/look-solid.webp" width="1040" height="1200" alt="不透明的米白色头骨和白色眼球。"><span class="tag">实体模式 · 头骨 + 眼球</span></div>
+      <div class="film"><img src="img/look-solid-muscle.webp" width="1040" height="1200" alt="不透明的红色肌肉覆盖在头骨上。"><span class="tag">实体模式 · 加肌肉</span></div>
+      <div class="film"><img src="img/reveal-half.webp" width="1040" height="1200" alt="头部轮廓里只有左半边显示头骨和大脑，沿正中面切开。"><span class="tag">只显示左半边</span></div>
+    </div>
+    <figcaption><b>图 5</b>　实体模式，以及“只显示左半边”的切面。切面是着色器里一个定义在头部坐标系里的裁剪平面，跟着头一起转。</figcaption>
+  </figure>
+
+  <h2 id="jaw">张嘴</h2>
+  <p>MediaPipe 的表情系数里有一项 <code>jawOpen</code>，范围 0 到 1。页面把它平滑后乘以 0.36 弧度，作为下颌绕 x 轴的转角。下颌骨网格挂在一个枢轴上，枢轴坐标 (0, 0.84, −3.80) cm。我量了下颌网格顶部 6 mm 的区域，也就是两侧髁突，平均高度 0.61 cm，前后位置 −3.74 cm，枢轴正落在两侧颞下颌关节的连线上。</p>
+
+  <figure class="wide">
+    <div class="strip three">
+      <div class="film"><img src="img/jaw-0.webp" width="880" height="1040" alt="侧面头骨，嘴闭合，枢轴标在耳前。"><span class="tag">侧位 LAT · jawOpen 0 · 0°</span></div>
+      <div class="film"><img src="img/jaw-50.webp" width="880" height="1040" alt="侧面头骨，下颌张开一半。"><span class="tag">jawOpen 0.5 · 10.3°</span></div>
+      <div class="film"><img src="img/jaw-100.webp" width="880" height="1040" alt="侧面头骨，下颌完全张开，颏部沿虚线弧向后下方移动。"><span class="tag">jawOpen 1.0 · 20.6°</span></div>
+    </div>
+    <figcaption><b>图 6</b>　下颌是一个纯铰链。琥珀色圆圈是枢轴，虚线是颏部最低点的运动轨迹。张到最大时颏部走 4.1 cm，下门齿位置移动 3.7 cm，其中向下 2.8 cm。真实的下颌在张大时髁突还会向前滑动，这里没有模拟。</figcaption>
+  </figure>
+
+  <h2 id="hand">手骨</h2>
+  <div class="split wide">
+    <div class="text">
+      <p>手的做法和头不同。头有一个完整的三维姿态，手只有 21 个关节点，页面直接在像素坐标里用这些点摆骨头。</p>
+      <p><strong>指骨。</strong>15 节指骨各是一个独立网格，预先归一化成沿 x 轴 1 个单位长。运行时，方向取两个关节点的连线，长度取两点距离，绕自身轴的滚转由食指根到小指根的连线决定。指尖那一节的长度乘 0.8，因为追踪点落在指尖皮肤上，比骨头末端更远。</p>
+      <p><strong>掌块。</strong>腕骨和四根掌骨合成一块，存成一种斜坐标：手腕是原点，食指根是 (1, 0, 0)，小指根是 (0, 1, 0)。运行时用图里的 e1、e2 和它们的法向组成基矩阵，一次仿射变换就把整块手掌骨摆好并撑到合适的大小。</p>
+      <p><strong>遮住真手。</strong>WebGL 画布下面还有一层二维画布，用粗圆头线条沿关节点画出手的暗色剪影，线宽约为指根跨度的三分之一。</p>
+      <p><strong>左右手。</strong>MediaPipe 的左右手标签假设输入是镜像画面。页面送进去的是未镜像的原始帧，所以代码把标签反过来用，否则掌骨会被镜像成另一只手的样子。</p>
+    </div>
+    <figure>
+      <div class="film">
+        <img src="img/hand.webp" width="1240" height="1280" alt="正面的手骨，五根手指各三节，手掌骨连成一块；白色圆点标出 21 个关节点，两条箭头从手腕指向食指根和小指根。">
+        <span class="tag">数据集自带的手 · 21 个关节点</span>
+      </div>
+      <figcaption><b>图 7</b>　白点是 21 个关节点，数字是 MediaPipe 的编号。e1 从手腕 0 指向食指根 5，e2 指向小指根 17，两者决定掌块的位置、朝向和大小。</figcaption>
+    </figure>
+  </div>
+  <p>代价是手骨只有二维半的精度。深度用的是 MediaPipe 给的相对值，相机是正交的，手和头之间也没有遮挡关系：手举到脸前时，头骨照样画在最上面。</p>
+
+  <h2 id="stack">四层画布、镜像和镜片</h2>
+  <div class="tbl">
+    <table class="grid">
+      <thead><tr><th>从前到后</th><th>画什么</th><th>镜像</th><th>受镜片遮罩</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>#hud</code> 二维画布</th><td>解剖名称和引线、镜片圆圈、调试点</td><td>否，坐标手动翻转</td><td>否</td></tr>
+        <tr><th scope="row"><code>#gl</code> WebGL 画布</th><td>头部各图层，然后是手骨</td><td>CSS <code>scaleX(-1)</code></td><td>是</td></tr>
+        <tr><th scope="row"><code>#shade</code> 二维画布</th><td>手的暗色剪影</td><td>CSS <code>scaleX(-1)</code></td><td>是</td></tr>
+        <tr><th scope="row"><code>&lt;video&gt;</code></th><td>摄像头原画面</td><td>CSS <code>scaleX(-1)</code></td><td>否</td></tr>
+      </tbody>
+      <caption>镜像全部交给 CSS，推理和三维计算都在未镜像的坐标里做。文字层不能镜像，所以标签的横坐标用画布宽度减一下。</caption>
+    </table>
+  </div>
+  <p>“混合现实”面板里的显示范围有两种实现。半边、上半、下半是着色器里的裁剪平面，带最多 5 cm 的软边。“X 光镜片”则完全不碰三维：页面给两块画布加一个 CSS <code>mask-image</code> 径向渐变，圆心跟着食指尖走，没有手就跟鼠标，再没有就跟鼻尖。圆外看到的是普通的摄像头画面。</p>
+  <p>解剖标签是 26 条头部名称加 5 条手部名称，每条带一两个头部坐标系里的锚点。标签排在头的左右两列，纵向位置做了平滑，排序带滞回，转头时不会来回跳。</p>
+
+  <h2 id="data">解剖数据</h2>
+  <div class="tbl">
+    <table class="grid">
+      <thead><tr><th>网格</th><th>图层</th><th class="num">顶点</th><th class="num">三角形</th><th class="barcell"></th><th class="num">字节</th></tr></thead>
+      <tbody>
+        <tr class="row" tabindex="0" title="cerebrum：35,147 顶点，70,000 三角形，630,882 字节"><th scope="row"><code>cerebrum</code></th><td><span class="sw" style="--c:#ff9fc0"></span>大脑</td><td class="num">35,147</td><td class="num">70,000</td><td class="barcell"><span class="bar hot" style="--w:100%"></span></td><td class="num">630,882</td></tr>
+        <tr class="row" tabindex="0" title="cranium：29,041 顶点，58,000 三角形，522,246 字节"><th scope="row"><code>cranium</code></th><td><span class="sw" style="--c:#bfe3ff"></span>头骨</td><td class="num">29,041</td><td class="num">58,000</td><td class="barcell"><span class="bar hot" style="--w:82.9%"></span></td><td class="num">522,246</td></tr>
+        <tr class="row" tabindex="0" title="muscles：18,249 顶点，36,000 三角形，325,494 字节"><th scope="row"><code>muscles</code></th><td><span class="sw" style="--c:#ff6b5e"></span>肌肉</td><td class="num">18,249</td><td class="num">36,000</td><td class="barcell"><span class="bar hot" style="--w:51.4%"></span></td><td class="num">325,494</td></tr>
+        <tr class="row" tabindex="0" title="hindbrain：7,935 顶点，16,000 三角形，143,610 字节"><th scope="row"><code>hindbrain</code></th><td><span class="sw" style="--c:#ffc37a"></span>小脑、脑干</td><td class="num">7,935</td><td class="num">16,000</td><td class="barcell"><span class="bar hot" style="--w:22.9%"></span></td><td class="num">143,610</td></tr>
+        <tr class="row" tabindex="0" title="jaw：7,030 顶点，14,000 三角形，126,180 字节"><th scope="row"><code>jaw</code></th><td><span class="sw" style="--c:#bfe3ff"></span>下颌</td><td class="num">7,030</td><td class="num">14,000</td><td class="barcell"><span class="bar hot" style="--w:20%"></span></td><td class="num">126,180</td></tr>
+        <tr class="row" tabindex="0" title="skin：7,039 顶点，13,999 三角形，126,228 字节"><th scope="row"><code>skin</code></th><td><span class="sw" style="--c:#6fb6ff"></span>面纱、轮廓</td><td class="num">7,039</td><td class="num">13,999</td><td class="barcell"><span class="bar hot" style="--w:20%"></span></td><td class="num">126,228</td></tr>
+        <tr class="row" tabindex="0" title="15 节指骨合计：4,031 顶点，8,000 三角形，72,186 字节"><th scope="row"><code>hand_b_*</code> × 15</th><td><span class="sw" style="--c:#d9f0ff"></span>指骨</td><td class="num">4,031</td><td class="num">8,000</td><td class="barcell"><span class="bar hot" style="--w:11.4%"></span></td><td class="num">72,186</td></tr>
+        <tr class="row" tabindex="0" title="hand_palm：3,522 顶点，7,000 三角形，63,132 字节"><th scope="row"><code>hand_palm</code></th><td><span class="sw" style="--c:#d9f0ff"></span>掌块</td><td class="num">3,522</td><td class="num">7,000</td><td class="barcell"><span class="bar hot" style="--w:10%"></span></td><td class="num">63,132</td></tr>
+        <tr class="row" tabindex="0" title="eyes：1,254 顶点，2,500 三角形，22,524 字节"><th scope="row"><code>eyes</code></th><td><span class="sw" style="--c:#fff3a8"></span>眼球</td><td class="num">1,254</td><td class="num">2,500</td><td class="barcell"><span class="bar hot" style="--w:3.6%"></span></td><td class="num">22,524</td></tr>
+      </tbody>
+      <tfoot><tr><th scope="row">合计 23 个网格</th><td></td><td class="num">113,248</td><td class="num">225,499</td><td></td><td class="num">2,032,482</td></tr></tfoot>
+      <caption>条形长度按三角形数画，最长一条是 70,000。色点是该图层在 X 光模式下的颜色。</caption>
+    </table>
+  </div>
+  <ul class="plain">
+    <li><strong>简化。</strong>三角形数都是整数目标：70,000、58,000、36,000、16,000、14,000、7,000、2,500，指骨每节 450 到 700。这是按目标面数做网格简化的结果。页面的署名里也写明模型“经过简化和重新对齐”。</li>
+    <li><strong>压缩。</strong>每个顶点是 3 个 16 位整数，按各网格自己的包围盒量化，最粗的步长是 4.1 微米。索引也是 16 位。法线不存，加载时现算。</li>
+    <li><strong>嵌入。</strong>2,032,482 字节的二进制转成 base64 后是 2,709,976 个字符，放在一个 <code>&lt;script type="application/octet-stream"&gt;</code> 标签里。整份 HTML 除了这一行和一行 6 KB 的元数据，只有 45.6 KB。</li>
+    <li><strong>坐标。</strong>单位是厘米。+y 向上，+z 朝脸的前方，+x 是本人的左侧，原点和朝向都与 MediaPipe 标准脸一致。</li>
+  </ul>
+
+  <h2 id="load">体积与加载</h2>
+  <p>“一个网页”指的是你下载的那个文件。点下 Start camera 之后，页面才去两个 CDN 取运行库和追踪模型。</p>
+  <div class="tbl">
+    <table class="grid">
+      <thead><tr><th>资源</th><th>来源</th><th class="barcell"></th><th class="num">未压缩</th><th class="num">gzip 估算</th></tr></thead>
+      <tbody>
+        <tr class="row" tabindex="0" title="vision_wasm_internal.wasm：9,423,986 字节"><th scope="row">MediaPipe 运行时<span class="sub">vision_wasm_internal.wasm</span></th><td>jsDelivr</td><td class="barcell"><span class="bar" style="--w:100%"></span></td><td class="num">9.42 MB</td><td class="num">2.87 MB</td></tr>
+        <tr class="row" tabindex="0" title="hand_landmarker.task：7,819,105 字节"><th scope="row">手部模型<span class="sub">hand_landmarker.task</span></th><td>Google 存储</td><td class="barcell"><span class="bar" style="--w:83%"></span></td><td class="num">7.82 MB</td><td class="num">5.85 MB</td></tr>
+        <tr class="row" tabindex="0" title="face_landmarker.task：3,758,596 字节"><th scope="row">脸部模型<span class="sub">face_landmarker.task</span></th><td>Google 存储</td><td class="barcell"><span class="bar" style="--w:39.9%"></span></td><td class="num">3.76 MB</td><td class="num">3.33 MB</td></tr>
+        <tr class="row" tabindex="0" title="index.html：2,762,056 字节"><th scope="row">页面本身，含全部网格<span class="sub">index.html</span></th><td>你下载的文件</td><td class="barcell"><span class="bar hot" style="--w:29.3%"></span></td><td class="num">2.76 MB</td><td class="num">1.75 MB</td></tr>
+        <tr class="row" tabindex="0" title="three.module.js：1,272,972 字节"><th scope="row">three.js 0.160.0<span class="sub">three.module.js</span></th><td>jsDelivr</td><td class="barcell"><span class="bar" style="--w:13.5%"></span></td><td class="num">1.27 MB</td><td class="num">0.26 MB</td></tr>
+        <tr class="row" tabindex="0" title="vision_bundle.mjs 136,870 字节 + vision_wasm_internal.js 209,826 字节"><th scope="row">MediaPipe 的 JS 胶水代码<span class="sub">vision_bundle.mjs 等 2 个文件</span></th><td>jsDelivr</td><td class="barcell"><span class="bar" style="--w:3.7%"></span></td><td class="num">0.35 MB</td><td class="num">0.09 MB</td></tr>
+      </tbody>
+      <tfoot><tr><th scope="row">首次启动合计</th><td></td><td></td><td class="num">25.38 MB</td><td class="num">14.15 MB</td></tr></tfoot>
+      <caption>蓝色是页面文件本身，灰色是启动时另外下载的 22.6 MB。大小取自 npm 上同版本的包和 Google 存储上的模型文件。gzip 一列是我本地压缩的估算，实际传输量取决于 CDN 用哪种压缩。</caption>
+    </table>
+  </div>
+  <p>所以它不需要安装，但需要联网，离线打不开。第二次打开时这些文件通常来自浏览器缓存。</p>
+
+  <h2 id="claims">帖子的说法逐条核对</h2>
+  <div class="tbl">
+    <table class="claims">
+      <thead><tr><th>帖子的说法</th><th>代码里的事实</th><th>判断</th></tr></thead>
+      <tbody>
+        <tr><td>一个网页，无需安装</td><td>仓库里只有一个 HTML（另一个文件名不同、内容逐字节相同）。运行库和模型在启动时从 jsDelivr 和 Google 存储下载。</td><td><span class="chip cond">◐ 属实，需联网</span></td></tr>
+        <tr><td>视频永远不会离开电脑</td><td>脚本里没有 <code>fetch</code>、XHR、WebSocket、WebRTC 或录制接口。对外只有取库、取 WASM、取模型三类下载。设置存在 <code>localStorage</code>。第三方脚本在运行时加载，没有 SRI 校验和 CSP 限制，这条保证依赖两个 CDN 上的文件不被改动。</td><td><span class="chip cond">◐ 属实，有前提</span></td></tr>
+        <tr><td>看到你头部内部的头骨、大脑和肌肉，实时跟踪</td><td>每个视频帧更新一次姿态。显示的是同一套通用模型，按你的脸缩放和摆放。页面自己写了“不是你的扫描，不是医疗工具”。</td><td><span class="chip ok">✓ 属实</span></td></tr>
+        <tr><td>张开嘴，下巴就会张开</td><td><code>jawOpen</code> 系数驱动下颌铰链，0 到 20.6°。</td><td><span class="chip ok">✓ 属实</span></td></tr>
+        <tr><td>举起一只手，就能看到它的骨头</td><td>最多两只手，每只 1 个掌块加 15 节指骨，按 21 个关节点摆放。</td><td><span class="chip ok">✓ 属实</span></td></tr>
+        <tr><td>解剖模型来自 BodyParts3D，CC BY-SA 2.1 Japan</td><td>页面底部有同样的署名，并注明模型经过简化和重新对齐。</td><td><span class="chip ok">✓ 属实</span></td></tr>
+        <tr><td>可以免费下载并试用</td><td>GitHub 仓库公开，可下载。仓库没有 LICENSE 文件，代码并未授权他人改用或再分发。</td><td><span class="chip cond">◐ 可试用，未开源</span></td></tr>
+        <tr><td>通过描述需求，用 Claude Fable 5.2 构建</td><td>代码无法证明是谁写的。有几处与这种做法相符的痕迹，见下一节。</td><td><span class="chip unk">? 无法核实</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="built">代码里留下的开发痕迹</h2>
+  <p>页面里有几个对最终用户没有用处的入口：</p>
+  <ul class="plain">
+    <li><code>#demo</code>：不需要摄像头的内置测试场景。一个按正弦左右摆动的假头放在镜头前 46 cm，下颌自动开合，旁边是数据集自带的那只手。</li>
+    <li><code>?still</code>：只渲染固定时刻的一帧，方便截图比对。</li>
+    <li><code>?dump</code>：把三层画布拍平成一张 PNG 贴在页面上，并在控制台打印二维贴合的缩放和平移。</li>
+    <li><code>?three=</code>：演示模式下可以换一个 three.js 的地址。</li>
+  </ul>
+  <p>还有两处防御式写法。姿态矩阵的解析同时接受行主序和列主序两种内存布局。手的左右手字段同时读 <code>handedness</code> 和 <code>handednesses</code> 两个名字。</p>
+  <p>这些都指向同一种工作条件：写代码的一方看不到真实的摄像头画面，访问不了公共 CDN，只能靠截图和打印出来的数字确认结果，并且对追踪库的实际返回格式没有把握。这和“向模型描述需求，由模型在沙箱里编写并自测”的说法相符。它不能证明帖子的说法，一位谨慎的人类开发者也可能这样写。我做这次分析的沙箱同样访问不了 jsDelivr。</p>
+  <p>界面文案也有特点。控件名是日常说法，例如“Real me showing through”“Fit to my head”，状态栏用整句话告诉你下一步做什么。注释解释的多是这样做的原因。</p>
+
+  <h2 id="limits">局限</h2>
+  <ul class="plain">
+    <li><strong>解剖是通用的。</strong>模型刚性摆放，只有整体缩放和 7 个手动滑杆。它显示结构通常在哪里，不反映你本人的骨骼。</li>
+    <li><strong>只有下颌会动。</strong>肌肉不随表情变形。眼球不跟视线转，尽管 MediaPipe 已经给出了视线方向的系数和虹膜点。</li>
+    <li><strong>手是二维半的叠加。</strong>手和头之间没有遮挡关系。</li>
+    <li><strong>只跟一张脸。</strong>多人同时入镜时只有一个人有效果。</li>
+    <li><strong>依赖在线 CDN。</strong>没有离线包，没有完整性校验。</li>
+    <li><strong>授权。</strong>代码没有许可证。模型是 CC BY-SA 2.1 Japan，改过的模型再分发时要署名并沿用同一许可。</li>
+    <li><strong>性能没有实测。</strong>每帧最多两次神经网络推理，外加约 25 万个双面、相加混合的三角形。不同设备上的实际帧率我没有数据。</li>
+  </ul>
+
+  <h2 id="remake">如果要做自己的版本</h2>
+  <p>这是我的建议，不是原作的内容。</p>
+  <ul class="plain">
+    <li><strong>可以直接借用的是做法。</strong>对齐到标准脸坐标系、每帧二维贴合、面纱、边缘发光加相加混合、单位长度骨骼，这五个做法都是通用技术，可以重新实现。原仓库的代码没有授权，不能照搬。</li>
+    <li><strong>主要工作量在离线数据处理。</strong>从 DBCLS 的归档站取 BodyParts3D 原始部件，按图层挑选合并，简化到目标面数，对齐到标准脸，量化打包。这部分决定最后的贴合精度。</li>
+    <li><strong>值得补的五处。</strong>把运行库和模型放到本地并加完整性校验，做成真正离线可用；用视线和眨眼系数驱动眼球；用姿态模型把范围扩到躯干骨架；竖屏和手机的布局与性能档位；用手部分割解决手挡脸时的遮挡。</li>
+    <li><strong>放到线下屏幕上。</strong>需要先确认设备有前置摄像头和可用的 GPU，再处理竖屏构图、离线依赖和无人值守时的自动开始与重置。</li>
+  </ul>
+
+  <h2 id="method">方法，以及没做到的事</h2>
+  <ul class="plain">
+    <li><strong>读了什么。</strong>GitHub 仓库 <code>MasterOfVFX2070/xray-mirror</code>，提交 <code>41e2413</code>（2026-11-10）。仓库里的 <code>index.html</code> 和 <code>X-Ray Mirror.html</code> 逐字节相同。我读完了全部 777 行。</li>
+    <li><strong>量了什么。</strong>用自己的脚本解出内嵌网格，统计顶点、三角形和字节；和 MediaPipe 仓库里的标准脸模型、face geometry 源码逐项对照；测量了对齐误差、下颌枢轴和手部骨骼的归一化方式。</li>
+    <li><strong>配图怎么来的。</strong>我写了一个独立的 three.js 场景，把内嵌网格当数据读入，按原作的颜色和着色参数重绘。重绘时下颌和手骨都按上文描述的算法摆放，结果正确，这也反过来验证了我对算法的理解。</li>
+  </ul>
+  <div class="note">
+    <h3>两件没做到的事</h3>
+    <p><strong>参考文件没读到。</strong>委托里附的 Google Drive 文件我打不开：Drive 连接器缺少读取权限，<code>drive.google.com</code> 又被这次会话的网络策略拦截。本页分析的是同一作品的公开源码。Drive 里的文件如果是视频或另一个版本，这里没有覆盖。</p>
+    <p><strong>原页面没有实际运行。</strong>沙箱的安全策略不允许执行这个外部页面。帧率、真实人脸上的贴合误差、不同光线下的稳定性都没有实测，相关结论来自读代码和测数据。</p>
+  </div>
+
+  <h3>来源</h3>
+  <ul class="plain src">
+    <li>原作仓库：<a href="https://github.com/MasterOfVFX2070/xray-mirror">github.com/MasterOfVFX2070/xray-mirror</a>，在线演示：<a href="https://masterofvfx2070.github.io/xray-mirror/">masterofvfx2070.github.io/xray-mirror</a></li>
+    <li>MediaPipe 标准脸模型与虚拟相机参数：<a href="https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model.obj">canonical_face_model.obj</a>，<a href="https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/cc/vision/face_geometry/face_geometry_from_landmarks_graph.cc">face_geometry_from_landmarks_graph.cc</a></li>
+    <li>BodyParts3D 许可与署名格式：<a href="https://dbarchive.biosciencedbc.jp/data/bodyparts3d/20110915/README_e.html">DBCLS 归档 README（2011-09-15）</a></li>
+    <li>更早的同类作品：<a href="https://www.fastcompany.com/3029302/kinect-equipped-digital-mirror-shows-your-innards">Fast Company 报道的 Kinect 数字镜子</a>，<a href="https://hub.jhu.edu/2017/10/26/magic-mirror-technology-teaches-physicians-anatomy">约翰·霍普金斯大学的 magic mirror</a>，<a href="https://engineering.vanderbilt.edu/2024/03/26/a-magic-mirror-reflects-anatomy-in-an-engaging-way-and-enters-white-house-open-science-challenge/">范德堡大学 2024 年的 AR 镜子</a></li>
+  </ul>
+
+  <footer class="credit">
+    <p>配图中的解剖模型：BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution-Share Alike 2.1 Japan。模型经原作者简化和重新对齐，本页配图由这些模型渲染而来，同样以 CC BY-SA 2.1 Japan 提供。图 3 的绿色点位来自 MediaPipe 的标准脸模型（Apache-2.0）。</p>
+  </footer>
+
+</div>
+</div>

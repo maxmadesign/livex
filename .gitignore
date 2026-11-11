@@ -15,3 +15,8 @@ out/render_log.txt
 out/*_log.txt
 out/*.webm
 out/score_gen.wav
+
+# X-ray mirror teardown: extracted third-party data and re-rendered scratch output
+xray-teardown/tools/data/
+xray-teardown/tools/out/
+xray-teardown/tools/out_webp/

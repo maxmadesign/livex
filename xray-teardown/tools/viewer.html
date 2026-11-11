@@ -1,0 +1,234 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>figure renderer</title>
+<style>
+  html, body { margin: 0; background: #03050a; }
+  #fig { position: relative; overflow: hidden;
+         background: radial-gradient(ellipse at 50% 44%, #0f1a2d 0%, #070b15 58%, #03050a 100%); }
+  #fig.flat { background: #05080f; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+<div id="fig"><canvas id="gl"></canvas><canvas id="ov"></canvas></div>
+<script type="module">
+// Figure renderer for the teardown. It reads the mesh table and the quantised buffers as plain data and draws
+// them with its own scene code. Nothing from the analysed page is executed.
+import * as THREE from '/three.module.js';
+
+const q = new URLSearchParams(location.search);
+const FIG = q.get('fig') || 'hero', W = +q.get('w') || 900, H = +q.get('h') || 600, DPR = +q.get('dpr') || 2;
+const fig = document.getElementById('fig'); fig.style.width = W + 'px'; fig.style.height = H + 'px';
+if (q.get('flat')) fig.classList.add('flat');
+
+const meta = await (await fetch('/data/meta.json')).json();
+const bin = await (await fetch('/data/meshdata.bin')).arrayBuffer();
+const canon = await (await fetch('/data/canon.json')).json();
+
+const G = {};
+for (const m of meta.meshes) {
+  const qv = new Uint16Array(bin, m.offV, m.nv * 3), pos = new Float32Array(m.nv * 3);
+  for (let i = 0; i < qv.length; i++) pos[i] = m.min[i % 3] + qv[i] / 65535 * m.size[i % 3];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint16Array(bin, m.offI, m.ni).slice(), 1));
+  g.computeVertexNormals();
+  G[m.name] = g;
+}
+
+const VERT = `
+varying vec3 vN; varying vec3 vV; varying vec3 vP;
+void main() {
+  vP = position;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
+}`;
+const FRAG = `
+uniform vec3 uColor; uniform float uGain, uMode, uNeck, uClip; uniform vec4 uPlane;
+varying vec3 vN; varying vec3 vV; varying vec3 vP;
+void main() {
+  if (uClip > 0.5 && dot(uPlane.xyz, vP) - uPlane.w < 0.0) discard;
+  vec3 n = normalize(vN);
+  float ndv = abs(dot(n, normalize(vV)));
+  float neck = uNeck > 0.5 ? smoothstep(-12.4, -9.2, vP.y) : 1.0;
+  if (uMode > 1.5) {                       // flat dark fill
+    gl_FragColor = vec4(uColor, uGain * neck);
+  } else if (uMode > 0.5) {                // lit surface
+    vec3 fn = gl_FrontFacing ? n : -n;
+    float d = max(dot(fn, normalize(vec3(0.35, 0.55, 0.76))), 0.0);
+    float rim = pow(1.0 - ndv, 2.5);
+    gl_FragColor = vec4(uColor * (0.28 + 0.78 * d) * uGain + vec3(0.25) * rim, 1.0);
+  } else {                                 // glow that grows where the surface turns edge-on
+    float rim = pow(1.0 - ndv, 2.1);
+    gl_FragColor = vec4(uColor, clamp((0.035 + 0.95 * rim) * uGain * neck, 0.0, 1.0));
+  }
+}`;
+function mat(color, gain, mode = 0, neck = 0) {
+  const solid = mode === 1, veil = mode === 2;
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) }, uGain: { value: gain }, uMode: { value: mode }, uNeck: { value: neck },
+                uClip: { value: 0 }, uPlane: { value: new THREE.Vector4(1, 0, 0, 0) } },
+    vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, transparent: !solid,
+    depthTest: solid, depthWrite: solid, blending: solid || veil ? THREE.NormalBlending : THREE.AdditiveBlending });
+}
+
+// palette and relative gains follow the values the analysed page uses, so the figures show its look
+const COL = { skull: 0xbfe3ff, skullSolid: 0xe9e2cf, cerebrum: 0xff9fc0, hindbrain: 0xffc37a, muscles: 0xff6b5e, eyes: 0xfff3a8,
+              outline: 0x6fb6ff, hand: 0xd9f0ff, veil: 0x04070d };
+const GAIN = { outline: 0.55, muscles: 0.5, cerebrum: 0.36, hindbrain: 0.6, eyes: 0.9, skull: 1 };
+
+function head(o = {}) {
+  const g = new THREE.Group(), L = o.layers || {}, bright = o.bright ?? 1;
+  const heavy = (L.skull ? 1 : 0) + (L.brain ? 1 : 0) + (L.muscles ? 1 : 0);
+  const share = 1 / (0.4 + 0.6 * Math.max(1, heavy));
+  const add = (geo, m, order, parent) => { const mesh = new THREE.Mesh(geo, m); mesh.renderOrder = order; mesh.frustumCulled = false; (parent || g).add(mesh); return mesh; };
+  const style = o.style === 'solid' ? 1 : 0;
+  if (L.veil) add(G.skin, mat(COL.veil, L.veil, 2, 1), -10);
+  if (L.outline) add(G.skin, mat(COL.outline, bright * GAIN.outline * (L.outline === true ? 1 : L.outline), 0, 1), 1);
+  if (L.muscles) add(G.muscles, mat(style ? 0xb5453c : COL.muscles, style ? 1 : bright * GAIN.muscles * share, style), 2);
+  if (L.skull) {
+    add(G.cranium, mat(style ? COL.skullSolid : COL.skull, style ? 1 : bright * share, style), 3);
+    const pivot = new THREE.Group(); pivot.position.fromArray(meta.jawPivot); g.add(pivot);
+    const jaw = add(G.jaw, mat(style ? COL.skullSolid : COL.skull, style ? 1 : bright * share, style), 3, pivot);
+    jaw.position.fromArray(meta.jawPivot).multiplyScalar(-1);
+    pivot.rotation.x = (o.jaw || 0) * 0.36;
+  }
+  if (L.eyes) add(G.eyes, mat(style ? 0xf4f4ee : COL.eyes, style ? 1 : bright * GAIN.eyes, style), 4);
+  if (L.brain) {
+    add(G.cerebrum, mat(style ? 0xe2a39d : COL.cerebrum, style ? 1 : bright * GAIN.cerebrum * share, style), 5);
+    add(G.hindbrain, mat(style ? 0xd6ad84 : COL.hindbrain, style ? 1 : bright * GAIN.hindbrain * share, style), 5);
+  }
+  if (o.clip) g.traverse(m => { if (m.material) { m.material.uniforms.uClip.value = 1; m.material.uniforms.uPlane.value.set(...o.clip); } });
+  return g;
+}
+
+// Hand: every bone mesh is one unit long, so it is placed by a basis built from two tracked joints.
+const BONES = [[1,2],[2,3],[3,4],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12],[13,14],[14,15],[15,16],[17,18],[18,19],[19,20]];
+function handPoints(scale = 0.1) {         // the dataset's own hand joints (mm), turned so the fingers point up
+  const B = meta.demoHand, c = B[9];
+  return B.map(p => new THREE.Vector3(-(p[0] - c[0]) * scale, -(p[2] - c[2]) * scale, -(p[1] - c[1]) * scale));
+}
+function hand(P, gain = 1.15, sign = 1) {
+  const g = new THREE.Group();
+  const mk = (geo, M) => { const m = new THREE.Mesh(geo, mat(COL.hand, gain)); m.matrixAutoUpdate = false; m.matrix.copy(M); m.frustumCulled = false; m.renderOrder = 6; g.add(m); };
+  const e1 = new THREE.Vector3().subVectors(P[5], P[0]), e2 = new THREE.Vector3().subVectors(P[17], P[0]);
+  const e3 = new THREE.Vector3().crossVectors(e1, e2).normalize().multiplyScalar(sign * Math.sqrt(e1.length() * e2.length()));
+  mk(G.hand_palm, new THREE.Matrix4().makeBasis(e1, e2, e3).setPosition(P[0]));
+  const across = new THREE.Vector3().subVectors(P[17], P[5]).normalize();
+  for (const [a, b] of BONES) {
+    const dir = new THREE.Vector3().subVectors(P[b], P[a]); const len = dir.length(); dir.normalize();
+    const side = across.clone().addScaledVector(dir, -across.dot(dir)).normalize();
+    const up = new THREE.Vector3().crossVectors(dir, side).multiplyScalar(sign);
+    const L = len * (b % 4 === 0 ? 0.8 : 1);
+    mk(G['hand_b_' + a + '_' + b], new THREE.Matrix4().makeBasis(dir.multiplyScalar(L), side.multiplyScalar(L), up.multiplyScalar(L)).setPosition(P[a]));
+  }
+  return g;
+}
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), alpha: true, antialias: true });
+renderer.setClearColor(0x000000, 0); renderer.setPixelRatio(DPR); renderer.setSize(W, H, false);
+const ov = document.getElementById('ov'); ov.width = W * DPR; ov.height = H * DPR;
+const g2 = ov.getContext('2d'); g2.scale(DPR, DPR);
+const scene = new THREE.Scene();
+let cam;
+function orbit(target, az, el, dist, fov = 26) {
+  cam = new THREE.PerspectiveCamera(fov, W / H, 1, 2000);
+  const a = az * Math.PI / 180, e = el * Math.PI / 180;
+  cam.position.set(target[0] + dist * Math.sin(a) * Math.cos(e), target[1] + dist * Math.sin(e), target[2] + dist * Math.cos(a) * Math.cos(e));
+  cam.lookAt(new THREE.Vector3(...target)); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+}
+function px(v, obj) {                        // 3D point (in obj's space) -> figure pixels
+  const p = (v.isVector3 ? v.clone() : new THREE.Vector3(...v));
+  if (obj) { obj.updateWorldMatrix(true, false); p.applyMatrix4(obj.matrixWorld); }
+  p.project(cam); return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * H];
+}
+const MONO = '500 11px "JetBrains Mono", "DejaVu Sans Mono", monospace';
+function dot(p, r, fill, stroke) { g2.beginPath(); g2.arc(p[0], p[1], r, 0, 6.3); if (fill) { g2.fillStyle = fill; g2.fill(); } if (stroke) { g2.strokeStyle = stroke; g2.lineWidth = 1.25; g2.stroke(); } }
+function label(text, p, dx = 8, dy = 0, color = '#eaf4ff', align = 'left') {
+  g2.font = MONO; g2.textBaseline = 'middle'; g2.textAlign = align; g2.lineJoin = 'round';
+  g2.strokeStyle = 'rgba(3,5,10,.9)'; g2.lineWidth = 3; g2.strokeText(text, p[0] + dx, p[1] + dy);
+  g2.fillStyle = color; g2.fillText(text, p[0] + dx, p[1] + dy);
+}
+function line(a, b, color, w = 1, dash) { g2.beginPath(); g2.setLineDash(dash || []); g2.moveTo(a[0], a[1]); g2.lineTo(b[0], b[1]); g2.strokeStyle = color; g2.lineWidth = w; g2.stroke(); g2.setLineDash([]); }
+function arrow(a, b, color) {
+  line(a, b, color, 1.6); const t = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  g2.beginPath(); g2.moveTo(b[0], b[1]); g2.lineTo(b[0] - 9 * Math.cos(t - 0.42), b[1] - 9 * Math.sin(t - 0.42));
+  g2.lineTo(b[0] - 9 * Math.cos(t + 0.42), b[1] - 9 * Math.sin(t + 0.42)); g2.closePath(); g2.fillStyle = color; g2.fill();
+}
+
+const HEAD_T = [0, 0.8, -4.2];
+const ALL = { outline: true, skull: true, brain: true, muscles: true, eyes: true };
+const figs = {
+  hero() {
+    orbit([6.2, 0.9, -4.2], -30, 4, 68, 26);
+    const h = head({ layers: ALL, jaw: 0.42, bright: 1.05 }); scene.add(h);
+    const P = handPoints().map(p => p.applyAxisAngle(new THREE.Vector3(0, 1, 0), -30 * Math.PI / 180).add(new THREE.Vector3(21.5, -2.4, 3)));
+    const hd = hand(P); scene.add(hd);
+  },
+  layer() {
+    const which = q.get('l');
+    orbit(HEAD_T, -32, 4, 84, 24);
+    const L = { outline: which === 'outline' ? 1.5 : 0.5 };
+    if (which !== 'outline') L[which] = true;
+    scene.add(head({ layers: L, jaw: which === 'skull' ? 0.25 : 0, bright: which === 'brain' ? 2.1 : which === 'muscles' ? 1.7 : which === 'eyes' ? 1.3 : 1.05 }));
+  },
+  all() { orbit(HEAD_T, -32, 4, 84, 24); scene.add(head({ layers: ALL, jaw: 0.25 })); },
+  solid() { orbit(HEAD_T, -32, 4, 84, 24); scene.add(head({ layers: { skull: true, eyes: true }, style: 'solid', jaw: 0.25 })); },
+  solidmuscle() { orbit(HEAD_T, -32, 4, 84, 24); scene.add(head({ layers: { skull: true, eyes: true, muscles: true }, style: 'solid', jaw: 0 })); },
+  cut() {                                    // "left half only": a clip plane in head space
+    orbit(HEAD_T, -18, 4, 84, 24);
+    scene.add(head({ layers: { outline: 0.5 } }));
+    scene.add(head({ layers: { skull: true, brain: true, eyes: true }, clip: [1, 0, 0, 0], bright: 1.2 }));
+  },
+  jaw() {
+    const j = +q.get('j') || 0;
+    orbit([0, 0.7, -4.0], 90, 0, 88, 22);
+    const h = head({ layers: { outline: 0.4, skull: true }, jaw: j }); scene.add(h);
+    return () => {
+      const piv = meta.jawPivot, chin0 = [0, -7.58, 3.93], r = [chin0[1] - piv[1], chin0[2] - piv[2]];
+      const at = t => [0, piv[1] + r[0] * Math.cos(t) - r[1] * Math.sin(t), piv[2] + r[0] * Math.sin(t) + r[1] * Math.cos(t)];
+      g2.beginPath(); for (let i = 0; i <= 24; i++) { const p = px(at(0.36 * i / 24)); i ? g2.lineTo(p[0], p[1]) : g2.moveTo(p[0], p[1]); }
+      g2.strokeStyle = 'rgba(255,207,122,.9)'; g2.lineWidth = 1.5; g2.setLineDash([4, 4]); g2.stroke(); g2.setLineDash([]);
+      const pp = px(piv), pc = px(at(j * 0.36));
+      line(pp, pc, 'rgba(255,207,122,.75)', 1.2);
+      dot(pp, 5, null, '#ffcf7a'); dot(pp, 1.6, '#ffcf7a'); dot(pc, 3, '#ffcf7a');
+      label('pivot', pp, 0, -14, '#ffcf7a', 'center');
+    };
+  },
+  fit() {
+    const side = q.get('v') === 'side';
+    orbit(side ? [0, 0.6, -3.8] : [0, 0.2, -2], side ? 90 : 0, 0, side ? 98 : 88, 22);
+    scene.add(head({ layers: { outline: 1.25 } }));
+    return () => {
+      for (const v of canon) { const p = px(v); dot(p, 1.15, 'rgba(127,255,170,.8)'); }
+      const off = { 10: [0, -13, 'center'], 152: [0, 14, 'center'], 1: [9, 0, 'left'], 2: [9, 6, 'left'], 168: [9, 0, 'left'], 234: [-9, 0, 'right'], 454: [9, 0, 'left'],
+                    33: [-8, -9, 'right'], 263: [8, -9, 'left'], 133: [0, 13, 'center'], 362: [0, 13, 'center'], 61: [-9, 4, 'right'], 291: [9, 4, 'left'] };
+      for (const id in meta.fit) {
+        if (side && meta.fit[id][0] < -0.01) continue;
+        const p = px(meta.fit[id]); dot(p, 4.4, 'rgba(255,207,122,.18)', '#ffcf7a'); dot(p, 1.5, '#ffcf7a');
+        const so = { 263: [10, -9, 'left'], 362: [-9, 11, 'right'], 2: [-9, 5, 'right'], 1: [-10, 0, 'right'], 168: [-9, -5, 'right'], 10: [-9, 0, 'right'], 152: [-9, 4, 'right'], 291: [10, 3, 'left'] };
+        const o = side ? (so[id] || [9, 0, 'left']) : off[id]; label(id, p, o[0], o[1], '#ffcf7a', o[2]);
+      }
+    };
+  },
+  hand() {
+    const P = handPoints();
+    const bb = new THREE.Box3().setFromPoints(P), c = bb.getCenter(new THREE.Vector3()); orbit([c.x, c.y - 0.4, 0], 0, 0, 60, 20);
+    scene.add(hand(P, 1.25));
+    return () => {
+      const p0 = px(P[0]), p5 = px(P[5]), p17 = px(P[17]);
+      arrow(p0, p5, '#ffcf7a'); arrow(p0, p17, '#7fffaa');
+      for (const c of [[0,1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]) for (let i = 0; i + 1 < c.length; i++) line(px(P[c[i]]), px(P[c[i + 1]]), 'rgba(255,255,255,.28)', 1, [2, 3]);
+      P.forEach((v, i) => { const p = px(v); dot(p, 3.2, 'rgba(3,5,10,.85)', '#ffffff'); });
+      const lab = { 0: [0, 14, 'center'], 5: [-8, -10, 'right'], 17: [10, -8, 'left'], 9: [0, -12, 'center'], 13: [0, -12, 'center'], 4: [-9, 0, 'right'], 8: [0, -12, 'center'], 12: [0, -12, 'center'], 16: [0, -12, 'center'], 20: [0, -12, 'center'], 1: [-9, 4, 'right'] };
+      for (const i in lab) label(i, px(P[i]), lab[i][0], lab[i][1], '#ffffff', lab[i][2]);
+      const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      label('e1', mid(p0, p5), -12, 2, '#ffcf7a', 'right'); label('e2', mid(p0, p17), 12, 2, '#7fffaa', 'left');
+    };
+  }
+};
+const after = figs[FIG]();
+renderer.render(scene, cam);
+if (after) after();
+window.__done = true;
+</script>
