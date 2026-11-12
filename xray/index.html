@@ -1118,7 +1118,7 @@ const order = () => Q.get("delegate") === "gpu" ? ["GPU", "CPU"] : perf.software
 async function first(make) { let err; for (const d of order()) { try { return [await make(d), d]; } catch (e) { err = e; } } throw err; }
 const needSmall = () => { if (!small && Object.values(perf.by).includes("CPU")) { small = document.createElement("canvas"); smallCtx = small.getContext("2d"); } };
 async function loadVision() {
-  vision = await import(MP_URL + "/vision_bundle.mjs");
+  vision = await import(MP_URL + (LOCAL ? "/vision_bundle.js" : "/vision_bundle.mjs"));      // the local copy is named .js so that any simple server sends it as JavaScript
   fileset = await vision.FilesetResolver.forVisionTasks(MP_URL + "/wasm");
 }
 // The face and hand trackers are made one after the other (their loader cannot be shared by two at once), after the

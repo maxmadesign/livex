@@ -7,13 +7,16 @@
 原版的拆解和性能补丁在 [`../xray-teardown/`](../xray-teardown/)。
 
 ```
-index.html   页面本身（界面、追踪、绘制，全部在这一个文件里）
-data/        人体模型：body.*（全身骨架）和 head.*（头部各层和带关节的手），各有完整版和轻量版两档
-tools/       生成数据、打包单文件、离线依赖、自动化测试的脚本
+index.html      页面本身（界面、追踪、绘制，全部在这一个文件里）
+data/           人体模型：body.*（全身骨架）和 head.*（头部各层和带关节的手），各有完整版和轻量版两档
+tools/          生成数据、打包单文件、离线依赖、自动化测试的脚本
+start.command   在自己的电脑上运行：Mac 上双击即可
 ```
 
 ## 打开方式
 
+- **在自己的电脑上**：Mac 上双击 `start.command`（第一次要右键 → 打开）。它在本机起一个只对本机开放的网页服务，并用 Chrome 打开页面；
+  目录里有 `vendor/`（见“离线”）时自动不走外网。关掉那个终端窗口就停止。
 - **放到任意静态网站**（含 GitHub Pages），访问 `…/xray/`。
 - **单个文件**：`python3 tools/bundle.py` 生成 `dist/xray-mirror.html`（5.5 MB，模型数据已内嵌），拷到屏幕上双击即可。
 - 浏览器用 Chrome 或 Edge。第一次启动要联网下载运行库和追踪模型，共约 28 MB（three.js 1.3 MB、MediaPipe 运行库 9.8 MB、
@@ -97,11 +100,11 @@ tools/       生成数据、打包单文件、离线依赖、自动化测试的�
 ## 离线
 
 ```bash
-sh tools/fetch_vendor.sh        # 需要 npm 和 curl；把运行库和四个模型下载到 ./vendor（约 47 MB，不入库）
+sh tools/fetch_vendor.sh        # 只需要 curl；把运行库和四个模型下载到 ./vendor（约 46 MB，不入库）
 ```
 
-然后把整个 `xray/` 目录用任意静态服务器提供出来（例如 `python3 -m http.server`），打开 `http://localhost:8000/?local`。
-字体在线时从 Google Fonts 加载，离线时退回系统字体。
+然后双击 `start.command`，或者把整个 `xray/` 目录用任意静态服务器提供出来（例如 `python3 -m http.server`）并打开 `http://localhost:8000/?local`。
+带 `?local` 时页面不发任何外部请求（已在断开外网的条件下验证）。字体在线时从 Google Fonts 加载，离线时退回系统字体。
 
 ## 它是怎么工作的
 
