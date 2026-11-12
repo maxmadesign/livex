@@ -18,9 +18,11 @@ import fast_simplification
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from parts import resolve
 
-# triangle budget per group
+# triangle budget per group, and for the light version that slow machines and small figures get
 BUDGET = {"skull": 12000, "cervical": 5000, "thorax": 34000, "lumbar": 6000, "pelvis": 9000,
           "humerus": 2200, "forearm": 2600, "hand": 5000, "femur": 2600, "leg": 3400, "foot": 4500}
+LITE = {"skull": 4200, "cervical": 1800, "thorax": 11000, "lumbar": 2200, "pelvis": 3000,
+        "humerus": 800, "forearm": 900, "hand": 1900, "femur": 900, "leg": 1200, "foot": 1700}
 
 
 def read_stl(path):
@@ -38,11 +40,14 @@ def area(V, F):
     return 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1).sum()
 
 
-def simplify(V, F, target):
-    if len(F) <= target:
-        return V, F
-    v, f = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_count=int(target), agg=5)
-    return np.asarray(v, dtype=np.float64), np.asarray(f, dtype=np.int64)
+def simplify(V, F, target, passes=1):
+    """One pass removes at most about nine triangles in ten, so a much lighter mesh takes several."""
+    for _ in range(passes):
+        if len(F) <= target:
+            break
+        v, f = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_count=int(target), agg=5)
+        V, F = np.asarray(v, dtype=np.float64), np.asarray(f, dtype=np.int64)
+    return V, F
 
 
 def sphere_fit(P):
@@ -103,38 +108,45 @@ def main():
     tip = nb[nb[:, 2] < np.percentile(nb[:, 2], 12)].mean(0)
     J["nose"] = np.array([0.0, tip[1] - 24.0, tip[2] - 14.0])                       # the nose tip is cartilage: ahead of and below the nasal bones
 
-    # ------------------------------------------------------------------ meshes
-    blob = bytearray(); meta = []
-    for grp, ids in groups.items():
-        budget = BUDGET[grp.split("_")[0]]
-        parts = [part(n) for _, n in ids]
-        areas = np.array([area(V, F) for V, F in parts])
-        share = np.maximum(60, budget * areas / areas.sum())
-        share = share * budget / share.sum()
-        Vs, Fs, off = [], [], 0
-        for (V, F), t in zip(parts, share):
-            v, f = simplify(V, F, max(40, round(t)))
-            Vs.append(v); Fs.append(f + off); off += len(v)
-        V = np.concatenate(Vs); F = np.concatenate(Fs)
-        assert len(V) < 65536, grp
-        lo = V.min(0); size = np.maximum(V.max(0) - lo, 1e-6)
-        q = np.round((V - lo) / size * 65535).astype("<u2")
-        m = {"name": grp, "nv": int(len(V)), "ni": int(F.size), "min": [round(float(x), 3) for x in lo], "size": [round(float(x), 3) for x in size]}
-        if len(blob) % 2: blob += b"\0"
-        m["offV"] = len(blob); blob += q.tobytes()
-        m["offI"] = len(blob); blob += F.astype("<u2").tobytes()
-        if grp in ("lumbar", "cervical"):       # how much each vertex follows the frame above it: 0 at the bottom of the group, 1 at its top
-            z = V[:, 2]; w = np.clip((z - z.min()) / (z.max() - z.min()), 0, 1)
-            m["offW"] = len(blob); blob += np.round(w * 255).astype("u1").tobytes()
-        meta.append(m)
-        print("%-15s %3d parts  %6d verts %6d tris" % (grp, len(parts), len(V), len(F)))
+    # ------------------------------------------------------------------ meshes, in two levels of detail
+    blob = bytearray()
 
+    def emit(budgets, floor, passes):
+        meta = []
+        for grp, ids in groups.items():
+            budget = budgets[grp.split("_")[0]]
+            parts = [part(n) for _, n in ids]
+            areas = np.array([area(V, F) for V, F in parts])
+            share = np.maximum(floor, budget * areas / areas.sum())
+            share = share * budget / share.sum()
+            Vs, Fs, off = [], [], 0
+            for (V, F), t in zip(parts, share):
+                v, f = simplify(V, F, max(floor * 2 // 3, round(t)), passes)
+                Vs.append(v); Fs.append(f + off); off += len(v)
+            V = np.concatenate(Vs); F = np.concatenate(Fs)
+            assert len(V) < 65536, grp
+            lo = V.min(0); size = np.maximum(V.max(0) - lo, 1e-6)
+            q = np.round((V - lo) / size * 65535).astype("<u2")
+            m = {"name": grp, "nv": int(len(V)), "ni": int(F.size), "min": [round(float(x), 3) for x in lo], "size": [round(float(x), 3) for x in size]}
+            if len(blob) % 2: blob.extend(b"\0")
+            m["offV"] = len(blob); blob.extend(q.tobytes())
+            m["offI"] = len(blob); blob.extend(F.astype("<u2").tobytes())
+            if grp in ("lumbar", "cervical"):   # how much each vertex follows the frame above it: 0 at the bottom of the group, 1 at its top
+                z = V[:, 2]; w = np.clip((z - z.min()) / (z.max() - z.min()), 0, 1)
+                m["offW"] = len(blob); blob.extend(np.round(w * 255).astype("u1").tobytes())
+            meta.append(m)
+            print("%-15s %3d parts  %6d verts %6d tris" % (grp, len(parts), len(V), len(F)))
+        print("  = %d verts %d tris" % (sum(m["nv"] for m in meta), sum(m["ni"] for m in meta) // 3))
+        return meta
+
+    meta = emit(BUDGET, 60, 1)
+    lite = emit(LITE, 24, 3)
     out = {"units": "mm", "axes": "+x subject's left, +y posterior, +z up",
            "source": "BodyParts3D release 3.0 (2011-09-15), (c) The Database Center for Life Science, CC BY-SA 2.1 Japan; simplified",
-           "joints": {k: [round(float(x), 2) for x in v] for k, v in J.items()}, "meshes": meta}
+           "joints": {k: [round(float(x), 2) for x in v] for k, v in J.items()}, "meshes": meta, "meshesLite": lite}
     json.dump(out, open(out_dir + "/body.json", "w"), separators=(",", ":"))
     open(out_dir + "/body.bin", "wb").write(bytes(blob))
-    print("total %d verts %d tris, %d bytes" % (sum(m["nv"] for m in meta), sum(m["ni"] for m in meta) // 3, len(blob)))
+    print("%d bytes" % len(blob))
     for k, v in out["joints"].items(): print("  %-15s %s" % (k, v))
 
 

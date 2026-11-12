@@ -7,14 +7,16 @@ meta.json / meshdata.bin are the head and hand meshes extracted from the X-Ray M
 canonical face (cm; +x the subject's left, +y up, +z forward), so they carry BodyParts3D's licence, CC BY-SA 2.1 Japan,
 and are used here unchanged. Writes <out dir>/head.json and head.bin.
 
-Two things are added to the mesh table:
+Three things are added to the mesh table:
+  meshesLite - the large head meshes simplified further (appended to head.bin), for slow machines
   anchors   - canonical-face positions of the face landmarks the page uses to pin the head to the picture
               (from MediaPipe's canonical_face_model.obj, Apache-2.0)
   fromBody  - the transform from the body skeleton's space (mm) to this head space, found here by fitting the
               source skull to the aligned one. The page uses it to hang the neck under the tracked head.
 """
-import json, shutil, sys
+import json, sys
 import numpy as np
+import fast_simplification
 
 meta_p, bin_p, obj_p, bjson_p, bbin_p, out = sys.argv[1:7]
 meta = json.load(open(meta_p)); raw = open(bin_p, "rb").read()
@@ -65,12 +67,29 @@ print("free affine fit: median residual %.2f mm; axis scales %s" % (np.median(d2
 IDS = [1, 2, 4, 6, 9, 10, 33, 61, 133, 152, 168, 199, 234, 263, 291, 362, 454]
 out_meta = {
     "source": "Head and hand meshes: BodyParts3D, (c) The Database Center for Life Science, CC BY-SA 2.1 Japan; simplified and aligned to "
-              "MediaPipe's canonical face by the author of X-Ray Mirror (github.com/MasterOfVFX2070/xray-mirror); used unchanged.",
+              "MediaPipe's canonical face by the author of X-Ray Mirror (github.com/MasterOfVFX2070/xray-mirror); used unchanged. "
+              "meshesLite: the same meshes simplified further.",
     "units": "cm", "axes": "+x subject's left, +y up, +z forward (MediaPipe canonical face)",
     "meshes": meta["meshes"], "jawPivot": meta["jawPivot"],
     "anchors": {str(i): [round(float(x), 4) for x in canon[i]] for i in IDS},
     "fromBody": [round(float(x), 6) for x in M.T.ravel()],          # column-major, as three.js reads it
 }
+# light versions of the large meshes: fewer triangles, same bounding box, appended after the original data
+LITE = {"cranium": 17000, "jaw": 4600, "cerebrum": 18000, "hindbrain": 5200, "muscles": 12500, "skin": 5000}
+blob = bytearray(raw); lite = []
+for m in meta["meshes"]:
+    if m["name"] not in LITE: continue
+    V = verts(m, raw); F = np.frombuffer(raw, dtype="<u2", count=m["ni"], offset=m["offI"]).reshape(-1, 3)
+    v, f = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_count=LITE[m["name"]], agg=5)
+    v = np.asarray(v, dtype=np.float64); f = np.asarray(f)
+    q = np.round(np.clip((v - np.array(m["min"])) / np.array(m["size"]), 0, 1) * 65535).astype("<u2")
+    e = {"name": m["name"], "nv": int(len(v)), "ni": int(f.size), "min": m["min"], "size": m["size"]}
+    if len(blob) % 2: blob.extend(b"\0")
+    e["offV"] = len(blob); blob.extend(q.tobytes())
+    e["offI"] = len(blob); blob.extend(f.astype("<u2").tobytes())
+    lite.append(e)
+    print("lite %-10s %6d -> %6d tris" % (m["name"], m["ni"] // 3, len(f)))
+out_meta["meshesLite"] = lite
 json.dump(out_meta, open(out + "/head.json", "w"), separators=(",", ":"))
-shutil.copyfile(bin_p, out + "/head.bin")
-print("wrote head.json (%d meshes, %d anchors) and head.bin (%d bytes)" % (len(meta["meshes"]), len(IDS), len(raw)))
+open(out + "/head.bin", "wb").write(bytes(blob))
+print("wrote head.json (%d meshes, %d light, %d anchors) and head.bin (%d bytes, %d of them the original data)" % (len(meta["meshes"]), len(lite), len(IDS), len(blob), len(raw)))
