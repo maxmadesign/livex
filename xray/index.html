@@ -1,0 +1,1195 @@
+<!doctype html>
+<html lang="zh-CN" data-profile="p32">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>X-Ray Mirror</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: the camera picture fills the whole screen like a mirror; everything else floats over it.
+   Sizes are written in design pixels of a 1080-wide portrait canvas (--u), times the screen's UI scale (--k). */
+:root {
+  --ink: #06080b; --graphite: #0f1216; --steel: #8a919c; --mist: #d9dee5; --paper: #f4f5f7; --cobalt: #2f5bea;
+  --glass: rgba(9, 12, 17, 0.66); --hair: rgba(217, 222, 229, 0.18); --warn: #ffb468;
+  --sans: "Geist", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, Menlo, Consolas, "Noto Sans SC", monospace;
+  --u: calc(min(100vw, 100vh * 0.5625) / 1080);
+  --k: 1;
+  --base: 58;       /* 86-inch screen: height of the UI's centre line, in % of the screen, from the bottom */
+  --span: 50;       /* 86-inch screen: height of the band the UI may use, in % of the screen */
+  --p: calc(var(--u) * var(--k));
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--ink); color: var(--paper);
+             font-family: var(--sans); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; user-select: none; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: calc(3 * var(--p)) solid var(--cobalt); outline-offset: calc(3 * var(--p)); }
+
+/* ---------- the mirror ---------- */
+#stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 38%, #10182a, #05070c 78%); }
+#stage video, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#video, #cam { object-fit: cover; }
+#shade, #gl, #hud { pointer-events: none; }
+.mirror #video, .mirror #cam, .mirror #shade, .mirror #gl { transform: scaleX(-1); }
+
+/* ---------- floating UI: 32-inch portrait and desktop ---------- */
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+.status { position: absolute; left: calc(56 * var(--p)); top: calc(40 * var(--p)); display: flex; align-items: center; gap: calc(14 * var(--p));
+          height: calc(72 * var(--p)); padding: 0 calc(28 * var(--p)); border-radius: calc(36 * var(--p));
+          background: var(--glass); border: 1px solid var(--hair); backdrop-filter: blur(calc(18 * var(--p))); -webkit-backdrop-filter: blur(calc(18 * var(--p)));
+          font: 500 calc(21 * var(--p))/1.2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--mist); pointer-events: none; }
+.status .brand { color: var(--paper); }
+.status .sep { width: calc(34 * var(--p)); height: 1px; background: var(--steel); }
+.status .dot { width: calc(12 * var(--p)); height: calc(12 * var(--p)); border-radius: 50%; background: var(--steel); }
+.status.live .dot { background: var(--cobalt); box-shadow: 0 0 calc(14 * var(--p)) var(--cobalt); animation: breathe 4.2s ease-in-out infinite; }
+.status.warn .dot { background: var(--warn); }
+@keyframes breathe { 50% { opacity: 0.45; } }
+#state { text-transform: none; letter-spacing: 0.04em; color: var(--mist); }
+
+.chips { position: absolute; left: 50%; bottom: calc(76 * var(--p)); transform: translateX(-50%);
+         display: flex; gap: calc(16 * var(--p)); padding: calc(14 * var(--p)); border-radius: calc(70 * var(--p));
+         background: var(--glass); border: 1px solid var(--hair); backdrop-filter: blur(calc(18 * var(--p))); -webkit-backdrop-filter: blur(calc(18 * var(--p))); }
+.chips button { min-width: calc(168 * var(--p)); height: calc(96 * var(--p)); padding: 0 calc(30 * var(--p)); border-radius: calc(48 * var(--p));
+                border: 1px solid transparent; background: transparent; color: var(--mist); cursor: pointer;
+                font-size: calc(30 * var(--p)); font-weight: 500; letter-spacing: 0.01em; white-space: nowrap; transition: background .25s, color .25s; }
+.chips button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.chips button:active { transform: scale(0.97); }
+#gear { position: absolute; right: calc(56 * var(--p)); top: calc(40 * var(--p)); width: calc(72 * var(--p)); height: calc(72 * var(--p)); border-radius: 50%;
+        background: var(--glass); border: 1px solid var(--hair); cursor: pointer; display: grid; place-items: center; opacity: 0.55; }
+#gear svg { width: 46%; height: 46%; }
+#hint { position: absolute; left: 50%; bottom: calc(236 * var(--p)); transform: translateX(-50%); margin: 0; max-width: 86vw; text-align: center;
+        padding: calc(18 * var(--p)) calc(36 * var(--p)); border-radius: calc(44 * var(--p)); background: var(--glass); border: 1px solid var(--hair);
+        backdrop-filter: blur(calc(18 * var(--p))); -webkit-backdrop-filter: blur(calc(18 * var(--p)));
+        font-size: calc(32 * var(--p)); font-weight: 500; letter-spacing: 0.01em; pointer-events: none; }
+
+.card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(calc(820 * var(--p)), 88vw); text-align: center;
+        display: flex; flex-direction: column; align-items: center; gap: calc(30 * var(--p)); }
+.card h1 { margin: 0; font-size: calc(92 * var(--p)); font-weight: 500; letter-spacing: -0.035em; line-height: 1.05; }
+.card p { margin: 0; font-size: calc(30 * var(--p)); line-height: 1.5; color: var(--mist); }
+.card .go { height: calc(104 * var(--p)); padding: 0 calc(64 * var(--p)); border-radius: calc(52 * var(--p)); border: 0; cursor: pointer;
+            background: var(--cobalt); color: #fff; font-size: calc(32 * var(--p)); font-weight: 600; }
+.card .go:disabled { opacity: 0.55; }
+.card .fine { font: 400 calc(19 * var(--p))/1.5 var(--mono); color: var(--steel); letter-spacing: 0.02em; }
+
+/* ---------- settings ---------- */
+#sheet { position: absolute; right: calc(40 * var(--p)); top: calc(130 * var(--p)); bottom: calc(210 * var(--p)); width: min(calc(600 * var(--p)), 92vw);
+         background: rgba(9, 12, 17, 0.9); border: 1px solid var(--hair); border-radius: calc(28 * var(--p)); backdrop-filter: blur(calc(22 * var(--p)));
+         -webkit-backdrop-filter: blur(calc(22 * var(--p))); overflow-y: auto; padding: calc(30 * var(--p)); font-size: calc(24 * var(--p)); }
+#sheet h2 { margin: calc(26 * var(--p)) 0 calc(12 * var(--p)); font: 500 calc(18 * var(--p))/1.2 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--steel); }
+#sheet h2:first-child { margin-top: 0; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: calc(18 * var(--p)); min-height: calc(62 * var(--p)); }
+.row label { flex: 1 1 auto; min-width: 0; }
+.row input[type=range] { flex: 0 0 46%; accent-color: var(--cobalt); height: calc(40 * var(--p)); }
+.row select { flex: 0 0 52%; max-width: 52%; height: calc(56 * var(--p)); padding: 0 calc(12 * var(--p)); border-radius: calc(12 * var(--p)); background: var(--graphite); border: 1px solid var(--hair); }
+.row input[type=checkbox] { width: calc(34 * var(--p)); height: calc(34 * var(--p)); accent-color: var(--cobalt); }
+.row button { height: calc(56 * var(--p)); padding: 0 calc(22 * var(--p)); border-radius: calc(12 * var(--p)); background: var(--graphite); border: 1px solid var(--hair); cursor: pointer; }
+#sheet small, #sheet .note { display: block; margin-top: calc(10 * var(--p)); font-size: calc(19 * var(--p)); line-height: 1.5; color: var(--steel); }
+#debug { margin: calc(12 * var(--p)) 0 0; padding: calc(14 * var(--p)); border-radius: calc(12 * var(--p)); background: var(--graphite);
+         font: 400 calc(17 * var(--p))/1.55 var(--mono); white-space: pre-wrap; color: var(--mist); }
+
+/* ---------- 86-inch portrait: everything a visitor reads or touches sits in a band around the centre line ---------- */
+[data-profile="p86"] { --k: 0.62; }
+[data-profile="p86"] .status { top: auto; left: calc(56 * var(--p)); bottom: calc(var(--base) * 1%); transform: translateY(50%);
+                               flex-direction: column; align-items: flex-start; gap: calc(12 * var(--p)); max-width: 24vw;
+                               height: auto; padding: calc(26 * var(--p)) calc(28 * var(--p)); border-radius: calc(28 * var(--p)); }
+[data-profile="p86"] .status .sep { width: calc(56 * var(--p)); }
+[data-profile="p86"] #state { white-space: normal; line-height: 1.4; }
+[data-profile="p86"] .chips { left: auto; right: calc(56 * var(--p)); bottom: calc(var(--base) * 1%); transform: translateY(50%); flex-direction: column; }
+[data-profile="p86"] .chips button { min-width: calc(210 * var(--p)); }
+[data-profile="p86"] #gear { top: auto; right: calc(56 * var(--p)); bottom: calc((var(--base) - var(--span) / 2) * 1%); }
+[data-profile="p86"] #hint { bottom: calc((var(--base) - var(--span) / 2 + 3) * 1%); }
+[data-profile="p86"] .card { top: auto; bottom: calc(var(--base) * 1%); transform: translate(-50%, 50%); }
+[data-profile="p86"] #sheet { top: auto; bottom: calc(var(--base) * 1%); transform: translateY(50%); height: calc(var(--span) * 1%); right: calc(300 * var(--p)); }
+
+/* ---------- landscape desktop ---------- */
+[data-profile="desk"] { --u: calc(min(100vw, 100vh * 1.6) / 1900); }
+@media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } .chips button { transition: none; } }
+</style>
+</head>
+<body class="mirror">
+<div id="stage">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="cam" hidden></canvas>
+  <canvas id="shade"></canvas>
+  <canvas id="gl"></canvas>
+  <canvas id="hud"></canvas>
+</div>
+
+<div id="ui">
+  <div class="status" id="status"><span class="brand">LiveX</span><span class="sep"></span><span data-t="name">X-Ray Mirror</span><span class="dot"></span><span id="state"></span></div>
+
+  <nav class="chips" id="chips" hidden>
+    <button data-layer="skeleton" aria-pressed="true" data-t="skeleton"></button>
+    <button data-layer="brain" aria-pressed="false" data-t="brain"></button>
+    <button data-layer="muscles" aria-pressed="false" data-t="muscles"></button>
+    <button data-layer="lens" aria-pressed="false" data-t="lens"></button>
+  </nav>
+  <p id="hint" hidden></p>
+
+  <section class="card" id="start">
+    <h1 data-t="title"></h1>
+    <p data-t="intro"></p>
+    <button class="go" id="go" data-t="start"></button>
+    <p class="fine" data-t="privacy"></p>
+  </section>
+
+  <button id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg></button>
+
+  <aside id="sheet" hidden>
+    <h2 data-t="s_screen"></h2>
+    <div class="row"><label for="profile" data-t="s_profile"></label><select id="profile"><option value="auto" data-t="o_auto"></option><option value="p32" data-t="o_p32"></option><option value="p86" data-t="o_p86"></option><option value="desk" data-t="o_desk"></option></select></div>
+    <div class="row"><label for="uiBase"><span data-t="s_base"></span> <b id="uiBaseV"></b></label><input id="uiBase" type="range" min="35" max="75" step="1"></div>
+    <div class="row"><label for="lang" data-t="s_lang"></label><select id="lang"><option value="zh">中文</option><option value="en">English</option></select></div>
+    <div class="row"><label data-t="s_full"></label><button id="full" data-t="b_full"></button></div>
+
+    <h2 data-t="s_camera"></h2>
+    <div class="row"><label for="camera" data-t="s_device"></label><select id="camera"></select></div>
+    <div class="row"><label for="rotate" data-t="s_rotate"></label><select id="rotate"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div>
+    <div class="row"><label for="mirror" data-t="s_mirror"></label><input id="mirror" type="checkbox"></div>
+
+    <h2 data-t="s_picture"></h2>
+    <div class="row"><label for="look" data-t="s_look"></label><select id="look"><option value="xray" data-t="o_xray"></option><option value="solid" data-t="o_solid"></option></select></div>
+    <div class="row"><label for="bright" data-t="s_bright"></label><input id="bright" type="range" min="0.4" max="2" step="0.01"></div>
+    <div class="row"><label for="real" data-t="s_real"></label><input id="real" type="range" min="0" max="1" step="0.01"></div>
+    <div class="row"><label for="lensSize" data-t="s_lens"></label><input id="lensSize" type="range" min="0.15" max="1" step="0.01"></div>
+
+    <h2 data-t="s_fit"></h2>
+    <div class="row"><label for="fitSize" data-t="s_fsize"></label><input id="fitSize" type="range" min="0.8" max="1.3" step="0.005"></div>
+    <div class="row"><label for="fitY" data-t="s_fy"></label><input id="fitY" type="range" min="-4" max="4" step="0.1"></div>
+    <div class="row"><label for="fitZ" data-t="s_fz"></label><input id="fitZ" type="range" min="-4" max="4" step="0.1"></div>
+
+    <h2 data-t="s_perf"></h2>
+    <div class="row"><label for="perf" data-t="s_mode"></label><select id="perf"><option value="auto" data-t="o_pauto"></option><option value="quality" data-t="o_quality"></option><option value="balanced" data-t="o_balanced"></option><option value="fast" data-t="o_fast"></option></select></div>
+    <div class="row"><label for="body" data-t="s_body"></label><select id="body"><option value="lite" data-t="o_lite"></option><option value="full" data-t="o_fullm"></option></select></div>
+    <div class="row"><label for="debugOn" data-t="s_debug"></label><input id="debugOn" type="checkbox"></div>
+    <pre id="debug" hidden></pre>
+
+    <h2 data-t="s_about"></h2>
+    <p class="note" data-t="about"></p>
+    <p class="note">Anatomy models: BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution-Share Alike 2.1 Japan. Simplified; head and hand models aligned by the author of X-Ray Mirror (MasterOfVFX2070).</p>
+  </aside>
+</div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const DEMO = location.hash === "#demo";                 // built-in test scene: a standing skeleton, no camera
+
+// Where the libraries and tracker models come from. "?local" takes them from ./vendor, for screens without internet.
+const LOCAL = Q.has("local");
+const THREE_URL = (DEMO && Q.get("three")) || (LOCAL ? "./vendor/three.module.js" : "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+const MP_URL = LOCAL ? "./vendor/tasks-vision" : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const MODEL_DIR = "https://storage.googleapis.com/mediapipe-models/";
+const MODELS = { face: "face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+                 hand: "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+                 lite: "pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+                 full: "pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task" };
+const modelUrl = k => LOCAL ? "./vendor/models/" + MODELS[k].split("/").pop() : MODEL_DIR + MODELS[k];
+
+// ------------------------------ words ------------------------------
+const TXT = {
+  zh: { name: "X 光镜", title: "X 光镜", intro: "站到屏幕前，看看自己的骨架。靠近一点，还能看到头骨、大脑和面部肌肉。", start: "开始",
+        privacy: "画面只在这台设备上处理，不会上传。", skeleton: "骨骼", brain: "大脑", muscles: "面部肌肉", lens: "镜片",
+        st_idle: "点“开始”打开摄像头", st_cam: "正在打开摄像头…", st_3d: "正在载入人体模型…", st_trk: "正在载入追踪器…",
+        st_none: "没有看到人", st_body: "正在跟踪身体", st_head: "正在跟踪头部", st_both: "正在跟踪身体和头部", st_hand: "正在跟踪手", st_demo: "演示场景",
+        st_denied: "摄像头被拒绝，请允许后重试", st_fail: "启动失败：", st_err: "追踪出错：",
+        hint_step: "站到屏幕前", hint_lens: "举起手，移动镜片", hint_near: "靠近一点，看看头部内部",
+        s_screen: "屏幕", s_profile: "屏幕类型", o_auto: "自动", o_p32: "32 寸竖屏", o_p86: "86 寸竖屏", o_desk: "横屏 / 电脑", s_base: "界面中线高度", s_lang: "语言",
+        s_full: "全屏显示", b_full: "切换", s_camera: "摄像头", s_device: "设备", s_rotate: "画面旋转", s_mirror: "镜像",
+        s_picture: "画面", s_look: "外观", o_xray: "X 光", o_solid: "实体", s_bright: "亮度", s_real: "透出真实画面", s_lens: "镜片大小",
+        s_fit: "头部贴合", s_fsize: "大小", s_fy: "上下", s_fz: "前后",
+        s_perf: "性能", s_mode: "模式", o_pauto: "自动", o_quality: "最佳画质", o_balanced: "均衡", o_fast: "最快", s_body: "身体追踪", o_lite: "快速", o_fullm: "精确",
+        s_debug: "显示追踪数据", s_about: "说明",
+        about: "显示的是同一套通用人体模型，按你的身体缩放和摆放。它表示各个结构通常所在的位置，不是对你本人的扫描，也不是医疗工具。",
+        soft: "浏览器没有使用显卡，画面会很慢。请在浏览器设置里打开硬件加速。" },
+  en: { name: "X-Ray Mirror", title: "X-Ray Mirror", intro: "Step in front of the screen and see your own skeleton. Come closer for the skull, brain and face muscles.", start: "Start",
+        privacy: "The picture is processed on this device and never uploaded.", skeleton: "Skeleton", brain: "Brain", muscles: "Face muscles", lens: "Lens",
+        st_idle: "Press Start to open the camera", st_cam: "Opening the camera…", st_3d: "Loading the body model…", st_trk: "Loading the trackers…",
+        st_none: "Nobody in view", st_body: "Tracking your body", st_head: "Tracking your head", st_both: "Tracking your body and head", st_hand: "Tracking your hand", st_demo: "Demo scene",
+        st_denied: "Camera blocked. Allow it and try again", st_fail: "Could not start: ", st_err: "Tracker error: ",
+        hint_step: "Step in front of the screen", hint_lens: "Raise a hand to move the lens", hint_near: "Come closer to see inside your head",
+        s_screen: "Screen", s_profile: "Screen type", o_auto: "Automatic", o_p32: "32-inch portrait", o_p86: "86-inch portrait", o_desk: "Landscape / desktop", s_base: "UI centre line", s_lang: "Language",
+        s_full: "Full screen", b_full: "Toggle", s_camera: "Camera", s_device: "Device", s_rotate: "Rotate picture", s_mirror: "Mirror",
+        s_picture: "Picture", s_look: "Look", o_xray: "X-ray", o_solid: "Solid", s_bright: "Brightness", s_real: "Real picture showing through", s_lens: "Lens size",
+        s_fit: "Head fit", s_fsize: "Size", s_fy: "Up / down", s_fz: "Forward / back",
+        s_perf: "Performance", s_mode: "Mode", o_pauto: "Automatic", o_quality: "Best picture", o_balanced: "Balanced", o_fast: "Fastest", s_body: "Body tracking", o_lite: "Fast", o_fullm: "Accurate",
+        s_debug: "Show tracking data", s_about: "About",
+        about: "The anatomy is one generic body model, scaled and placed on yours. It shows where structures usually sit. It is not a scan of you and not a medical tool.",
+        soft: "This browser is drawing without a graphics card, which is slow. Switch on hardware acceleration in its settings." }
+};
+
+// ------------------------------ settings ------------------------------
+const DEFAULTS = { lang: (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en", profile: "auto", uiBase: 58,
+                   skeleton: true, brain: false, muscles: false, lens: false, look: "xray", bright: 1, real: 0.18, lensSize: 0.5,
+                   rotate: 0, mirror: true, camera: "", perf: "auto", body: "lite", debug: false, fitSize: 1, fitY: 0, fitZ: 0 };
+let S = Object.assign({}, DEFAULTS);
+try { Object.assign(S, JSON.parse(localStorage.getItem("livex_xray") || "{}")); } catch (e) {}
+// one-off set-up through the address: ?screen=86&base=58&lang=zh&rotate=90
+if (Q.get("screen")) S.profile = { "32": "p32", "86": "p86", desk: "desk", auto: "auto" }[Q.get("screen")] || S.profile;
+if (Q.get("base")) S.uiBase = Math.max(35, Math.min(75, +Q.get("base") || 58));
+if (Q.get("lang")) S.lang = Q.get("lang") === "en" ? "en" : "zh";
+if (Q.get("rotate")) S.rotate = [0, 90, 180, 270].includes(+Q.get("rotate")) ? +Q.get("rotate") : 0;
+const save = () => { try { localStorage.setItem("livex_xray", JSON.stringify(S)); } catch (e) {} };
+if (["screen", "base", "lang", "rotate"].some(k => Q.get(k))) save();          // so the address is only needed once
+const t = k => (TXT[S.lang] || TXT.en)[k] || k;
+const LAYERS = ["skeleton", "brain", "muscles", "lens"];
+
+let stateKey = "st_idle", stateExtra = "", stateCls = "";
+let stateShown = "";
+function setState(key, cls, extra) {                     // called every frame, so the page is only touched when the words change
+  stateKey = key; stateCls = cls || ""; stateExtra = extra || "";
+  const sig = S.lang + key + stateCls + stateExtra; if (sig === stateShown) return; stateShown = sig;
+  $("state").textContent = t(key) + stateExtra; $("status").className = "status " + stateCls;
+}
+function applyWords() {
+  document.documentElement.lang = S.lang === "zh" ? "zh-CN" : "en";
+  for (const el of document.querySelectorAll("[data-t]")) el.textContent = t(el.dataset.t);
+  setState(stateKey, stateCls, stateExtra);
+}
+function profile() { return S.profile !== "auto" ? S.profile : innerHeight >= innerWidth ? "p32" : "desk"; }
+function applyProfile() {
+  const root = document.documentElement;
+  root.dataset.profile = profile(); root.style.setProperty("--base", S.uiBase);
+  document.body.classList.toggle("mirror", !!S.mirror);
+}
+function syncUI() {
+  for (const k of LAYERS) document.querySelector('[data-layer="' + k + '"]').setAttribute("aria-pressed", S[k] ? "true" : "false");
+  for (const k of ["profile", "lang", "rotate", "look", "perf", "body"]) $(k).value = S[k];
+  for (const k of ["uiBase", "bright", "real", "lensSize", "fitSize", "fitY", "fitZ"]) $(k).value = S[k];
+  $("mirror").checked = S.mirror; $("debugOn").checked = S.debug; $("debug").hidden = !S.debug;
+  $("uiBaseV").textContent = S.uiBase + "%";
+}
+for (const b of document.querySelectorAll("[data-layer]")) b.onclick = () => { const k = b.dataset.layer; S[k] = !S[k]; save(); syncUI(); applyLook(); };
+for (const k of ["uiBase", "bright", "real", "lensSize", "fitSize", "fitY", "fitZ"]) $(k).oninput = e => { S[k] = parseFloat(e.target.value); save(); syncUI(); applyProfile(); };
+$("profile").onchange = e => { S.profile = e.target.value; save(); applyProfile(); layout(); };
+$("lang").onchange = e => { S.lang = e.target.value; save(); applyWords(); hintShown = null; };
+$("look").onchange = e => { S.look = e.target.value; save(); applyLook(); };
+$("mirror").onchange = e => { S.mirror = e.target.checked; save(); applyProfile(); };
+$("debugOn").onchange = e => { S.debug = e.target.checked; save(); syncUI(); };
+$("rotate").onchange = e => { S.rotate = +e.target.value; save(); layout(); };
+$("perf").onchange = e => { S.perf = e.target.value; save(); gov.setMode(S.perf, performance.now()); applyQuality(); };
+$("body").onchange = e => { S.body = e.target.value; save(); reloadPose(); };
+$("camera").onchange = e => { S.camera = e.target.value; save(); openCamera().catch(() => {}); };
+$("gear").onclick = () => { $("sheet").hidden = !$("sheet").hidden; };
+$("full").onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+addEventListener("keydown", e => { if (e.key === "s" || e.key === "S") $("gear").onclick(); if (e.key === "f" || e.key === "F") $("full").onclick(); });
+applyProfile(); applyWords(); syncUI();
+
+// ------------------------------ performance ------------------------------
+// When this device cannot keep up with the camera, two things give way: the 3D layer is drawn less sharp, and the
+// hand and body trackers run less often. Each has its own row of steps, best first.
+const SCALES = [2, 1.5, 1.25, 1, 0.8, 0.65, 0.5];     // sharpness limit of the 3D layer (1 = one drawn pixel per CSS pixel)
+const PROBE = [3, 4, 4, 6, 8, 10, 15];                // with no hand in view, look for one on every n-th camera frame
+const TRACK_STEPS = [                                 // hand tracker on every n-th frame, for one or two hands; body tracker on every
+  { hand: 1, hands: 2, body: 1 }, { hand: 2, hands: 2, body: 1 },     // n-th frame while the face tracker is also running
+  { hand: 2, hands: 1, body: 1 }, { hand: 3, hands: 1, body: 2 },
+];
+const FIXED = { quality: [0, 0], balanced: [2, 1], fast: [5, 3] };
+const perf = { software: false, gpu: "", by: { pose: "", face: "", hand: "" }, ms: { pose: 0, face: 0, hand: 0 }, camFps: 0, scale: 1, handCount: 2, fps: 0 };
+
+// Chooses the steps. frame() is called once for every camera frame that was drawn and returns true when a step changed.
+function makeGovernor(startScale, startTrack) {
+  let mode = "auto", si = startScale, hi = startTrack, fps = 30, busy = 0, last = 0, decided = 0, changed = 0, lastKnob = "";
+  let trial = null, keepScaleUntil = 0, keepScaleFor = 30000;
+  const knobs = { s: { wait: 6000, last: -1e9, good: 0 }, h: { wait: 6000, last: -1e9, good: 0 } };
+  return {
+    setMode(m, now) {
+      mode = FIXED[m] ? m : "auto";
+      if (FIXED[m]) { si = FIXED[m][0]; hi = FIXED[m][1]; } else { si = startScale; hi = startTrack; }
+      changed = now; trial = null; knobs.s.good = knobs.h.good = 0;
+    },
+    scale: () => SCALES[si], probeEvery: () => PROBE[si], handEvery: () => TRACK_STEPS[hi].hand, hands: () => TRACK_STEPS[hi].hands,
+    bodyEvery: () => TRACK_STEPS[hi].body, best: () => si === 0, step: () => si, track: () => hi, fps: () => fps,
+    // busyMs: time this page worked on the frame. camFps: the camera's own rate, 0 if unknown. spare: share of recent frames
+    // that left the page waiting for the camera (0..1). heavy: more than one tracker is at work on this frame.
+    frame(now, busyMs, camFps, spare, heavy) {
+      const dt = now - last; last = now;
+      if (dt > 0 && dt < 1000) { const a = 1 - Math.exp(-dt / 400); fps += (1000 / dt - fps) * a; busy += (busyMs - busy) * a; }
+      if (mode !== "auto" || now - changed < 1500 || now - decided < 500) return false;
+      decided = now;
+      const target = camFps > 5 ? Math.min(camFps, 60) : 30, room = 1000 / Math.max(fps, 10);
+      const over = fps < target * 0.88 - 0.5 && spare < 0.25;                 // camera frames are being dropped
+      const slack = !over && busy < room * 0.45 && (spare > 0.6 || fps > target * 0.94);
+      if (trial) {                                                            // did the last cut in sharpness buy anything?
+        const tr = trial; trial = null;
+        if (tr.heavy !== heavy) { si = tr.from; changed = now; return true; }     // the load changed meanwhile: no fair comparison, undo
+        if (fps >= tr.fps * 1.04) keepScaleFor = 30000;
+        else { si = tr.from; keepScaleUntil = now + keepScaleFor; keepScaleFor = Math.min(keepScaleFor * 2, 300000); changed = now; return true; }
+      }
+      // With several trackers at work, their rate gives way first and comes back first. If the page itself is idle
+      // most of the time, the graphics card is the limit and only sharpness helps.
+      let knob = "s";
+      if (heavy && !(over && busy < room * 0.4)) knob = over ? (hi < TRACK_STEPS.length - 1 ? "h" : "s") : (hi > 0 ? "h" : "s");
+      if (knob !== lastKnob) { lastKnob = knob; knobs[knob].good = 0; }
+      const u = knobs[knob];
+      if (over) {
+        if (now - u.last < 6000) u.wait = Math.min(u.wait * 2, 120000);       // the last step up was one too many: wait longer next time
+        knobs.s.good = knobs.h.good = 0;
+        if (knob === "h") { hi++; changed = now; return true; }
+        if (now < keepScaleUntil) return false;
+        const to = Math.min(SCALES.length - 1, si + (fps < target * 0.75 ? 2 : 1));
+        if (to !== si) { trial = { from: si, fps, heavy }; si = to; changed = now; return true; }
+      } else if (slack) {
+        if (!u.good) u.good = now;
+        if (now - u.good >= u.wait) {
+          if (knob === "h" && hi > 0) hi--; else if (knob === "s" && si > 0) si--; else return false;
+          u.last = now; u.good = 0; changed = now; return true;
+        }
+      } else knobs.s.good = knobs.h.good = 0;
+      return false;
+    }
+  };
+}
+// Is the browser drawing with a real graphics card? Software drawing shows up in the renderer's name.
+(function probeGraphics() {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2") || document.createElement("canvas").getContext("webgl");
+    if (!gl) return;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    perf.gpu = String((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || "");
+    perf.software = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(perf.gpu);
+    const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext();
+  } catch (e) {}
+})();
+const touchDevice = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+const gov = perf.software ? makeGovernor(SCALES.length - 1, TRACK_STEPS.length - 1) : touchDevice ? makeGovernor(3, 1) : makeGovernor(1, 0);
+gov.setMode(S.perf, 0);
+// Smoothing constants are written for 30 camera frames a second; this converts one to the time that really passed.
+const SAME = a => a;
+function easing(dt) { if (!dt) return SAME; const n = Math.max(0.25, Math.min(4, dt / 33.3)); return a => 1 - Math.pow(1 - a, n); }
+
+// ------------------------------ the stage ------------------------------
+// The picture is scaled to cover the whole screen, so part of it may be cut off. view maps a tracker's 0..1
+// coordinates in the picture to stage pixels.
+const video = $("video");
+const view = { W: 2, H: 2, iw: 720, ih: 1280, s: 1, ox: 0, oy: 0 };
+let THREE, renderer, veilScene, headScene, bodyScene, cam3, ortho, baseProj;
+const camCtx = $("cam").getContext("2d");
+function pictureSize() {
+  const w = video.videoWidth || 720, h = video.videoHeight || 1280;
+  return S.rotate === 90 || S.rotate === 270 ? [h, w] : [w, h];
+}
+function renderScale() {          // sharpness of the 3D layer: the screen's own, limited by the current step and by a total pixel count
+  const want = Math.min(window.devicePixelRatio || 1, gov.scale());
+  return S.perf === "quality" ? want : Math.max(0.35, Math.min(want, Math.sqrt(3.2e6 / (view.W * view.H))));
+}
+function layout() {
+  view.W = Math.max(2, innerWidth); view.H = Math.max(2, innerHeight);
+  [view.iw, view.ih] = DEMO ? [view.W, view.H] : pictureSize();
+  view.s = Math.max(view.W / view.iw, view.H / view.ih);
+  view.ox = (view.W - view.iw * view.s) / 2; view.oy = (view.H - view.ih * view.s) / 2;
+  $("cam").hidden = !S.rotate || DEMO; video.hidden = !!S.rotate;
+  if (S.rotate) { const c = $("cam"); if (c.width !== view.iw || c.height !== view.ih) { c.width = view.iw; c.height = view.ih; } }
+  for (const id of ["shade", "hud"]) { const c = $(id); c.width = view.W; c.height = view.H; }
+  if (renderer) {
+    perf.scale = renderScale(); renderer.setPixelRatio(perf.scale); renderer.setSize(view.W, view.H, false);
+    // MediaPipe places the face for a camera that sees 63 degrees of the picture's height. The stage shows a window of that picture.
+    cam3.aspect = view.iw / view.ih; cam3.setViewOffset(view.iw * view.s, view.ih * view.s, -view.ox, -view.oy, view.W, view.H);
+    cam3.updateProjectionMatrix(); baseProj = cam3.projectionMatrix.clone();
+    ortho.right = view.W; ortho.top = view.H; ortho.updateProjectionMatrix();
+  }
+}
+function applyQuality() {
+  if (!renderer) return;
+  const s = renderScale();
+  if (Math.abs(s - perf.scale) > 0.02) { perf.scale = s; renderer.setPixelRatio(s); renderer.setSize(view.W, view.H, false); }
+}
+addEventListener("resize", () => { applyProfile(); layout(); });
+
+// ------------------------------ data ------------------------------
+// Meshes are stored as 16-bit positions inside each mesh's bounding box, plus 16-bit triangle indices.
+async function loadData(name, json) {
+  const el = document.getElementById("data:" + name);           // the single-file build carries the data inside the page
+  if (el) {
+    if (json) return JSON.parse(el.textContent);
+    const bin = atob(el.textContent.trim()), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return u8.buffer;
+  }
+  const r = await fetch("data/" + name);
+  if (!r.ok) throw new Error("data/" + name + " " + r.status);
+  return json ? r.json() : r.arrayBuffer();
+}
+function decode(meta, buf) {
+  const out = {};
+  for (const m of meta.meshes) {
+    const q = new Uint16Array(buf, m.offV, m.nv * 3), pos = new Float32Array(m.nv * 3);
+    for (let i = 0; i < q.length; i++) pos[i] = m.min[i % 3] + q[i] / 65535 * m.size[i % 3];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, m.offI, m.ni).slice(), 1));
+    g.setAttribute("w", m.offW !== undefined ? new THREE.BufferAttribute(new Uint8Array(buf, m.offW, m.nv).slice(), 1, true)
+                                             : new THREE.BufferAttribute(new Uint8Array(m.nv), 1, true));
+    g.computeVertexNormals();
+    out[m.name] = g;
+  }
+  return out;
+}
+
+// ------------------------------ materials ------------------------------
+// One fragment shader, three looks: a glow that grows where a surface turns away from the eye (the x-ray look),
+// a plainly lit surface, and a flat dark cover that hides the real face.
+const FRAG = `
+uniform vec3 uColor; uniform float uGain, uMode, uOpacity, uEdge;
+varying vec3 vN; varying vec3 vV; varying float vFade;
+void main() {
+  vec3 n = normalize(vN);
+  float facing = abs(dot(n, normalize(vV)));
+  float soft = uEdge > 0.001 ? smoothstep(0.0, uEdge, facing) : 1.0;       // the very outline fades instead of ending hard
+  if (uMode > 1.5) { gl_FragColor = vec4(uColor, uOpacity * vFade * soft); return; }
+  if (uMode > 0.5) {
+    vec3 fn = gl_FrontFacing ? n : -n;
+    float lit = 0.3 + 0.75 * max(dot(fn, normalize(vec3(0.3, 0.55, 0.78))), 0.0);
+    gl_FragColor = vec4(uColor * lit * uGain + vec3(0.22) * pow(1.0 - facing, 2.5), soft); return;
+  }
+  float glow = 0.04 + 0.96 * pow(1.0 - facing, 2.0);
+  gl_FragColor = vec4(uColor, clamp(glow * uGain, 0.0, 1.0) * vFade * soft);
+}`;
+const HEAD_VERT = `
+uniform float uNeck;
+varying vec3 vN; varying vec3 vV; varying float vFade;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
+  vFade = uNeck > 0.5 ? smoothstep(-12.5, -9.0, position.y) : 1.0;         // the skin mesh stops at the neck
+  gl_Position = projectionMatrix * mv;
+}`;
+// Body pieces are placed by two matrices that take model millimetres straight to stage pixels. A vertex follows
+// the first, the second, or a mix of both (the spine between two tracked parts of the body).
+const BODY_VERT = `
+attribute float w; uniform mat4 uA; uniform mat4 uB;
+varying vec3 vN; varying vec3 vV; varying float vFade;
+void main() {
+  vec4 p = mix(uA * vec4(position, 1.0), uB * vec4(position, 1.0), w);
+  vN = normalize(mix(mat3(uA) * normal, mat3(uB) * normal, w)); vV = vec3(0.0, 0.0, 1.0); vFade = 1.0;
+  gl_Position = projectionMatrix * viewMatrix * p;
+}`;
+const COLOR = { bone: [0xcfe9ff, 0xe9e2cf], cerebrum: [0xff9fc0, 0xe2a39d], hindbrain: [0xffc37a, 0xd6ad84], muscles: [0xff6b5e, 0xb5453c],
+                eyes: [0xfff3a8, 0xf4f4ee], outline: [0x6fb6ff, 0x6fb6ff], veil: [0x04070d, 0x04070d] };
+const mats = [];
+function mat(kind, vert, fixedMode) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(COLOR[kind][0]) }, uGain: { value: 1 }, uMode: { value: fixedMode || 0 }, uOpacity: { value: 1 },
+                uEdge: { value: 0 }, uNeck: { value: 0 }, uA: { value: new THREE.Matrix4() }, uB: { value: new THREE.Matrix4() } },
+    vertexShader: vert, fragmentShader: FRAG, side: THREE.DoubleSide, transparent: true, depthTest: false, depthWrite: false,
+    blending: fixedMode === 2 ? THREE.NormalBlending : THREE.AdditiveBlending });
+  m.userData = { kind, fixed: fixedMode !== undefined };
+  mats.push(m); return m;
+}
+function applyLook() {
+  if (!renderer) return;
+  const solid = S.look === "solid";
+  for (const m of mats) {
+    if (m.userData.fixed) continue;
+    m.uniforms.uMode.value = solid ? 1 : 0; m.uniforms.uColor.value.set(COLOR[m.userData.kind][solid ? 1 : 0]);
+    m.blending = solid ? THREE.NormalBlending : THREE.AdditiveBlending; m.depthTest = m.depthWrite = solid; m.needsUpdate = true;
+  }
+}
+
+// ------------------------------ scene ------------------------------
+let J, HEAD, headGroup, veilGroup, jawPivot, headMeshes = {};
+const bodyParts = [];              // { mesh, a, b, far }: which two frames a piece of the body follows
+const handRigs = [];               // jointed hands, driven by the hand tracker
+const FINGER_BONES = [[1,2],[2,3],[3,4],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12],[13,14],[14,15],[15,16],[17,18],[18,19],[19,20]];
+const SIDES = ["left", "right"];
+const PIECES = [["skull", "head", "head", true], ["cervical", "thorax", "head"], ["thorax", "thorax", "thorax"], ["lumbar", "pelvis", "thorax"], ["pelvis", "pelvis", "pelvis"]];
+for (const s of SIDES) for (const k of ["humerus", "forearm", "hand", "femur", "leg", "foot"]) PIECES.push([k + "_" + s, k + "_" + s, k + "_" + s]);
+
+async function buildScene() {
+  THREE = await import(THREE_URL);
+  const [headMeta, headBin, bodyMeta, bodyBin] = await Promise.all([loadData("head.json", true), loadData("head.bin"), loadData("body.json", true), loadData("body.bin")]);
+  HEAD = headMeta; J = {};
+  for (const k in bodyMeta.joints) J[k] = new THREE.Vector3().fromArray(bodyMeta.joints[k]);
+  const hg = decode(headMeta, headBin), bg = decode(bodyMeta, bodyBin);
+
+  // Edge smoothing is kept wherever a graphics card does the work; a processor drawing every pixel cannot afford it.
+  renderer = new THREE.WebGLRenderer({ canvas: $("gl"), alpha: true, antialias: !(perf.software && S.perf !== "quality"), powerPreference: "high-performance" });
+  renderer.setClearColor(0x000000, 0); renderer.autoClear = false;
+  veilScene = new THREE.Scene(); headScene = new THREE.Scene(); bodyScene = new THREE.Scene();
+  cam3 = new THREE.PerspectiveCamera(63, 1, 1, 10000);
+  ortho = new THREE.OrthographicCamera(0, 2, 2, 0, -8000, 8000);
+
+  // head, in the space of MediaPipe's canonical face (cm)
+  headGroup = new THREE.Group(); headGroup.matrixAutoUpdate = false; headGroup.visible = false; headScene.add(headGroup);
+  veilGroup = new THREE.Group(); veilGroup.matrixAutoUpdate = false; veilGroup.visible = false; veilScene.add(veilGroup);
+  jawPivot = new THREE.Group(); jawPivot.position.fromArray(HEAD.jawPivot); headGroup.add(jawPivot);
+  const put = (name, geo, kind, order, parent, mode) => {
+    const mesh = new THREE.Mesh(geo, mat(kind, HEAD_VERT, mode)); mesh.renderOrder = order; mesh.frustumCulled = false; parent.add(mesh); headMeshes[name] = mesh; return mesh;
+  };
+  put("veil", hg.skin, "veil", 0, veilGroup, 2).material.uniforms.uNeck.value = 1;
+  put("outline", hg.skin, "outline", 1, headGroup, 0).material.uniforms.uNeck.value = 1;
+  put("muscles", hg.muscles, "muscles", 2, headGroup);
+  put("cranium", hg.cranium, "bone", 3, headGroup);
+  put("jaw", hg.jaw, "bone", 3, jawPivot).position.fromArray(HEAD.jawPivot).multiplyScalar(-1);
+  put("eyes", hg.eyes, "eyes", 4, headGroup);
+  put("cerebrum", hg.cerebrum, "cerebrum", 5, headGroup);
+  put("hindbrain", hg.hindbrain, "hindbrain", 5, headGroup);
+
+  // body, in the space of the source data (mm), posed in stage pixels
+  for (const [name, a, b, far] of PIECES) {
+    const mesh = new THREE.Mesh(bg[name], mat("bone", BODY_VERT)); mesh.frustumCulled = false; mesh.visible = false; bodyScene.add(mesh);
+    bodyParts.push({ name, mesh, a, b, far: !!far });
+  }
+  for (let h = 0; h < 2; h++) {
+    const group = new THREE.Group(); group.visible = false; bodyScene.add(group);
+    const mk = geo => { const m = new THREE.Mesh(geo, mat("bone", BODY_VERT)); m.frustumCulled = false; group.add(m); return m; };
+    handRigs.push({ group, palm: mk(hg.hand_palm), bones: FINGER_BONES.map(([a, b]) => mk(hg["hand_b_" + a + "_" + b])), pts: null, side: "" });
+  }
+  initRig(); applyLook(); layout();
+}
+
+// ------------------------------ posing the body ------------------------------
+// A frame is a matrix from model millimetres to stage pixels. It is built from an orthonormal triple measured on the
+// model (x along a line between two joints, y towards a third point) and the same triple measured on the tracked person.
+let P, vis, firm, ref = {}, rest = {}, frames = {}, bodyScale = 0, bodyFound = false, tmp, hipJoint;
+const HIP_IN = 0.87;
+const PART_GAIN = { cervical: 0.5, lumbar: 0.7, thorax: 0.75, pelvis: 0.9, skull: 0.85 };
+const mid = (a, b, out) => out.addVectors(a, b).multiplyScalar(0.5);
+function triple(o, x, yRef) {
+  o.x.copy(x).normalize(); o.y.copy(yRef).addScaledVector(o.x, -yRef.dot(o.x));
+  if (o.y.lengthSq() < 1e-10) o.y.set(-o.x.y, o.x.x, 0);
+  o.y.normalize(); o.z.crossVectors(o.x, o.y); return o;
+}
+const newTriple = () => ({ x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), o: new THREE.Vector3(), len: 1 });
+function setFrame(M, m, p, sx, sy, sz) {        // M = [p triple] * scale * [m triple]^T, moved so that m.o lands on p.o
+  const e = M.elements, ax = [m.x, m.y, m.z], bx = [p.x, p.y, p.z], sc = [sx, sy, sz];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    let v = 0; for (let k = 0; k < 3; k++) v += bx[k].getComponent(r) * sc[k] * ax[k].getComponent(c);
+    e[c * 4 + r] = v;
+  }
+  e[3] = e[7] = e[11] = 0; e[15] = 1;
+  for (let r = 0; r < 3; r++) e[12 + r] = p.o.getComponent(r) - (e[r] * m.o.x + e[4 + r] * m.o.y + e[8 + r] * m.o.z);
+  return M;
+}
+function affine(M, o, e1, e2) {                 // columns e1, e2 and their normal, origin o: a block pinned to three points
+  tmp.n.crossVectors(e1, e2); const l = tmp.n.length(); if (l < 1e-9) return null;
+  tmp.n.multiplyScalar(Math.sqrt(e1.length() * e2.length()) / l);
+  return M.makeBasis(e1, e2, tmp.n).setPosition(o);
+}
+const LEFT = { sh: 11, el: 13, wr: 15, pinky: 17, index: 19, hip: 23, knee: 25, ankle: 27, heel: 29, toe: 31, ear: 7 };
+const RIGHT = { sh: 12, el: 14, wr: 16, pinky: 18, index: 20, hip: 24, knee: 26, ankle: 28, heel: 30, toe: 32, ear: 8 };
+const IDX = { left: LEFT, right: RIGHT };
+
+function initRig() {
+  tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(),
+          t: newTriple(), M: new THREE.Matrix4(), M2: new THREE.Matrix4() };
+  P = Array.from({ length: 33 }, () => new THREE.Vector3()); vis = new Float32Array(33); firm = new Uint8Array(33);
+  hipJoint = { left: new THREE.Vector3(), right: new THREE.Vector3() };
+  const shMid = mid(J.shoulder_left, J.shoulder_right, new THREE.Vector3()), hipMid = mid(J.hip_left, J.hip_right, new THREE.Vector3());
+  const earMid = mid(J.ear_left, J.ear_right, new THREE.Vector3()), up = new THREE.Vector3().subVectors(shMid, hipMid), X = new THREE.Vector3(1, 0, 0);
+  const R = (name, x, yRef, o, len) => { const tr = triple(newTriple(), x, yRef); tr.o.copy(o); tr.len = len; rest[name] = tr; frames[name] = { M: new THREE.Matrix4(), ok: false }; };
+  const d = (a, b) => new THREE.Vector3().subVectors(a, b);
+  R("pelvis", d(J.hip_left, J.hip_right), up, hipMid, J.hip_left.distanceTo(J.hip_right));
+  R("thorax", d(J.shoulder_left, J.shoulder_right), up, shMid, J.shoulder_left.distanceTo(J.shoulder_right));
+  R("head", d(J.ear_left, J.ear_right), d(J.nose, earMid), earMid, J.ear_left.distanceTo(J.ear_right));
+  rest.torso = shMid.distanceTo(hipMid);
+  for (const s of SIDES) {
+    const j = k => J[k + "_" + s];
+    R("humerus_" + s, d(j("elbow"), j("shoulder")), X, j("shoulder"), j("elbow").distanceTo(j("shoulder")));
+    R("forearm_" + s, d(j("wrist"), j("elbow")), X, j("elbow"), j("wrist").distanceTo(j("elbow")));
+    R("femur_" + s, d(j("knee"), j("hip")), X, j("hip"), j("knee").distanceTo(j("hip")));
+    R("leg_" + s, d(j("ankle"), j("knee")), X, j("knee"), j("ankle").distanceTo(j("knee")));
+    frames["hand_" + s] = { M: new THREE.Matrix4(), ok: false, inv: affine(new THREE.Matrix4(), j("wrist"), d(j("index"), j("wrist")), d(j("pinky"), j("wrist"))).clone().invert() };
+    frames["foot_" + s] = { M: new THREE.Matrix4(), ok: false, inv: affine(new THREE.Matrix4(), j("heel"), d(j("toe"), j("heel")), d(j("ankle"), j("heel"))).clone().invert() };
+    ref["arm_" + s] = new THREE.Vector3(1, 0, 0); ref["leg_" + s] = new THREE.Vector3(1, 0, 0);
+  }
+  // the point on the model where the neck meets the head, and the way from body space to head space
+  rest.fromBody = new THREE.Matrix4().fromArray(HEAD.fromBody); rest.neckTop = earMid.clone();
+  if (Q.has("probe")) window.__xr = { P, vis, frames, rest, view, J, head, perf, raw: null };      // for tests: lets a script read the tracked points
+}
+
+const seen = i => vis[i] > 0.5;
+// Elbows, wrists, knees and feet have to earn more trust than that. The tracker also reports the ones it cannot see,
+// at the edge of the picture or hidden, with middling confidence, and bones drawn to a guessed joint look broken.
+// In our sample pictures joints in plain view scored 0.8 and more, guessed ones 0.75 and less. A joint that has
+// been shown stays until it drops clearly lower, so that it does not blink.
+const sure = i => firm[i] === 1;
+const WORLD_PAIRS = [[11, 12], [23, 24], [11, 23], [12, 24], [11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28]];
+let pxPerMetre = 0;
+// Takes the tracker's 33 body points and builds every frame that can be built from what is in view.
+// lms are positions in the picture (0..1); world is the same body in metres, which is where the depth comes from:
+// the picture positions carry a depth too, but it comes out several times too large.
+function poseBody(lms, world, dt) {
+  const k = easing(dt), a = k(0.62), fresh = !bodyFound;
+  if (window.__xr) window.__xr.raw = lms;
+  const sx = i => view.ox + lms[i].x * view.iw * view.s, sy0 = i => view.oy + lms[i].y * view.ih * view.s;
+  // a joint outside the picture is the tracker's guess, however sure it says it is
+  const inPic = p => p.x > -0.08 && p.x < 1.08 && p.y > -0.08 && p.y < 1.08, conf = p => inPic(p) ? (p.visibility === undefined ? 1 : p.visibility) : 0;
+  if (world) {                                    // stage pixels per metre: the same body segments, measured in the picture and in the metric body
+    const rr = [];
+    for (const [i, j] of WORLD_PAIRS) {
+      if (conf(lms[i]) < 0.5 || conf(lms[j]) < 0.5) continue;
+      const dw = Math.hypot(world[i].x - world[j].x, world[i].y - world[j].y);
+      if (dw > 0.06) rr.push(Math.hypot(sx(i) - sx(j), sy0(i) - sy0(j)) / dw);
+    }
+    if (rr.length) { rr.sort((x, y) => x - y); const m = rr[rr.length >> 1]; pxPerMetre = pxPerMetre && !fresh ? pxPerMetre + (m - pxPerMetre) * k(0.2) : m; }
+  }
+  const depth = 0.25 * view.iw * view.s;          // without a metric body (the demo scene): the picture's own depth, toned down
+  for (let i = 0; i < 33; i++) {
+    const p = lms[i]; tmp.a.set(sx(i), view.H - sy0(i), world && pxPerMetre ? -world[i].z * pxPerMetre : -p.z * depth);
+    if (fresh) P[i].copy(tmp.a); else P[i].lerp(tmp.a, a);
+    const v = conf(p);
+    vis[i] = fresh ? v : vis[i] + (v - vis[i]) * k(0.5);
+    firm[i] = vis[i] > (firm[i] && !fresh ? 0.6 : 0.75) ? 1 : 0;
+  }
+  bodyFound = true;
+  for (const key in frames) frames[key].ok = false;
+  const L = LEFT, Rr = RIGHT, shMid = mid(P[L.sh], P[Rr.sh], tmp.c), hipMid = mid(P[L.hip], P[Rr.hip], tmp.d);
+  // A trunk lying across the picture is nearly always the tracker reading a body into something else (an arm, a bag):
+  // more than 75 degrees from upright and the whole body is left out.
+  if (seen(L.sh) && seen(Rr.sh) && seen(L.hip) && seen(Rr.hip) && shMid.y - hipMid.y < 0.26 * Math.hypot(shMid.x - hipMid.x, shMid.y - hipMid.y)) { bodyFound = false; return; }
+
+  // how many stage pixels one model millimetre is on this person: the median over the body segments in view
+  const ratios = [];
+  const seg = (i, j, len) => { if (seen(i) && seen(j)) ratios.push(P[i].distanceTo(P[j]) / len); };
+  seg(L.sh, Rr.sh, rest.thorax.len); seg(L.hip, Rr.hip, rest.pelvis.len);
+  if (seen(L.sh) && seen(Rr.sh) && seen(L.hip) && seen(Rr.hip)) ratios.push(shMid.distanceTo(hipMid) / rest.torso);
+  const lseg = (i, j, len) => { if (seen(i) && sure(j) && (i === L.sh || i === Rr.sh || i === L.hip || i === Rr.hip || sure(i))) ratios.push(P[i].distanceTo(P[j]) / len); };
+  for (const s of SIDES) { const I = IDX[s]; lseg(I.sh, I.el, rest["humerus_" + s].len); lseg(I.el, I.wr, rest["forearm_" + s].len); lseg(I.hip, I.knee, rest["femur_" + s].len); lseg(I.knee, I.ankle, rest["leg_" + s].len); }
+  if (!ratios.length) { bodyFound = false; return; }
+  ratios.sort((x, y) => x - y);
+  const med = ratios[ratios.length >> 1];
+  bodyScale = bodyScale && !fresh ? bodyScale + (med - bodyScale) * k(0.25) : med;
+  const lim = (v, lo, hi) => Math.max(lo * bodyScale, Math.min(hi * bodyScale, v));
+
+  // trunk: the rib cage follows the shoulders, the pelvis follows the hips, the lower spine bends between the two
+  const hipTrust = Math.max(0, Math.min(1, (Math.min(vis[L.hip], vis[Rr.hip]) - 0.5) / 0.3));
+  const hips = hipTrust > 0, shoulders = seen(L.sh) && seen(Rr.sh);
+  tmp.a.subVectors(shMid, hipMid);                                          // up along the trunk
+  let sy = lim(tmp.a.length() / rest.torso, 0.7, 1.45);
+  if (shoulders) {
+    tmp.b.subVectors(P[L.sh], P[Rr.sh]); const sx = lim(tmp.b.length() / rest.thorax.len, 0.7, 1.45);
+    // Hips at the edge of the picture or outside it are a guess, and so is the lean of the trunk measured from them.
+    // The less they can be trusted, the more the trunk is taken to be upright and as long as its width suggests.
+    if (hipTrust < 1) { tmp.a.normalize().lerp(tmp.n.set(0, 1, 0), 1 - hipTrust); sy = sx + (sy - sx) * hipTrust; }
+    triple(tmp.t, tmp.b, tmp.a); tmp.t.o.copy(shMid);
+    setFrame(frames.thorax.M, rest.thorax, tmp.t, sx, sy, Math.sqrt(sx * sy)); frames.thorax.ok = true;
+  }
+  if (hips) {
+    // The tracker's hip points lie on the outside of the hips. The joints themselves are closer together.
+    hipJoint.left.lerpVectors(hipMid, P[L.hip], HIP_IN); hipJoint.right.lerpVectors(hipMid, P[Rr.hip], HIP_IN);
+    tmp.b.subVectors(hipJoint.left, hipJoint.right); const sx = lim(tmp.b.length() / rest.pelvis.len, 0.7, 1.45);
+    triple(tmp.t, tmp.b, tmp.a); tmp.t.o.copy(hipMid);
+    setFrame(frames.pelvis.M, rest.pelvis, tmp.t, sx, sy, Math.sqrt(sx * sy)); frames.pelvis.ok = true;
+  }
+  // head from the ears and the nose (used while the face tracker has no close-up of the face)
+  if (seen(L.ear) && seen(Rr.ear) && seen(0)) {
+    // the tracker's ear points sit closer together than the ears, so the skull takes its size mostly from the body
+    tmp.b.subVectors(P[L.ear], P[Rr.ear]); const s = lim(tmp.b.length() / rest.head.len, 0.97, 1.2);
+    mid(P[L.ear], P[Rr.ear], tmp.t.o); tmp.a.subVectors(P[0], tmp.t.o);
+    triple(tmp.t, tmp.b, tmp.a);
+    setFrame(frames.head.M, rest.head, tmp.t, s, s, s); frames.head.ok = true;
+  }
+  // limbs: each long bone runs between two joints. Its twist about its own axis comes from the plane the limb bends in,
+  // or from the hand, and is kept from the last frame while the limb is straight.
+  const lat = tmp.b.subVectors(P[L.sh], P[Rr.sh]).normalize().clone(), latHip = tmp.b.subVectors(P[L.hip], P[Rr.hip]).normalize().clone();
+  const bone = (name, from, j, twist) => {
+    const m = rest[name]; tmp.a.subVectors(P[j], from); const len = tmp.a.length(); if (len < 1e-3) return;
+    const sl = len / m.len, st = lim(sl, 0.75, 1.3);
+    triple(tmp.t, tmp.a, twist); tmp.t.o.copy(from);
+    setFrame(frames[name].M, m, tmp.t, sl, st, st); frames[name].ok = true;
+  };
+  const bendAxis = (key, i, j, kx, fallback) => {            // the axis a hinge joint turns about, kept pointing the way it did before
+    const r = ref[key]; tmp.a.subVectors(P[j], P[i]); tmp.n.subVectors(P[kx], P[j]);
+    const ax = new THREE.Vector3().crossVectors(tmp.a, tmp.n), bent = ax.length() / (tmp.a.length() * tmp.n.length() + 1e-9);
+    if (bent > 0.2) { ax.normalize(); if (ax.dot(r) < 0) ax.negate(); r.lerp(ax, 0.4).normalize(); }
+    else r.lerp(fallback, 0.15).normalize();
+    return r;
+  };
+  for (const s of SIDES) {
+    const I = IDX[s], sign = s === "left" ? 1 : -1;
+    if (seen(I.sh) && sure(I.el)) {
+      const ax = sure(I.wr) ? bendAxis("arm_" + s, I.sh, I.el, I.wr, lat) : ref["arm_" + s];
+      bone("humerus_" + s, P[I.sh], I.el, ax);
+      if (sure(I.wr)) {
+        let tw = ax;
+        if (sure(I.index) && sure(I.pinky)) { tmp.n.subVectors(P[I.index], P[I.pinky]).multiplyScalar(sign); if (tmp.n.lengthSq() > 1e-6) tw = tmp.n.clone(); }
+        bone("forearm_" + s, P[I.el], I.wr, tw);
+      }
+    }
+    if (frames["forearm_" + s].ok && sure(I.index) && sure(I.pinky)) {         // a hand without its forearm in view is usually a guess
+      tmp.a.subVectors(P[I.index], P[I.wr]); tmp.d.subVectors(P[I.pinky], P[I.wr]);
+      const f = frames["hand_" + s];
+      if (affine(tmp.M, P[I.wr], tmp.a, tmp.d)) { f.M.multiplyMatrices(tmp.M, f.inv); f.ok = true; }
+    }
+    if (seen(I.hip) && sure(I.knee)) {
+      const ax = sure(I.ankle) ? bendAxis("leg_" + s, I.hip, I.knee, I.ankle, latHip) : ref["leg_" + s];
+      bone("femur_" + s, hips ? hipJoint[s] : P[I.hip], I.knee, ax);
+      if (sure(I.ankle)) bone("leg_" + s, P[I.knee], I.ankle, ax);
+    }
+    if (frames["leg_" + s].ok && seen(I.heel) && seen(I.toe)) {
+      tmp.a.subVectors(P[I.toe], P[I.heel]); tmp.d.subVectors(P[I.ankle], P[I.heel]);
+      const f = frames["foot_" + s];
+      if (affine(tmp.M, P[I.heel], tmp.a, tmp.d)) { f.M.multiplyMatrices(tmp.M, f.inv); f.ok = true; }
+    }
+  }
+}
+
+// ------------------------------ head, close up ------------------------------
+// The face tracker gives the pose of MediaPipe's canonical face in front of its virtual camera. The head meshes live
+// in that face's space, so the pose is their model matrix. A second, small correction keeps the drawn head on the
+// face on screen: a scale and a shift that line the projected anchor points up with where the tracker saw them.
+const head = { found: false, pos: null, quat: null, scl: null, s: 1, tx: 0, ty: 0, jaw: 0, lms: null, lostAt: 0 };
+let hM, hP, hQ, hS, hV, hFit, hCorr, ANCH;
+function initHead() {
+  hM = new THREE.Matrix4(); hP = new THREE.Vector3(); hQ = new THREE.Quaternion(); hS = new THREE.Vector3(); hV = new THREE.Vector3();
+  hFit = new THREE.Matrix4(); hCorr = new THREE.Matrix4();
+  head.pos = new THREE.Vector3(); head.quat = new THREE.Quaternion(); head.scl = new THREE.Vector3(1, 1, 1);
+  ANCH = Object.keys(HEAD.anchors).map(id => ({ id: +id, p: new THREE.Vector3().fromArray(HEAD.anchors[id]) }));
+}
+const ndcX = x => (view.ox + x * view.iw * view.s) / view.W * 2 - 1, ndcY = y => 1 - (view.oy + y * view.ih * view.s) / view.H * 2;
+function poseHead(matrix, lms, jawOpen, dt) {
+  const k = easing(dt), d = matrix;
+  hM.fromArray(d);                                             // three.js reads column by column; turn a row-by-row matrix round
+  if (Math.abs(d[3]) + Math.abs(d[7]) + Math.abs(d[11]) > 1e-3 && Math.abs(d[12]) + Math.abs(d[13]) + Math.abs(d[14]) < 1e-6) hM.transpose();
+  hM.decompose(hP, hQ, hS);
+  if (!head.found) { head.pos.copy(hP); head.quat.copy(hQ); head.scl.copy(hS); head.s = 1; head.tx = head.ty = 0; }
+  else { head.pos.lerp(hP, k(0.6)); head.quat.slerp(hQ, k(0.55)); head.scl.lerp(hS, k(0.5)); }
+  head.found = true; head.lms = lms; head.jaw += (jawOpen - head.jaw) * k(0.6);
+  hM.compose(head.pos, head.quat, head.scl);
+  let n = 0, px = 0, py = 0, qx = 0, qy = 0; const A = [];
+  for (const an of ANCH) {
+    const q = lms[an.id]; if (!q) continue;
+    hV.copy(an.p).applyMatrix4(hM).applyMatrix4(baseProj);
+    const row = [hV.x, hV.y, ndcX(q.x), ndcY(q.y)]; A.push(row); px += row[0]; py += row[1]; qx += row[2]; qy += row[3]; n++;
+  }
+  if (n > 2) {
+    px /= n; py /= n; qx /= n; qy /= n; let num = 0, den = 0;
+    for (const r of A) { const ax = r[0] - px, ay = r[1] - py; num += ax * (r[2] - qx) + ay * (r[3] - qy); den += ax * ax + ay * ay; }
+    const s = Math.max(0.6, Math.min(1.6, den > 1e-9 ? num / den : 1));
+    head.s += (s - head.s) * k(0.5); head.tx += (qx - head.s * px - head.tx) * k(0.7); head.ty += (qy - head.s * py - head.ty) * k(0.7);
+  }
+  hCorr.set(head.s, 0, 0, head.tx, 0, head.s, 0, head.ty, 0, 0, 1, 0, 0, 0, 0, 1);
+  cam3.projectionMatrix.copy(baseProj).premultiply(hCorr); cam3.projectionMatrixInverse.copy(cam3.projectionMatrix).invert();
+  hFit.makeScale(S.fitSize, S.fitSize, S.fitSize).setPosition(0, S.fitY, S.fitZ);
+  headGroup.matrix.copy(hM).multiply(hFit); headGroup.matrixWorldNeedsUpdate = true;
+  veilGroup.matrix.copy(headGroup.matrix); veilGroup.matrixWorldNeedsUpdate = true;
+  jawPivot.rotation.x = Math.min(1, Math.max(0, head.jaw)) * 0.36;
+}
+// The same head pose as a frame for the body layer: the perspective view of the head, measured around the point where
+// the neck meets it. The neck hangs from this, so it stays under the drawn skull.
+function headFrameFromFace(M) {
+  const toStage = (v, out) => {
+    hV.copy(v).applyMatrix4(rest.fromBody).applyMatrix4(headGroup.matrix); const zc = hV.z;
+    hV.applyMatrix4(cam3.projectionMatrix); return out.set((hV.x + 1) / 2 * view.W, (hV.y + 1) / 2 * view.H, zc);
+  };
+  const c = rest.neckTop, o = toStage(c, new THREE.Vector3()), step = 40, cols = [];
+  for (let ax = 0; ax < 3; ax++) { tmp.a.copy(c); tmp.a.setComponent(ax, tmp.a.getComponent(ax) + step); cols.push(toStage(tmp.a, new THREE.Vector3()).sub(o).multiplyScalar(1 / step)); }
+  const pxPerCm = Math.hypot(cols[0].x, cols[0].y) / (rest.fromBody.elements[0] || 0.109);       // stage pixels per cm at the head's depth
+  for (const col of cols) col.z *= pxPerCm;
+  M.makeBasis(cols[0], cols[1], cols[2]);
+  tmp.a.copy(c).applyMatrix4(tmp.M2.copy(M).setPosition(0, 0, 0));
+  return M.setPosition(o.x - tmp.a.x, o.y - tmp.a.y, -tmp.a.z);
+}
+
+// ------------------------------ hands, close up ------------------------------
+// Each finger bone is one unit long in its own mesh, so a basis built from two tracked joints places it. The palm
+// is a block pinned to the wrist and the knuckles of the index and little finger.
+function poseHand(rig, lms, isRight, dt) {
+  const k = easing(dt), depth = view.iw * view.s;
+  if (!rig.pts) rig.pts = lms.map(() => new THREE.Vector3());
+  const fresh = !rig.group.visible;
+  lms.forEach((p, i) => { tmp.a.set(view.ox + p.x * view.iw * view.s, view.H - (view.oy + p.y * view.ih * view.s), -p.z * depth); if (fresh) rig.pts[i].copy(tmp.a); else rig.pts[i].lerp(tmp.a, k(0.65)); });
+  const pt = rig.pts, sign = isRight ? 1 : -1;
+  const e1 = tmp.a.subVectors(pt[5], pt[0]), e2 = tmp.b.subVectors(pt[17], pt[0]);
+  tmp.n.crossVectors(e1, e2).normalize().multiplyScalar(sign * Math.sqrt(e1.length() * e2.length()));
+  rig.palm.material.uniforms.uA.value.makeBasis(e1, e2, tmp.n).setPosition(pt[0]); rig.palm.material.uniforms.uB.value.copy(rig.palm.material.uniforms.uA.value);
+  const across = tmp.c.subVectors(pt[17], pt[5]).normalize();
+  FINGER_BONES.forEach(([a, b], i) => {
+    const dir = tmp.a.subVectors(pt[b], pt[a]); let len = dir.length(); if (len < 1e-6) len = 1e-6; dir.divideScalar(len);
+    const side = tmp.b.copy(across).addScaledVector(dir, -across.dot(dir)); if (side.lengthSq() < 1e-6) side.set(1, 0, 0); side.normalize();
+    const upv = tmp.n.crossVectors(dir, side).multiplyScalar(sign), Ln = len * (b % 4 === 0 ? 0.8 : 1);       // a fingertip point lies past the end of its bone
+    const u = rig.bones[i].material.uniforms;
+    u.uA.value.makeBasis(dir.multiplyScalar(Ln), side.multiplyScalar(Ln), upv.multiplyScalar(Ln)).setPosition(pt[a]); u.uB.value.copy(u.uA.value);
+  });
+  rig.group.visible = true;
+}
+
+// ------------------------------ dark silhouettes under the bones ------------------------------
+// The real body is dimmed where bones are drawn, so they read against it. Limbs are thick strokes between tracked
+// joints, drawn small and enlarged, which softens their edge for free.
+let scratch;
+function drawVeils(g, hands, alpha) {
+  if (alpha < 0.02) return;
+  const W = view.W, H = view.H, f = 6, sw = Math.ceil(W / f), sh = Math.ceil(H / f);
+  scratch = scratch || document.createElement("canvas");
+  if (scratch.width !== sw || scratch.height !== sh) { scratch.width = sw; scratch.height = sh; }
+  const s = scratch.getContext("2d");
+  s.setTransform(1, 0, 0, 1, 0, 0); s.clearRect(0, 0, sw, sh); s.setTransform(1 / f, 0, 0, 1 / f, 0, 0);
+  s.fillStyle = s.strokeStyle = "#04070d"; s.lineCap = s.lineJoin = "round";
+  const X = i => P[i].x, Y = i => H - P[i].y;
+  let any = false;
+  if (bodyFound && S.skeleton) {
+    const mm = bodyScale, line = (i, j, w) => { s.lineWidth = w * mm; s.beginPath(); s.moveTo(X(i), Y(i)); s.lineTo(X(j), Y(j)); s.stroke(); any = true; };
+    if (seen(11) && seen(12)) {
+      s.lineWidth = 105 * mm; s.beginPath(); s.moveTo(X(11), Y(11)); s.lineTo(X(12), Y(12));
+      if (seen(23) && seen(24)) { s.lineTo(X(24), Y(24)); s.lineTo(X(23), Y(23)); } else { s.lineTo(X(12), Y(12) + 260 * mm); s.lineTo(X(11), Y(11) + 260 * mm); }
+      s.closePath(); s.fill(); s.stroke(); any = true;
+    }
+    for (const I of [LEFT, RIGHT]) {                           // a dark stroke under every limb bone that is drawn
+      const sd = I === LEFT ? "left" : "right", ok = n => frames[n + "_" + sd].ok;
+      if (ok("humerus")) line(I.sh, I.el, 95); if (ok("forearm")) line(I.el, I.wr, 78); if (ok("femur")) line(I.hip, I.knee, 150); if (ok("leg")) line(I.knee, I.ankle, 105);
+      if (ok("foot")) { line(I.heel, I.toe, 85); line(I.ankle, I.heel, 85); }
+      if (ok("hand")) { s.lineWidth = 95 * mm; s.beginPath(); s.moveTo(X(I.wr), Y(I.wr)); s.lineTo((X(I.index) + X(I.pinky)) / 2 * 1.6 - X(I.wr) * 0.6, (Y(I.index) + Y(I.pinky)) / 2 * 1.6 - Y(I.wr) * 0.6); s.stroke(); }
+    }
+    if (frames.head.ok) {                                      // head and neck. Close up the head has a veil of its own, so only the neck is drawn
+      let cx, cy;
+      if (head.found) { tmp.a.copy(rest.neckTop).applyMatrix4(frames.head.M); cx = tmp.a.x; cy = H - tmp.a.y; }
+      else { cx = (X(7) + X(8)) / 2; cy = (Y(7) + Y(8)) / 2; s.beginPath(); s.ellipse(cx, cy - 25 * mm, 100 * mm, 128 * mm, 0, 0, 6.3); s.fill(); }
+      if (seen(11) && seen(12)) { s.lineWidth = 120 * mm; s.beginPath(); s.moveTo(cx, cy); s.lineTo((X(11) + X(12)) / 2, (Y(11) + Y(12)) / 2); s.stroke(); }
+      any = true;
+    }
+  }
+  for (const lms of hands) {                                   // jointed hands
+    const hx = i => view.ox + lms[i].x * view.iw * view.s, hy = i => view.oy + lms[i].y * view.ih * view.s;
+    const d = Math.hypot(hx(5) - hx(17), hy(5) - hy(17)) || 1;
+    s.lineWidth = d * 0.36; s.beginPath();
+    [0, 1, 2, 5, 9, 13, 17].forEach((i, n) => n ? s.lineTo(hx(i), hy(i)) : s.moveTo(hx(i), hy(i))); s.closePath(); s.fill(); s.stroke();
+    for (const c of [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]) { s.beginPath(); c.forEach((i, n) => n ? s.lineTo(hx(i), hy(i)) : s.moveTo(hx(i), hy(i))); s.stroke(); }
+    any = true;
+  }
+  if (!any) return;
+  g.globalAlpha = alpha; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.drawImage(scratch, 0, 0, sw, sh, 0, 0, sw * f, sh * f); g.globalAlpha = 1;
+}
+
+// ------------------------------ one frame ------------------------------
+let frames60 = 0, fpsAt = 0, dataAt = 0, lastMask = "", pointer = null, lastSeen = 0, hintShown = null;
+$("stage").addEventListener("pointermove", e => { pointer = { x: e.clientX, y: e.clientY, at: performance.now() }; });
+$("stage").addEventListener("pointerleave", () => { pointer = null; });
+function draw(now, hands, sides, dt) {
+  const W = view.W, H = view.H, solid = S.look === "solid", near = head.found;
+  // which pieces of the body are in view and switched on
+  if (near && frames.thorax.ok) { headFrameFromFace(frames.head.M); frames.head.ok = true; }
+  const taken = { left: false, right: false };
+  handRigs.forEach((rig, i) => {
+    const lms = hands[i];
+    if (lms && S.skeleton) {
+      poseHand(rig, lms, sides[i], dt);
+      // a jointed hand replaces the stiff one that the body tracker placed at the nearest wrist
+      if (bodyFound) { const w = rig.pts[0], dl = sure(15) ? w.distanceTo(P[15]) : 1e9, dr = sure(16) ? w.distanceTo(P[16]) : 1e9; if (Math.min(dl, dr) < 400 * bodyScale) taken[dl < dr ? "left" : "right"] = true; }
+    } else rig.group.visible = false;
+  });
+  const gain = solid ? Math.min(1.25, 0.6 + 0.4 * S.bright) : S.bright;
+  for (const part of bodyParts) {
+    const A = frames[part.a], B = frames[part.b], side = part.name.startsWith("hand_") ? part.name.slice(5) : "";
+    part.mesh.visible = S.skeleton && bodyFound && A.ok && B.ok && !(part.far && near) && !(side && taken[side]);
+    if (!part.mesh.visible) continue;
+    const u = part.mesh.material.uniforms; u.uA.value.copy(A.M); u.uB.value.copy(B.M); u.uGain.value = solid ? gain : gain * (PART_GAIN[part.name] || 1);
+  }
+  for (const rig of handRigs) for (const m of [rig.palm, ...rig.bones]) m.material.uniforms.uGain.value = gain * 1.1;
+  // head layers
+  headGroup.visible = veilGroup.visible = near;
+  if (near) {
+    const heavy = (S.skeleton ? 1 : 0) + (S.brain ? 1 : 0) + (S.muscles ? 1 : 0), share = 1 / (0.4 + 0.6 * Math.max(1, heavy));
+    const on = { outline: true, cranium: S.skeleton, jaw: S.skeleton, eyes: S.skeleton || S.muscles, muscles: S.muscles, cerebrum: S.brain, hindbrain: S.brain };
+    const weight = { outline: 0.55, muscles: 0.5, cerebrum: 0.4, hindbrain: 0.6, eyes: 0.9 };
+    for (const name in on) {
+      const m = headMeshes[name]; m.visible = on[name];
+      m.material.uniforms.uGain.value = solid && name !== "outline" ? gain : S.bright * (weight[name] || 1) * (name === "outline" ? 1 : share);
+      m.material.uniforms.uEdge.value = 0.18;
+    }
+    headMeshes.veil.material.uniforms.uOpacity.value = 1 - S.real; headMeshes.veil.material.uniforms.uEdge.value = 0.18;
+  }
+
+  const sg = $("shade").getContext("2d"); sg.clearRect(0, 0, W, H);
+  drawVeils(sg, S.skeleton ? hands : [], (1 - S.real) * 0.9);
+
+  // lens: a round window that follows a raised hand; outside it the plain picture shows
+  let mask = "none", lens = null;
+  if (S.lens) {
+    const rad = (0.08 + 0.3 * S.lensSize) * Math.min(W, H) * 1.2; let cx, cy;
+    if (hands[0]) { cx = view.ox + hands[0][8].x * view.iw * view.s; cy = view.oy + hands[0][8].y * view.ih * view.s; }
+    else if (bodyFound && (sure(19) || sure(20))) { const i = sure(19) && sure(20) ? (P[19].y > P[20].y ? 19 : 20) : sure(19) ? 19 : 20; cx = P[i].x; cy = H - P[i].y; }
+    else if (pointer && now - pointer.at < 4000) { cx = S.mirror ? W - pointer.x : pointer.x; cy = pointer.y; }
+    else if (bodyFound && seen(0)) { cx = P[0].x; cy = H - P[0].y; }
+    else { cx = W / 2; cy = H * 0.4; }
+    mask = "radial-gradient(circle " + rad.toFixed(0) + "px at " + cx.toFixed(0) + "px " + cy.toFixed(0) + "px, #000 72%, transparent 100%)";
+    lens = { x: S.mirror ? W - cx : cx, y: cy, r: rad };
+  }
+  if (mask !== lastMask) { lastMask = mask; for (const id of ["gl", "shade"]) { const st = $(id).style; st.maskImage = mask; st.webkitMaskImage = mask; } }
+
+  renderer.clear();
+  if (near) renderer.render(veilScene, cam3);
+  renderer.clearDepth(); renderer.render(bodyScene, ortho);
+  if (near) { renderer.clearDepth(); renderer.render(headScene, cam3); }
+
+  const g = $("hud").getContext("2d"); g.clearRect(0, 0, W, H);
+  if (lens) { g.strokeStyle = "rgba(244,245,247,.85)"; g.lineWidth = Math.max(1.5, W / 540); g.beginPath(); g.arc(lens.x, lens.y, lens.r, 0, 6.3); g.stroke(); }
+  if (S.debug) {
+    const fx = x => S.mirror ? W - x : x;
+    if (bodyFound) { g.fillStyle = "#7fffaa"; for (let i = 0; i < 33; i++) if (seen(i)) g.fillRect(fx(P[i].x) - 3, H - P[i].y - 3, 6, 6); }
+    if (head.lms) { g.fillStyle = "rgba(255,207,122,.8)"; for (const p of head.lms) g.fillRect(fx(view.ox + p.x * view.iw * view.s) - 1, view.oy + p.y * view.ih * view.s - 1, 2, 2); }
+    if (now - dataAt > 200) {
+      dataAt = now;
+      const row = (a, b) => (a + "                ").slice(0, 16) + b;
+      $("debug").textContent = [
+        row("speed", perf.fps + " frames/s, camera " + (perf.camFps ? perf.camFps.toFixed(0) : "?")),
+        row("picture", view.iw + "x" + view.ih + " on " + W + "x" + H + ", " + profile()),
+        row("sharpness", Math.round(perf.scale * 100) + "%, step " + (gov.step() + 1) + "/" + SCALES.length + " (" + S.perf + ")"),
+        row("body", bodyFound ? perf.ms.pose.toFixed(0) + " ms " + perf.by.pose + ", " + (bodyScale * 1000).toFixed(0) + " px/m" : "none"),
+        row("head", near ? perf.ms.face.toFixed(0) + " ms " + perf.by.face + ", fit " + head.s.toFixed(3) + ", jaw " + head.jaw.toFixed(2) : "far or none"),
+        row("hands", hands.length ? hands.length + ", " + perf.ms.hand.toFixed(0) + " ms " + perf.by.hand + ", 1 in " + gov.handEvery() : "none"),
+        row("graphics", perf.gpu.replace(/^ANGLE \(/, "").slice(0, 30) || "?"),
+      ].join("\n");
+    }
+  }
+  frames60++;
+  if (now - fpsAt >= 1000) { perf.fps = Math.round(frames60 * 1000 / (now - fpsAt)); frames60 = 0; fpsAt = now; }
+
+  // words on screen
+  if (bodyFound || near || hands.length) lastSeen = now;
+  const present = now - lastSeen < 1200;
+  setState(DEMO ? "st_demo" : near && bodyFound ? "st_both" : near ? "st_head" : bodyFound ? "st_body" : hands.length ? "st_hand" : "st_none", perf.software ? "warn" : present ? "live" : "");
+  const hint = !present ? "hint_step" : S.lens && !hands[0] && !(bodyFound && (sure(19) || sure(20))) ? "hint_lens" : (S.brain || S.muscles) && !near ? "hint_near" : "";
+  if (hint !== hintShown) { hintShown = hint; $("hint").hidden = !hint; if (hint) $("hint").textContent = t(hint); }
+  // a screen left alone goes back to showing the skeleton, ready for the next visitor
+  if (!present && now - lastSeen > 25000 && (S.brain || S.muscles || S.lens || !S.skeleton)) { S.skeleton = true; S.brain = S.muscles = S.lens = false; save(); syncUI(); }
+}
+
+// ------------------------------ trackers ------------------------------
+let poseTracker = null, faceTracker = null, handTracker = null, vision = null, fileset = null, small = null, smallCtx = null;
+const order = () => perf.software ? ["CPU"] : ["GPU", "CPU"];
+async function first(make) { let err; for (const d of order()) { try { return [await make(d), d]; } catch (e) { err = e; } } throw err; }
+async function loadTrackers() {
+  vision = await import(MP_URL + "/vision_bundle.mjs");
+  fileset = await vision.FilesetResolver.forVisionTasks(MP_URL + "/wasm");
+  await reloadPose();
+  [faceTracker, perf.by.face] = await first(d => vision.FaceLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: modelUrl("face"), delegate: d },
+    runningMode: "VIDEO", numFaces: 1, outputFacialTransformationMatrixes: true, outputFaceBlendshapes: true }));
+  try {
+    [handTracker, perf.by.hand] = await first(d => vision.HandLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: modelUrl("hand"), delegate: d },
+      runningMode: "VIDEO", numHands: (perf.handCount = gov.hands()) }));
+  } catch (e) { handTracker = null; perf.by.hand = ""; }           // everything else still works without the hand tracker
+  if (Object.values(perf.by).includes("CPU")) { small = document.createElement("canvas"); smallCtx = small.getContext("2d"); }
+}
+async function reloadPose() {
+  if (!vision) return;
+  const old = poseTracker; poseTracker = null;
+  const made = await first(d => vision.PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: modelUrl(S.body === "full" ? "full" : "lite"), delegate: d },
+    runningMode: "VIDEO", numPoses: 1 }));
+  poseTracker = made[0]; perf.by.pose = made[1];
+  if (old) try { old.close(); } catch (e) {}
+}
+
+function liveLoop() {
+  let lastTime = -1, frameNo = 0, lastFresh = 0, handDue = false, busy = 0, waited = 0, spare = 0.5, inputFor = -1, switching = false, faceMiss = 0, faceHits = 0, failing = 0;
+  const held = { hands: [], sides: [], frame: -99 };
+  gov.setMode(S.perf, performance.now() + 1500);              // the first inferences are slow: do not judge the speed by them
+  if (video.requestVideoFrameCallback) {                      // the camera's real frame rate, where the browser reports it
+    let n0 = 0, t0 = 0;
+    const onFrame = (tm, meta) => {
+      if (!t0) { n0 = meta.presentedFrames; t0 = tm; }
+      else if (tm - t0 >= 1000) { const r = (meta.presentedFrames - n0) * 1000 / (tm - t0); perf.camFps = perf.camFps ? perf.camFps + (r - perf.camFps) * 0.5 : r; n0 = meta.presentedFrames; t0 = tm; }
+      video.requestVideoFrameCallback(onFrame);
+    };
+    video.requestVideoFrameCallback(onFrame);
+  }
+  const timed = (key, fn) => { const t0 = performance.now(), r = fn(); perf.ms[key] += (performance.now() - t0 - perf.ms[key]) * (perf.ms[key] ? 0.2 : 1); return r; };
+  function input() {             // what the trackers look at: the upright picture, or a small copy of it for CPU trackers
+    const src = S.rotate ? $("cam") : video;
+    if (!small) return src;
+    if (inputFor !== frameNo) {
+      const k = Math.min(1, 640 / Math.max(view.iw, view.ih)), w = Math.round(view.iw * k), h = Math.round(view.ih * k);
+      if (small.width !== w || small.height !== h) { small.width = w; small.height = h; }
+      smallCtx.drawImage(src, 0, 0, w, h); inputFor = frameNo;
+    }
+    return small;
+  }
+  function fitHandCount() {      // one hand or two, as the current step asks
+    const n = gov.hands();
+    if (!handTracker || switching || n === perf.handCount) return;
+    switching = true;
+    handTracker.setOptions({ numHands: n }).then(() => { perf.handCount = n; }, () => {}).then(() => { switching = false; });
+  }
+  // The hand tracker sometimes holds on to a "hand" that is a collar or a neck, mostly after the real hand has left the
+  // picture. While a body is tracked, a hand only counts where the body tracker has a hand too: how far apart the two
+  // palms are, in palm lengths.
+  function palmGap(lms) {
+    const hx = i => view.ox + lms[i].x * view.iw * view.s, hy = i => view.H - (view.oy + lms[i].y * view.ih * view.s);
+    const cx = (hx(0) + hx(5) + hx(17)) / 3, cy = (hy(0) + hy(5) + hy(17)) / 3, palm = Math.hypot(hx(9) - hx(0), hy(9) - hy(0)) || 1;
+    let best = 1e9;
+    for (const I of [LEFT, RIGHT]) {
+      if (!sure(I.wr) || !sure(I.index) || !sure(I.pinky)) continue;
+      best = Math.min(best, Math.hypot((P[I.wr].x + P[I.index].x + P[I.pinky].x) / 3 - cx, (P[I.wr].y + P[I.index].y + P[I.pinky].y) / 3 - cy) / palm);
+    }
+    return best;
+  }
+  function runHands() {
+    if (switching || !handTracker) return 0;
+    const t0 = performance.now(), hr = timed("hand", () => handTracker.detectForVideo(input(), t0));
+    const all = hr.landmarks || [], hd = hr.handedness || hr.handednesses || [], gaps = all.map(palmGap);
+    held.hands = []; held.sides = [];
+    all.forEach((h, i) => {
+      if (bodyFound && gaps[i] > 1.3) return;
+      held.hands.push(h); held.sides.push(!!(hd[i] && hd[i][0] && hd[i][0].categoryName === "Right"));   // named as in the unmirrored picture
+    });
+    if (window.__xr) window.__xr.gaps = gaps;
+    held.frame = frameNo; handDue = false;
+    return performance.now() - t0;
+  }
+  // a hand is worth the hand tracker when it is big enough in the picture to show its fingers
+  const inPicture = d => d / view.s * 1280 / Math.max(view.iw, view.ih);       // a length on the stage, as pixels of a picture 1280 long
+  const bigHand = () => { for (const I of [LEFT, RIGHT]) if (sure(I.wr) && sure(I.index) && inPicture(P[I.wr].distanceTo(P[I.index])) > 26) return true; return false; };
+  const bigHead = () => seen(7) && seen(8) && inPicture(Math.abs(P[7].x - P[8].x)) > 44 || seen(0) && seen(2) && seen(5) && inPicture(P[2].distanceTo(P[5])) > 24;
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (video.readyState < 2 || !poseTracker) return;
+    const wantHands = !!handTracker && (S.skeleton || S.lens);
+    if (video.currentTime === lastTime) {
+      if (lastFresh && performance.now() - lastFresh > 5000) { lastFresh = performance.now(); reopenCamera(); }      // the camera has stopped sending
+      waited++;                                               // a spare moment between two camera frames: the hand tracker uses it
+      if (handDue && wantHands) { try { busy += runHands(); } catch (e) { setState("st_err", "warn", e.message); } }
+      return;
+    }
+    lastTime = video.currentTime; frameNo++;
+    const now = performance.now(), dt = lastFresh ? now - lastFresh : 33.3; lastFresh = now;
+    if (S.rotate) {                                           // the camera is mounted sideways: make an upright copy
+      const c = $("cam"); if (c.width !== view.iw || c.height !== view.ih) layout();
+      camCtx.save(); camCtx.translate(view.iw / 2, view.ih / 2); camCtx.rotate(S.rotate * Math.PI / 180);
+      camCtx.drawImage(video, -video.videoWidth / 2, -video.videoHeight / 2); camCtx.restore();
+    } else if (video.videoWidth !== view.iw || video.videoHeight !== view.ih) layout();
+    fitHandCount();
+    try {
+      if (handDue && wantHands) runHands();                   // no spare moment came, so it runs now
+      const near = head.found;
+      // body: every frame, or every other frame at the lowest step while the face tracker shares the work
+      if (!(near && gov.bodyEvery() > 1 && frameNo % gov.bodyEvery())) {
+        const pr = timed("pose", () => poseTracker.detectForVideo(input(), performance.now()));
+        const lms = pr.landmarks && pr.landmarks[0];
+        if (lms) poseBody(lms, pr.worldLandmarks && pr.worldLandmarks[0], dt); else bodyFound = false;
+      }
+      // face: while a face is close enough to show detail, with an occasional look otherwise
+      const tryFace = near || faceHits > 0 || (bodyFound ? bigHead() || frameNo % 20 === 0 : frameNo % 4 === 0);
+      if (tryFace) {
+        const fr = timed("face", () => faceTracker.detectForVideo(input(), performance.now()));
+        const fl = fr.faceLandmarks && fr.faceLandmarks[0], mt = fr.facialTransformationMatrixes && fr.facialTransformationMatrixes[0];
+        if (fl && mt) {
+          let jaw = 0; const bs = fr.faceBlendshapes && fr.faceBlendshapes[0];
+          if (bs) for (const c of bs.categories) if (c.categoryName === "jawOpen") jaw = c.score;
+          faceMiss = 0;
+          if (near || ++faceHits >= 2) poseHead(mt.data, fl, jaw, dt);
+        } else { faceHits = 0; if (++faceMiss > 6) { head.found = false; head.lms = null; } }
+      } else if (++faceMiss > 6) { head.found = false; head.lms = null; faceHits = 0; }
+      // hands: only when one is big enough to matter, or when there is no body to tell
+      const worth = bodyFound ? bigHand() || held.hands.length > 0 : true;
+      if (!wantHands || !worth) { held.hands = []; held.sides = []; if (!wantHands) held.frame = -99; handDue = false; }
+      if (wantHands && worth && frameNo - held.frame >= (held.hands.length ? gov.handEvery() : gov.probeEvery())) {
+        if (held.hands.length && gov.handEvery() === 1) runHands(); else handDue = true;
+      }
+    } catch (e) { setState("st_err", "warn", e.message); if (!failing) failing = now; else if (now - failing > 8000) freshPage(); return; }
+    failing = 0;
+    draw(now, held.hands, held.sides, dt);
+    busy += performance.now() - now;
+    spare += (Math.min(waited, 1) - spare) * 0.1; waited = 0;
+    if (gov.frame(now, busy, perf.camFps, spare, held.hands.length > 0 || (head.found && bodyFound))) applyQuality();
+    busy = 0;
+  }
+  tick();
+}
+
+// ------------------------------ demo scene ------------------------------
+// The model's own joints, laid out as the body tracker would report them, with the arms moving. No camera.
+function demoLoop() {
+  $("start").hidden = true; $("chips").hidden = false;
+  const Z = (a, b) => new THREE.Vector3().lerpVectors(a, b, 0.5);
+  function tick() {
+    if (!Q.has("still")) requestAnimationFrame(tick);
+    const now = performance.now(), tm = Q.has("still") ? 1.3 : now / 1000, W = view.W, H = view.H;
+    const kpx = H * 0.86 / 1720, cx = W / 2, floor = H * 0.95;                    // stage pixels per model millimetre
+    const j = n => J[n].clone();
+    const pts = {}; for (const n in J) pts[n] = j(n);
+    for (const s of SIDES) {                                                       // swing the arms about the shoulders and bend the elbows
+      const sg = s === "left" ? 1 : -1, sh = pts["shoulder_" + s], a = (0.22 + 0.18 * Math.sin(tm * 0.9 + (sg > 0 ? 0 : 1.3))) * sg, b = 0.9 + 0.8 * Math.sin(tm * 1.3 + (sg > 0 ? 0.7 : 0));
+      const rot = (p, c, ang) => { const d = p.clone().sub(c), x = d.x * Math.cos(ang) - d.z * Math.sin(ang), z = d.x * Math.sin(ang) + d.z * Math.cos(ang); return new THREE.Vector3(c.x + x, c.y + d.y, c.z + z); };
+      for (const n of ["elbow", "wrist", "index", "pinky"]) pts[n + "_" + s] = rot(pts[n + "_" + s], sh, a);
+      const el = pts["elbow_" + s];
+      for (const n of ["wrist", "index", "pinky"]) pts[n + "_" + s] = rot(pts[n + "_" + s], el, b * sg);
+    }
+    const lm = n => { const p = pts[n]; return { x: ((cx + p.x * kpx) - view.ox) / (view.iw * view.s), y: ((floor - p.z * kpx) - view.oy) / (view.ih * view.s), z: 0, visibility: 1 }; };
+    const wl = n => { const p = pts[n]; return { x: p.x / 1000, y: -p.z / 1000, z: p.y / 1000 }; };      // metres; down and away from the camera are positive
+    const lms = Array.from({ length: 33 }, () => lm("nose")), world = Array.from({ length: 33 }, () => wl("nose"));
+    for (const s of SIDES) { const I = IDX[s]; for (const [key, n] of [["sh", "shoulder"], ["el", "elbow"], ["wr", "wrist"], ["pinky", "pinky"], ["index", "index"], ["hip", "hip"], ["knee", "knee"], ["ankle", "ankle"], ["heel", "heel"], ["toe", "toe"], ["ear", "ear"]]) { lms[I[key]] = lm(n + "_" + s); world[I[key]] = wl(n + "_" + s); } }
+    for (const s of SIDES) {                                                       // the tracker reports the hips further apart than the joints are
+      const I = IDX[s], o = IDX[s === "left" ? "right" : "left"], f = (1 / HIP_IN - 1) / 2;
+      const a = lm("hip_" + s), b = lm("hip_" + (s === "left" ? "right" : "left")); lms[I.hip] = { x: a.x + (a.x - b.x) * f, y: a.y + (a.y - b.y) * f, z: 0, visibility: 1 };
+    }
+    poseBody(lms, world, 33.3);
+    draw(now, [], [], 33.3);
+  }
+  tick();
+}
+
+// ------------------------------ start-up ------------------------------
+async function openCamera() {
+  const old = video.srcObject; if (old) for (const tr of old.getTracks()) tr.stop();
+  // The camera is asked for 1280x720. "?cam=1080" or "?cam=2160" asks for a sharper picture (for large screens with a
+  // capable computer); "?cam=native" takes the camera's own format (for cameras that deliver portrait frames).
+  const size = { "1080": [1920, 1080], "2160": [3840, 2160] }[Q.get("cam")] || [1280, 720];
+  const want = Q.get("cam") === "native" ? {} : { width: { ideal: size[0] }, height: { ideal: size[1] }, facingMode: "user" };
+  if (S.camera) want.deviceId = { exact: S.camera };
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: want, audio: false }); }
+  catch (e) { if (!S.camera) throw e; S.camera = ""; save(); delete want.deviceId; stream = await navigator.mediaDevices.getUserMedia({ video: want, audio: false }); }
+  video.srcObject = stream; await video.play();
+  for (const tr of stream.getVideoTracks()) tr.addEventListener("ended", () => { if (video.srcObject === stream) reopenCamera(); });
+  try {                                                        // the list of cameras, for screens that have more than one
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"), sel = $("camera");
+    sel.textContent = "";
+    cams.forEach((d, i) => { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || "Camera " + (i + 1); sel.appendChild(o); });
+    const cur = stream.getVideoTracks()[0].getSettings().deviceId; if (cur) sel.value = cur;
+  } catch (e) {}
+  layout();
+}
+// An unattended screen has to mend itself. A camera that stops (unplugged, taken away by the system) is asked for again
+// until it is back; a tracker that keeps failing gets a fresh page, at most once in two minutes.
+let reopening = false;
+const showLayers = on => { for (const id of ["gl", "shade", "hud"]) $(id).style.visibility = on ? "" : "hidden"; };
+async function reopenCamera() {
+  if (reopening || !started) return; reopening = true; setState("st_cam", "warn");
+  showLayers(false);                                           // the bones of the last picture would otherwise stay on screen
+  for (;;) { try { await openCamera(); break; } catch (e) { await new Promise(r => setTimeout(r, 3000)); } }
+  reopening = false; showLayers(true);
+}
+function freshPage() {
+  try { const k = "livex_xray_reload", last = +sessionStorage.getItem(k) || 0; if (Date.now() - last < 120000) return; sessionStorage.setItem(k, String(Date.now())); } catch (e) { return; }
+  location.reload();
+}
+async function keepAwake() { try { if (navigator.wakeLock && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch (e) {} }
+document.addEventListener("visibilitychange", () => { if (started) keepAwake(); });     // the lock is dropped whenever the page is hidden
+let started = false;
+async function start() {
+  if (started) return; started = true; $("go").disabled = true;
+  let stage = "camera";
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("no camera access in this browser");
+    setState("st_cam"); await openCamera();
+    $("start").hidden = true;
+    stage = "model"; setState("st_3d"); await buildScene(); initHead();
+    stage = "trackers"; setState("st_trk"); await loadTrackers();
+    $("chips").hidden = false; layout();
+    if (perf.software) { $("hint").hidden = false; $("hint").textContent = t("soft"); }
+    keepAwake();
+    liveLoop();
+  } catch (err) {
+    started = false; $("go").disabled = false; $("start").hidden = false;
+    const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+    if (denied) setState("st_denied", "warn"); else setState("st_fail", "warn", stage + ": " + (err && err.message ? err.message : err));
+  }
+}
+$("go").onclick = start;
+if (DEMO) buildScene().then(() => { initHead(); demoLoop(); }).catch(e => setState("st_fail", "warn", e.message));
+else if (Q.has("autostart")) start();
+else if (navigator.permissions && navigator.permissions.query) {
+  // an unattended screen that was already given the camera starts by itself
+  navigator.permissions.query({ name: "camera" }).then(p => { if (p.state === "granted") start(); }).catch(() => {});
+}
+</script>
+</body>
+</html>
