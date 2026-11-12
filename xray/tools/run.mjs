@@ -61,7 +61,8 @@ if (mode === 'demo') {
 } else {
   await page.goto(base);
   await page.waitForTimeout(600);
-  if (!(await page.evaluate(() => document.getElementById('start').hidden))) await page.click('#go');
+  // the page starts by itself once the camera is allowed, so the Start button may be gone by the time it is clicked
+  if (!(await page.evaluate(() => document.getElementById('start').hidden))) await page.click('#go', { timeout: 3000 }).catch(() => {});
   let st = '';
   for (let i = 0; i < 300; i++) { await page.waitForTimeout(500); st = await state(); if (!/(…|\.\.\.)$/.test(st) && !/Press|点/.test(st)) break; }
   await page.waitForTimeout(4000);
