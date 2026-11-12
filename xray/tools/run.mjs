@@ -10,10 +10,11 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');      // fileURLToPath: the folder may have spaces in its name
 const [mode, deps, out, ...rest] = process.argv.slice(2);
 const y4m = mode === 'live' ? rest.shift() : null;
 const [w = '1080', h = '1920', query = '', settingsJson = '{}', secs = '10'] = rest;
