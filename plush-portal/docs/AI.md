@@ -199,10 +199,11 @@ One setting, `ai.voiceLanguage` (Settings → AI Guide → "Guide speaks"):
 - `ui` — Momo follows the interface language (en / zh / ja).
 
 It replaces the older `ai.language` (`ui` | `en` | `zh` | `ja`), which is no
-longer in the settings spec: stored values are dropped on load. The pure
-helper `migrateGuideLanguage()` (`src/ai/settingsMigration.ts`) maps old data
-for the settings store: the old default `ui` and `en` → `en`; an explicit `zh` /
-`ja` that matched the interface language → `ui`; anything else → `en`.
+longer in the settings spec. The settings store migrates stored and imported data
+with the pure helper `migrateGuideLanguage()` (`src/ai/settingsMigration.ts`,
+called from `migrate()` in `src/settings/store.ts`): the old default `ui` and `en` → `en`; an explicit `zh` /
+`ja` that matched the interface language → `ui`; anything else → `en`. See also
+[SETTINGS.md](SETTINGS.md#6-ai-guide).
 
 ## HTTPS for phones on the LAN
 

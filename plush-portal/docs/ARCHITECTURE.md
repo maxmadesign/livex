@@ -16,7 +16,8 @@ The one rule the structure exists to enforce:
 
 ```
                          ┌──────────────── src/ui (React) ────────────────┐
-                         │ App · Hud · Dialogs · settings/SettingsDialog  │
+                         │ App · Hud · ScoreHud · AttractOverlay ·        │
+                         │ CalibrationOverlay · Dialogs · SettingsDialog  │
                          └───────▲───────────────────────────┬────────────┘
                     reads state  │                           │ calls methods
                  (zustand stores)│                           ▼
@@ -28,31 +29,44 @@ The one rule the structure exists to enforce:
  src/game + src/physics   src/scene + src/plush   src/perspective   ports (src/core/contracts.ts)
  GameCore (authoritative) Stage, Cabinet,         OffAxisCamera,    AudioPort   → src/audio
  PhysicsWorld, ClawRig,   ClawVisual, ToyVisuals, windowGeometry    GuidePort   → src/ai  ──► /api ──► server/
- GripMonitor,             Effects, PlushMaterial,                   TrackerPort → src/tracking
- RoundMachine,            PlushDeformer
- RoundController, ToyField
+ GripMonitor,             Effects (FxApi),        + src/layout      TrackerPort → src/tracking
+ RoundMachine,            PlushMaterial,          (solve, frame)
+ RoundController, ToyField PlushDeformer
+ scoring, rarity, attract
 ```
 
 | Module | Files | Responsibility | May depend on |
 | --- | --- | --- | --- |
 | Core | `src/core/{types,contracts,events,math}.ts` | Shared types, typed event emitter, the three port interfaces | nothing |
 | Simulation | `src/game/{GameCore,RoundMachine,RoundController,ToyField}.ts`, `src/physics/{PhysicsWorld,ClawRig,GripMonitor,fieldSpec}.ts` | Fixed-step world, claw rig, grip evaluation, round rules, toy placement | core, Rapier, manifest *types* |
-| Assets | `src/plush/{manifest,PlushLibrary,PlushMaterial,PlushDeformer,customModels,fallbackGeometry,thumbnails}.ts` | Manifest contract, GLB loading, plush shading, visual soft-body deformation, user GLB import | core, Three.js |
-| Scene | `src/scene/{Stage,Cabinet,ClawVisual,ToyVisuals,Effects,materials,textures}.ts`, `src/themes/themes.ts` | Renderer, lights, post-processing, cabinet geometry, visuals that follow physics poses | assets, perspective |
-| Perspective | `src/perspective/{offAxis,OffAxisCamera,windowGeometry}.ts` | Off-axis frustum, screen ↔ cabinet mapping | core |
-| Tracking | `src/tracking/*` | Camera, MediaPipe inference (worker or main thread), eye estimate, filters, calibration | core |
-| Audio | `src/audio/*` | Web Audio engine, music, SFX, voice bus, fallback synth worker | core |
-| AI guide | `src/ai/*` | Event → line (`GuideDirector`), server client, local lines, speech, cache | core |
-| Layout | `src/layout/solve.ts` | Pure HUD geometry solver | settings types |
-| Settings | `src/settings/{spec,store}.ts`, `src/persistence/*` | One specification for every setting, draft/apply store, storage | core |
-| UI | `src/ui/*`, `src/i18n/*` | HUD, dialogs, settings dialog, strings | stores, `Game` methods |
+| Points, rarity, attract | `src/game/{scoring,rarity,attract}.ts`, `src/persistence/scores.ts` | Rarity tier per character; pure `scoreRound` and the idempotent `ScoreKeeper` (player and demo tracks); `IdleTimer` (wall clock) and `AttractDirector` (demo rounds in attract mode); best / lifetime storage | core (headless, no DOM) |
+| Assets | `src/plush/{manifest,PlushLibrary,PlushMaterial,PlushDeformer,customModels,fallbackGeometry,thumbnails}.ts` | Manifest contract (v4: optional textured model + provenance), GLB loading incl. texture tiers, plush shading (procedural and `PLUSH_TEXTURED` variants), visual soft-body deformation, user GLB import | core, Three.js |
+| Scene | `src/scene/{Stage,Cabinet,ClawVisual,ToyVisuals,materials,textures}.ts`, `src/themes/themes.ts` | Renderer, post-processing, cabinet geometry, visuals that follow physics poses | assets, perspective |
+| Lighting & materials | `src/scene/{environment,contactShadows,texgen,decor}.ts` | Per-theme procedural studio environment (PMREM) sized by tier, contact shadows (Medium and up), runtime detail maps (brushed metal, flake, weave, braid, normal maps), bevel / UV helpers and the GPU Party wall kit | Three.js, themes |
+| Effects | `src/scene/Effects.ts`, `src/scene/fx/*` (`api.ts` = `FxApi`) | GPU particles in two instanced batches (≤ 2 draw calls, fixed pools), `celebrate(tier)`, bursts, rarity aura, light show (`idle` / `attract` / `win` / `jackpot`), LED energy | Three.js, themes |
+| Perspective | `src/perspective/{offAxis,OffAxisCamera,windowGeometry}.ts` | Off-axis frustum, screen ↔ cabinet mapping (incl. the simulated 9:16 screen and phone size estimate) | core |
+| Tracking | `src/tracking/*` | Camera, MediaPipe inference (worker or main thread), eye estimate, filters; countdown calibration (`countdown.ts`), auto-calibration policy (`autoCalibration.ts`), head direction (`headPose.ts`), baselines (`baseline.ts`), phone / low-power capture (`devicePolicy.ts`) | core |
+| Audio | `src/audio/AudioEngine.ts`, `src/audio/studio/{manifest,playlist,moments}.ts`, `src/audio/synth/*` | Web Audio engine; studio music play-lists (two takes per theme, beat-aligned cross-fades), tier-aware win, character voices, dramatic effect layer, attract chime; the synthesised set as the complete fallback | core |
+| AI guide | `src/ai/*` | Event → line (`GuideDirector`), server client and key client (`keyClient.ts`), local lines, speech, cache, settings migration (`settingsMigration.ts`) | core |
+| Layout | `src/layout/{solve,frame,phone,safeArea,labelFit}.ts` | Pure HUD geometry solver (incl. the phone layout), the simulated 9:16 box, phone behaviour (guards, immersive mode, first-run setup), safe-area insets | settings types |
+| Settings | `src/settings/{spec,store}.ts`, `src/persistence/*` | One specification for every setting, draft/apply store, migrations, storage | core |
+| UI | `src/ui/*`, `src/i18n/*` | HUD, score HUD and popups, attract call to action, calibration overlay, dialogs, settings dialog, strings | stores, `Game` methods |
 | App | `src/app/{Game,bootstrap,gameStore,launch,presets,AdaptiveQuality,DemoPilot,nullPorts}.ts` | Wires everything, runs the frame loop | all of the above |
-| Server | `server/{index,app,config,schemas,text,rateLimit,static,log,errors,capabilities}.ts`, `server/speech/` | `/api/*`: OpenAI proxy, validation, rate limit, static hosting | Node only |
-| Tools | `tools/plush/*`, `tools/audio/bake.ts`, `tools/fetch-tracking-assets.mjs`, `tools/dev/*` | Asset generation and development probes (never bundled) | Node only |
+| Server | `server/{index,app,config,schemas,text,rateLimit,static,log,errors,capabilities,keys,net,tls}.ts`, `server/speech/` | `/api/*`: OpenAI proxy, validation, rate limit, static hosting; replaceable key store (`keys.ts`), outbound proxy and CA handling (`net.ts`), self-signed HTTPS for phones (`tls.ts`) | Node only |
+| Tools | `tools/plush/*` (incl. `import-generated.ts`, `generated.ts`, `manifestFile.ts`), `tools/audio/{bake,importStudio}.ts` + `tools/audio/lib/`, `tools/fetch-tracking-assets.mjs`, `tools/dev/*` | Asset generation, the generated-model and studio-audio import pipelines, development probes (never bundled) | Node only |
 
-`src/app/bootstrap.ts` creates the two stores, applies the launch parameters,
-constructs the audio engine, the guide and the tracker (each wrapped so that a
-failure yields a *null port* instead of an exception) and finally the `Game`.
+`src/app/bootstrap.ts` creates the two stores, applies the launch parameters
+(and, on a phone's first run, the Safe graphics preset), constructs the audio
+engine, the guide and the tracker (each wrapped so that a failure yields a
+*null port* instead of an exception) and finally the `Game`.
+
+### Pipelines added in this version
+
+| Pipeline | Path | What it does |
+| --- | --- | --- |
+| Generated plush models | Higgsfield concept image → image-to-3D GLB (outside the repo) → `npm run assets:import` (`tools/plush/import-generated.ts`) → `public/assets/plush/<theme>/<slug>.gen.glb` + WebP textures (512 embedded, 1K, 2K) + `model.textured` and `source` in the manifest | Fits the raw model to the procedural design of the same id (uniform scale, base on the floor), transfers softness / fur / AO from the design, builds three LODs with meshoptimizer, records provenance (job ids, raw-file hash, licence note) and a proxy-fit verdict. Physics keeps the design's proxies; the procedural GLB is the fallback. [ASSETS.md](ASSETS.md#textured-ai-generated-models) |
+| Studio audio | Higgsfield audio results → `npx tsx tools/audio/importStudio.ts --src <dir>` → `public/audio/studio/` + the manifest's `studio` section | Loudness normalisation, tempo / beat analysis and in / out points for the music takes, trimming, gating and seamless loops for effects and voices, per-file provenance and licence note. [AUDIO.md](AUDIO.md#studio-recordings) |
+| Synthesised audio | `npm run assets:audio` (`tools/audio/bake.ts`) | The complete original fallback set (music per theme, every effect, motor loops); keeps the `studio` section. |
 
 ## One frame
 
@@ -75,15 +89,54 @@ frame(now)
  │   │        ClawRig.postStep          read back hub, cable slack, finger angles
  │   │        RoundController.postStep  milestones, slip check, prize sensor
  │   │     collect impacts, restock queue
- │   │   updateFlow(dt)    idle → attract, auto "play again" after a miss, guide hints
- │   │   updateAudio(dt)   motor loops and one-shots from simulation events
+ │   │   updateFlow(dt)    attract demo rounds, auto "play again" after a miss, guide hints
+ │   │   updateAudio(dt)   motor loops, attract chime on / off (one-shots come from simulation events)
+ │   ├─ idle reset check          IdleTimer (wall clock) → Game.idleReset() → attract mode
  │   ├─ ToyVisuals.update(alpha)   interpolate prev/current poses, feed contacts and
  │   │                             impacts to PlushDeformer (dents, sag, squash, sway)
- │   ├─ ClawVisual.update(alpha), aim ring / beam, cabinet LEDs, Effects.update
+ │   ├─ ClawVisual.update(alpha), aim ring / beam
+ │   ├─ updateShow()               rarity aura, lift burst, light-show mode, call-to-action sparkles
+ │   ├─ cabinet LEDs (win energy + light show), Effects.update
  │   ├─ updateEye()                tracker.sampleEye(now) → eyeToWorld → Stage.setEyeWorld
  │   └─ Stage.render(dt)           OffAxisCamera projection → composer (AO, bloom, AA, …)
  └─ recordPerf()                   frame-time window → UI store, AdaptiveQuality.sample()
 ```
+
+After `updateAudio`, three presentation steps follow every frame (also while paused, unless noted):
+
+- **Idle reset.** `IdleTimer.due(system.idleSeconds, active)` on the wall clock, with the applied (not the
+  previewed) `idleSeconds`. A running player round and a running
+  calibration countdown count as activity; input events (`pointerdown`, `pointermove`, `keydown`, `wheel`,
+  `touchstart`) and every `Game` input method touch the timer. When due, `Game.idleReset()` closes dialogs (a settings
+  draft is cancelled), silences the guide, clears the test viewpoint, cancels a calibration, clears the session score,
+  restocks and enters attract mode (`AttractDirector.enter`).
+- **Attract mode.** `updateFlow` lets `AttractDirector` start demo rounds (the `DemoPilot` steers them) and hold their
+  results; `pressStart()` (START, the call to action, `Space` / `Enter`) leaves at once: demo round reset, claw home,
+  field refilled, a player round in READY.
+- **Effects follow the game** (`updateShow`): the rarity aura around a held toy, the lift burst, the light-show base
+  mode (`attract` in attract mode, else `idle`; a demo's running win / jackpot show is cancelled with `off` when a player
+  takes over or the idle reset runs) and the call-to-action sparkles. Every `FxApi` call goes through `safeFx`, so a
+  failing effect is logged and skipped instead of tripping the frame loop's error recovery.
+
+### Moments: what the game sends to effects and audio
+
+| Simulation event | Effects (`FxApi`) | Audio (`AudioPort`) |
+| --- | --- | --- |
+| `grabStarted` | `burst('grab')` at the claw | (the GRAB button already played `grab_confirm`) |
+| `clawTouch` | `burst('contact')` when it is a toy | `playSfx('claw_touch')` (quieter when it is not a toy) |
+| `liftStarted` | — | `playSfx('claw_lift')`; if a toy is held, `playCharacter(id, 'lift')` (that character's own voice, 0.25 s later, panned to the toy) |
+| lifted milestone, while held | `burst('lift')`, then `aura(pos, tier)` every frame | — |
+| `slipped` | `burst('slip')` | `playSfx('slip')`, `playCharacter(id, 'slip')` |
+| `prizeDetected` (the win, scored here) | `celebrate(tier)` (epic starts the `win` light show, legendary the `jackpot` show); `lightShow('jackpot')` for a ×3 combo below legendary; `burst('score')`, `burst('combo')` from the 2nd win in a row | `playSfx('chute_drop')`, `playWin(theme, tier)` (stinger · sparkle · confetti + firework · jackpot fanfare + bells), `playCharacter(id, 'win')`, `playSfx('combo')` from the 2nd win in a row; quieter in demo rounds |
+| a "+N" score popup | — | `playSfx('score_count')` |
+| `result` won | `burst('drop')` where the prize lands | `playWin` only if the exit event did not already play it; `collect_unlock` for a new character |
+| `result` empty | — | `playSfx('empty_grab')` |
+| restock starts / each toy | `burst('restock')` per toy | `playSfx('restock_rain')` once, `restock_drop` per toy |
+| attract mode | `lightShow('attract')`, `burst('cta')` every 2.4 s | `setAttract(true)` → a chime every 20–30 s (`audio.attractChime`) |
+| calibration countdown / done | — | `countdown_tick` each second, `calibration_ok` when the baseline is taken |
+
+Rarity tiers come from `src/game/rarity.ts`; the same tier drives the points, the aura, the celebration, the cabinet
+LED energy and the win sound.
 
 Points worth knowing:
 
@@ -118,7 +171,8 @@ timers below are only minimum waits or watchdogs.
     └──toAttract()── RESULT ◄──finish()── SETTLING ◄──released── RELEASING ◄──arrived── TRANSPORTING
 ```
 
-Not drawn: READY and AIMING also return to ATTRACT after the idle time, and
+Not drawn: any player phase returns to ATTRACT on the idle reset (`system.idleSeconds`; an unfinished round is
+abandoned without an award), demo rounds run from ATTRACT and back (`AttractDirector`), and
 `abort()` (error recovery, *Restart this round*) returns any phase to READY or ATTRACT.
 One grab is accepted per round.
 
@@ -146,6 +200,10 @@ Outcome rules:
   (`eccentric`, `weak_support`, `contact_lost`, `transport_swing`, `overload`, `bounced_out`).
 - **Result**: `won`, `slipped` (was held, then lost) or `empty`, plus the contact level reached
   (`none` / `touched` / `gripped` / `lifted`), which drives the guide's and the HUD's feedback.
+- **Points** are presentation: `Game` settles each round once through `ScoreKeeper.settle` (idempotent per round id) —
+  a win when the prize passes the exit sensor (so the popup appears where the prize leaves the field), a slip or an
+  empty grab from the round result. Demo rounds score on their own track and are never stored. Nothing in the
+  simulation reads the score.
 - **Watchdog**: if a phase overruns, the machine emits `watchdog` and the controller forces the
   next milestone so the claw always returns home; the round then ends with whatever really happened.
 
@@ -157,14 +215,16 @@ Two vanilla zustand stores and three ports; no React state is authoritative.
 
 | Channel | Direction | Content |
 | --- | --- | --- |
-| `GameStore` (`src/app/gameStore.ts`) | engine → UI | Phase, demo flag, result, prize, toasts, open modal, display preset, effective render resolution, automatic reductions, perf snapshot, tracker / audio / guide status, boot progress |
+| `GameStore` (`src/app/gameStore.ts`) | engine → UI | Phase, demo flag, result, prize, score (session, streak, best, lifetime, last award) and score popups, toasts, open modal, display preset, effective render resolution, automatic reductions, perf snapshot, tracker / audio / guide status (incl. the calibration phase), boot progress |
 | `SettingsStore` (`src/settings/store.ts`) | UI ↔ engine | Applied settings, the draft being edited, `view()` = draft or applied |
-| `Game` methods | UI → engine | `setDirection`, `grab`, `pressStart`, `playAgain`, `chooseProfile`, `restartRound`, `restockNow`, … |
+| `Game` methods | UI → engine | `setDirection`, `grab`, `pressStart`, `playAgain`, `chooseProfile`, `restartRound`, `restockNow`, `resetScores`, `dismissPopup`, … (calibration goes straight to the tracker port: `startCalibration`) |
 | `AudioPort`, `GuidePort`, `TrackerPort` (`src/core/contracts.ts`) | engine → subsystem | Narrow interfaces; each has a null implementation in `src/app/nullPorts.ts` |
 | Simulation events | simulation → `Game` | `RoundMachine`: `phase`, `result`, `award`, `watchdog`, `abort`, `aimTick`; `RoundController`: `grabStarted`, `clawTouch`, `gripEvaluated`, `liftStarted`, `slipped`, `released`, `prizeDetected`, `strayInBin`, `recovered`; `PhysicsWorld.impacts` |
 
 React components subscribe to store slices and call `Game` methods; they never
-touch Three.js or Rapier objects. `Game` translates simulation events into store
+touch Three.js or Rapier objects. Score popups are positioned by `Game.toScreen`, which projects a world point to
+CSS pixels **relative to the game's box** (the canvas): the HUD, popups and dialogs are laid out inside that box,
+which is the whole window except when a 9:16 screen is simulated (`src/layout/frame.ts`, [DISPLAYS.md](DISPLAYS.md#simulated-916-screen)). `Game` translates simulation events into store
 updates, sounds and guide events. The guide receives *facts* (`GuideFacts`: phase,
 attempt and win counts, outcome, contact level, slip reason, toy name, where the
 nearest toy was relative to the claw) — never images, landmarks or free text from the player.
@@ -224,7 +284,9 @@ invariants (for example "safe zone at least 30 % tall") are applied on load and 
 | Tab hidden | Pauses the simulation and the guide, suspends audio and tracking; resumes without catch-up. |
 | A character GLB is missing, corrupt or has no meshes | `src/plush/fallbackGeometry.ts` supplies a simple two-ball stand-in in the character's main colour; physics is unaffected because it uses the manifest proxies. The problem is logged and listed under *System → Warnings*. |
 | A character GLB is an ordinary glTF model without the plush vertex attributes | Not an error: it is rendered with its own materials plus the shared soft-body deformation (see [ASSETS.md](ASSETS.md#adding-or-replacing-a-character)). |
-| Audio files missing / decoding fails | The engine switches to the built-in synthesiser (worker) and reports `usingFallbackSynth`. |
+| Audio files missing / decoding fails | A studio take, stinger, voice or effect that cannot be loaded falls back to the synthesised file of the same name (music: the theme's synthesised track); if those are missing too, the engine switches to the built-in synthesiser (worker) and reports `usingFallbackSynth`. |
+| A textured (generated) model or a texture tier is missing or broken | `PlushLibrary` falls back to the embedded 512 textures, then to the procedural model of the same character, with a warning; `?models=procedural` forces the procedural models. |
+| An effect throws | `Game.safeFx` logs it and skips the effect; the round is not touched. |
 | No audio permission yet | State `locked`; audio starts on the first user gesture. |
 | Camera denied, absent, busy, insecure context, model load failure | The tracker reports a specific state; the view uses the reference eye position (plus a slow drift on the attract screen, unless reduced motion is on) and the game is fully playable. The HUD chip shows the state. |
 | Face lost during play | Hold the last position, then ease back to neutral, then blend in again when a face returns ([CALIBRATION.md](CALIBRATION.md)). |
@@ -240,11 +302,14 @@ invariants (for example "safe zone at least 30 % tall") are applied on load and 
 | Route | Purpose |
 | --- | --- |
 | `GET /api/health` | Liveness and version |
-| `GET /api/ai/status` | `configured` (whether a key is present — never the key itself), model names, speech interface, limits |
+| `GET /api/ai/status` | `configured` (whether a key is present — never the key itself), model names, speech interface, limits, `credential` (source and last-four fingerprint) |
+| `GET /api/ai/key`, `POST /api/ai/key`, `POST /api/ai/key/test`, `DELETE /api/ai/key` | Show, replace, check and restore the OpenAI key (stored in `<PLUSH_DATA_DIR>/secrets.json`; only from the server machine or with the admin token, per `PLUSH_KEY_MANAGEMENT`) |
 | `POST /api/ai/line` | One guide line (validated facts in, structured line out) |
 | `POST /api/ai/speech` | Speech audio for a line |
 | `POST /api/ai/test`, `GET /api/ai/models` | Connection test and model list for the settings dialog |
 
 Requests are validated with zod (`server/schemas.ts`), rate limited per client,
 time-boxed, and logged without secrets. With `--serve-dist` the same process
-serves the production build. Full description: [AI.md](AI.md).
+serves the production build; `--https` / `PLUSH_HTTPS=1` adds an HTTPS listener with a self-signed certificate
+for phones on the LAN. Outbound calls honour `HTTPS_PROXY` / `NO_PROXY` and `NODE_EXTRA_CA_CERTS` /
+`SSL_CERT_FILE` without Node flags. Full description: [AI.md](AI.md).

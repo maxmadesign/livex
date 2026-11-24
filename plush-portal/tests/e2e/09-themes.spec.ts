@@ -1,7 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { aim, boot, click, closeSettings, collection, ff, ffUntil, fieldToys, finishRound, lowContrast, openSettings, plush, results, settle, start, state, switchTheme, type Theme } from './helpers';
-
-const THEMES: Theme[] = ['sakura', 'storybook', 'ocean', 'cosmic'];
+import { THEMES, aim, boot, click, closeSettings, collection, ff, ffUntil, fieldToys, finishRound, lowContrast, openSettings, plush, results, settle, start, state, switchTheme, type Theme } from './helpers';
 
 const look = (page: import('@playwright/test').Page) =>
   page.evaluate(() => {
@@ -24,12 +22,13 @@ const look = (page: import('@playwright/test').Page) =>
   });
 
 test.describe('9. themes', () => {
-  test('all four themes swap the cabinet, the characters, the UI colours and the music', async ({ page }) => {
+  test('all five themes swap the cabinet, the characters, the UI colours and the music', async ({ page }) => {
+    test.setTimeout(1_500_000);
     await boot(page, { display: 'desktop' });
     await start(page);
     await expect.poll(() => plush(page, (p) => p.audio().state), { timeout: 60_000 }).toBe('running');
     const seen: Record<string, Awaited<ReturnType<typeof look>>> = {};
-    for (const id of ['storybook', 'ocean', 'cosmic', 'sakura'] as Theme[]) {
+    for (const id of ['storybook', 'ocean', 'cosmic', 'gpu', 'sakura'] as Theme[]) {
       await switchTheme(page, id);
       await expect.poll(() => plush(page, (p) => p.audio().musicTheme), { timeout: 60_000 }).toBe(id);
       const l = await look(page);
@@ -45,22 +44,23 @@ test.describe('9. themes', () => {
       expect((await state(page)).phase).toMatch(/READY|AIMING|ATTRACT/);
     }
     // Every theme has its own palette and its own cast.
-    expect(new Set(THEMES.map((t) => seen[t]!.primary)).size).toBe(4);
-    expect(new Set(THEMES.map((t) => seen[t]!.accent)).size).toBe(4);
+    expect(new Set(THEMES.map((t) => seen[t]!.primary)).size).toBe(5);
+    expect(new Set(THEMES.map((t) => seen[t]!.accent)).size).toBe(5);
     expect(new Set(THEMES.flatMap((t) => seen[t]!.types)).size).toBe(THEMES.reduce((n, t) => n + seen[t]!.types.length, 0));
-    expect(new Set(THEMES.map((t) => seen[t]!.chip)).size).toBe(4);
-    // The collection dialog lists all 24 characters.
+    expect(new Set(THEMES.map((t) => seen[t]!.chip)).size).toBe(5);
+    // The collection dialog lists all 31 characters.
     await click(page, 'menu-collection');
     await expect(page.getByTestId('collection')).toBeVisible();
     const cards = await page.locator('[data-testid^="collection-"]').count();
     console.log(`collection dialog lists ${cards} characters`);
-    expect(cards).toBeGreaterThanOrEqual(24);
+    expect(cards).toBeGreaterThanOrEqual(31);
     await click(page, 'modal-close');
   });
 
   test('dialogs stay readable in every theme (text contrast on settings, theme picker and collection)', async ({ page }) => {
+    test.setTimeout(1_500_000);
     await boot(page, { display: 'desktop' });
-    for (const id of ['cosmic', 'ocean', 'storybook', 'sakura'] as Theme[]) {
+    for (const id of ['gpu', 'cosmic', 'ocean', 'storybook', 'sakura'] as Theme[]) {
       if ((await state(page)).theme !== id) await switchTheme(page, id);
       const found: { text: string; where: string; ratio: number }[] = [];
       await openSettings(page, 'menu-settings');

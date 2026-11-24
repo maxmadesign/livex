@@ -20,7 +20,7 @@ import {
   writeTexturedGlb,
   type ReferenceMesh,
 } from '../../../tools/plush/generated';
-import { readJobMeta, verdictFor } from '../../../tools/plush/import-generated';
+import { readJobMeta, referenceHash, verdictFor } from '../../../tools/plush/import-generated';
 
 /**
  * A synthetic "generated" plush: a body sphere and a smaller head sphere offset towards +Z (so the
@@ -290,5 +290,16 @@ describe('generated model import', () => {
     expect(real.get('sakura.biribi')).toEqual({ concept: 'd7a60a0c-fc48-436b-849c-4c9acee6f5bd', model: '00713269-2106-4957-afe1-e0ed1e24623f', qa: 'ok (minor cosmetic)' });
     const list = readJobMeta({ items: [{ id: 'ocean.seal', concept_job: 'c-000003', model_job: { id: 'm-000003' }, verdict: 'ok' }] });
     expect(list.get('ocean.seal')).toEqual({ concept: 'c-000003', model: 'm-000003', qa: 'ok' });
+  });
+});
+
+describe('fit reference', () => {
+  it('changes with the procedural model or its proxies, so a re-baked design is refitted', () => {
+    const proxies: ProxyShape[] = [{ part: 'body', role: 'core', geometry: { type: 'ball', r: 0.05 }, pos: [0, 0.05, 0], rot: [0, 0, 0, 1], massFraction: 1 }];
+    const glb = new Uint8Array([1, 2, 3, 4]);
+    const base = referenceHash(glb, { proxies });
+    expect(referenceHash(new Uint8Array([1, 2, 3, 4]), { proxies })).toBe(base);
+    expect(referenceHash(new Uint8Array([1, 2, 3, 5]), { proxies })).not.toBe(base);
+    expect(referenceHash(glb, { proxies: [{ ...proxies[0]!, massFraction: 0.9 }] })).not.toBe(base);
   });
 });

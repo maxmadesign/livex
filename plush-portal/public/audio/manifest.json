@@ -577,6 +577,130 @@
       "duration": 1.1,
       "peakDb": -4,
       "rmsDb": -20.25
+    },
+    "claw_lift": {
+      "files": [
+        "sfx/claw_lift_1.wav"
+      ],
+      "gain": 0.32,
+      "pitchVar": 0.02,
+      "gainVar": 0.04,
+      "duration": 0.7539,
+      "peakDb": -4,
+      "rmsDb": -9.75
+    },
+    "combo": {
+      "files": [
+        "sfx/combo_1.wav"
+      ],
+      "gain": 0.54,
+      "pitchVar": 0,
+      "gainVar": 0.02,
+      "duration": 1,
+      "peakDb": -4,
+      "rmsDb": -18.73
+    },
+    "score_count": {
+      "files": [
+        "sfx/score_count_1.wav",
+        "sfx/score_count_2.wav",
+        "sfx/score_count_3.wav"
+      ],
+      "gain": 0.15,
+      "pitchVar": 0.02,
+      "gainVar": 0.06,
+      "duration": 0.1139,
+      "peakDb": -4,
+      "rmsDb": -11.46
+    },
+    "sparkle": {
+      "files": [
+        "sfx/sparkle_1.wav"
+      ],
+      "gain": 0.3,
+      "pitchVar": 0.02,
+      "gainVar": 0.05,
+      "duration": 1.0744,
+      "peakDb": -4,
+      "rmsDb": -18.86
+    },
+    "firework": {
+      "files": [
+        "sfx/firework_1.wav"
+      ],
+      "gain": 1,
+      "pitchVar": 0.04,
+      "gainVar": 0.05,
+      "duration": 1.32,
+      "peakDb": -4,
+      "rmsDb": -19.84
+    },
+    "confetti": {
+      "files": [
+        "sfx/confetti_1.wav"
+      ],
+      "gain": 0.6,
+      "pitchVar": 0.04,
+      "gainVar": 0.05,
+      "duration": 0.6432,
+      "peakDb": -4,
+      "rmsDb": -28.11
+    },
+    "jackpot": {
+      "files": [
+        "sfx/jackpot_1.wav"
+      ],
+      "gain": 0.6,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 1.33,
+      "peakDb": -4,
+      "rmsDb": -18.27
+    },
+    "attract_chime": {
+      "files": [
+        "sfx/attract_chime_1.wav"
+      ],
+      "gain": 0.31,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 1.35,
+      "peakDb": -4,
+      "rmsDb": -17.96
+    },
+    "restock_rain": {
+      "files": [
+        "sfx/restock_rain_1.wav"
+      ],
+      "gain": 0.57,
+      "pitchVar": 0.03,
+      "gainVar": 0.05,
+      "duration": 0.9469,
+      "peakDb": -4,
+      "rmsDb": -17.28
+    },
+    "calibration_ok": {
+      "files": [
+        "sfx/calibration_ok_1.wav"
+      ],
+      "gain": 0.55,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 0.9,
+      "peakDb": -4,
+      "rmsDb": -17.7
+    },
+    "plush_squeak": {
+      "files": [
+        "sfx/plush_squeak_1.wav",
+        "sfx/plush_squeak_2.wav"
+      ],
+      "gain": 0.69,
+      "pitchVar": 0.03,
+      "gainVar": 0.05,
+      "duration": 0.3039,
+      "peakDb": -4,
+      "rmsDb": -17
     }
   },
   "loops": {
@@ -593,6 +717,1569 @@
       "gain": 0.5,
       "peakDb": -7,
       "rmsDb": -17.67
+    }
+  },
+  "studio": {
+    "schema": 1,
+    "generator": "tools/audio/importStudio.ts",
+    "licence": "AI-generated through Higgsfield (music: ElevenLabs Music v2.5; effects: Mirelo text-to-audio) and processed by tools/audio/importStudio.ts. Check the Higgsfield / ElevenLabs terms for commercial use before shipping commercially.",
+    "music": {
+      "sakura": {
+        "title": "Sakura Kawaii (studio set)",
+        "takes": [
+          {
+            "file": "studio/music/sakura_a.mp3",
+            "bytes": 2401718,
+            "duration": 120.0322,
+            "bpm": 119.993,
+            "beatsPerBar": 4,
+            "key": "D major",
+            "inPoint": 2.0171,
+            "outPoint": 116.0237,
+            "crossfade": 2.0001,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.2,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/sakura_a.mp3"
+            }
+          },
+          {
+            "file": "studio/music/sakura_b.mp3",
+            "bytes": 2401718,
+            "duration": 120.0318,
+            "bpm": 117.971,
+            "beatsPerBar": 4,
+            "key": "Ab major",
+            "inPoint": 1.5314,
+            "outPoint": 115.458,
+            "crossfade": 2.0344,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.4,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/sakura_b.mp3"
+            }
+          }
+        ]
+      },
+      "storybook": {
+        "title": "Storybook Friends (studio set)",
+        "takes": [
+          {
+            "file": "studio/music/storybook_a.mp3",
+            "bytes": 2401718,
+            "duration": 120.0296,
+            "bpm": 110.001,
+            "beatsPerBar": 4,
+            "key": "D minor",
+            "inPoint": 8.7683,
+            "outPoint": 115.6767,
+            "crossfade": 2.1818,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -4,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/storybook_a.mp3"
+            }
+          },
+          {
+            "file": "studio/music/storybook_b.mp3",
+            "bytes": 2401718,
+            "duration": 120.0281,
+            "bpm": 111.988,
+            "beatsPerBar": 4,
+            "key": "C minor",
+            "inPoint": 2.6981,
+            "outPoint": 116.282,
+            "crossfade": 2.1431,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.1,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/storybook_b.mp3"
+            }
+          }
+        ]
+      },
+      "ocean": {
+        "title": "Ocean Dream (studio set)",
+        "takes": [
+          {
+            "file": "studio/music/ocean_a.mp3",
+            "bytes": 2201620,
+            "duration": 110.0247,
+            "bpm": 99.98,
+            "beatsPerBar": 4,
+            "key": "C major",
+            "inPoint": 2.4018,
+            "outPoint": 105.6221,
+            "crossfade": 2.4005,
+            "crossfadeBeats": 4,
+            "lufs": -15.9,
+            "truePeakDb": -4,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/ocean_a.mp3"
+            }
+          },
+          {
+            "file": "studio/music/ocean_b.mp3",
+            "bytes": 2401718,
+            "duration": 120.0322,
+            "bpm": 103.98,
+            "beatsPerBar": 4,
+            "key": "D major",
+            "inPoint": 5.7741,
+            "outPoint": 116.5651,
+            "crossfade": 2.3081,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.3,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/ocean_b.mp3"
+            }
+          }
+        ]
+      },
+      "cosmic": {
+        "title": "Cosmic Arcade (studio set)",
+        "takes": [
+          {
+            "file": "studio/music/cosmic_a.mp3",
+            "bytes": 2201620,
+            "duration": 110.0262,
+            "bpm": 123.982,
+            "beatsPerBar": 4,
+            "key": "E major",
+            "inPoint": 2.4483,
+            "outPoint": 106.9795,
+            "crossfade": 1.9358,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.8,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/cosmic_a.mp3"
+            }
+          },
+          {
+            "file": "studio/music/cosmic_b.mp3",
+            "bytes": 2401718,
+            "duration": 120.0281,
+            "bpm": 121.964,
+            "beatsPerBar": 4,
+            "key": "A minor",
+            "inPoint": 1.4833,
+            "outPoint": 115.6153,
+            "crossfade": 1.9678,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.4,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/cosmic_b.mp3"
+            }
+          }
+        ]
+      },
+      "gpu": {
+        "title": "GPU Party (studio set)",
+        "takes": [
+          {
+            "file": "studio/music/gpu_a.mp3",
+            "bytes": 2401718,
+            "duration": 120.0322,
+            "bpm": 127.959,
+            "beatsPerBar": 4,
+            "key": "Eb major",
+            "inPoint": 16.4216,
+            "outPoint": 115.8286,
+            "crossfade": 1.8756,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/gpu_a.mp3"
+            }
+          },
+          {
+            "file": "studio/music/gpu_b.mp3",
+            "bytes": 2401718,
+            "duration": 120.0316,
+            "bpm": 125.998,
+            "beatsPerBar": 4,
+            "key": "E major",
+            "inPoint": 2.301,
+            "outPoint": 116.5889,
+            "crossfade": 1.9048,
+            "crossfadeBeats": 4,
+            "lufs": -16,
+            "truePeakDb": -3.7,
+            "source": {
+              "generator": "Higgsfield",
+              "model": "ElevenLabs Music v2.5",
+              "job": null,
+              "input": "music/gpu_b.mp3"
+            }
+          }
+        ]
+      }
+    },
+    "stingers": {
+      "sakura": {
+        "win": {
+          "files": [
+            "studio/stingers/sakura_win.mp3"
+          ],
+          "gain": 0.7903,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 5.544,
+          "fileLoudness": -12.21,
+          "targetLoudness": -14.25,
+          "peakDb": -1.5,
+          "bytes": 112346,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/sakura_win.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 6 ms",
+            "kept 0.006–5.550 s of 6.03 s"
+          ]
+        },
+        "jackpot": {
+          "files": [
+            "studio/stingers/sakura_jackpot.mp3"
+          ],
+          "gain": 0.7735,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 5.604,
+          "fileLoudness": -10.02,
+          "targetLoudness": -12.25,
+          "peakDb": -1.5,
+          "bytes": 113391,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/sakura_jackpot.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 856 ms",
+            "kept 0.856–6.460 s of 7.03 s"
+          ]
+        }
+      },
+      "storybook": {
+        "win": {
+          "files": [
+            "studio/stingers/storybook_win.mp3"
+          ],
+          "gain": 0.8417,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 5.374,
+          "fileLoudness": -12.76,
+          "targetLoudness": -14.25,
+          "peakDb": -1.5,
+          "bytes": 108689,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/storybook_win.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 6 ms",
+            "kept 0.006–5.380 s of 6.03 s"
+          ]
+        },
+        "jackpot": {
+          "files": [
+            "studio/stingers/storybook_jackpot.mp3"
+          ],
+          "gain": 0.8349,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 7.494,
+          "fileLoudness": -10.69,
+          "targetLoudness": -12.25,
+          "peakDb": -1.5,
+          "bytes": 151007,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/storybook_jackpot.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 276 ms",
+            "kept 0.276–7.770 s of 8.05 s"
+          ]
+        }
+      },
+      "ocean": {
+        "win": {
+          "files": [
+            "studio/stingers/ocean_win.mp3"
+          ],
+          "gain": 0.9442,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 4.51,
+          "fileLoudness": -13.76,
+          "targetLoudness": -14.25,
+          "peakDb": -1.5,
+          "bytes": 91448,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/ocean_win.mp3"
+            }
+          ],
+          "notes": [
+            "kept 0.000–4.510 s of 6.03 s"
+          ]
+        },
+        "jackpot": {
+          "files": [
+            "studio/stingers/ocean_jackpot.mp3"
+          ],
+          "gain": 1.0116,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 6.98,
+          "fileLoudness": -12.35,
+          "targetLoudness": -12.25,
+          "peakDb": -1.5,
+          "bytes": 141081,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": null,
+              "input": "stingers/ocean_jackpot.mp3"
+            }
+          ],
+          "notes": [
+            "kept 0.000–6.980 s of 7.08 s"
+          ]
+        }
+      },
+      "cosmic": {
+        "win": {
+          "files": [
+            "studio/stingers/cosmic_win.mp3"
+          ],
+          "gain": 0.8168,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 5.4,
+          "fileLoudness": -12.5,
+          "targetLoudness": -14.25,
+          "peakDb": -1.5,
+          "bytes": 109211,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": "hf_20261124_125835_6949c606-ce9e-4717-b9da-ea902a2ac1e2.mp3",
+              "input": "stingers/cosmic_win.mp3"
+            }
+          ],
+          "notes": [
+            "kept 0.000–5.400 s of 6.03 s"
+          ]
+        },
+        "jackpot": {
+          "files": [
+            "studio/stingers/cosmic_jackpot.mp3"
+          ],
+          "gain": 0.8846,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 6.764,
+          "fileLoudness": -11.19,
+          "targetLoudness": -12.25,
+          "peakDb": -1.5,
+          "bytes": 136379,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": "hf_20261124_125842_e074821d-70ba-44b6-a829-2b6d357b82d9.mp3",
+              "input": "stingers/cosmic_jackpot.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 26 ms",
+            "kept 0.026–6.790 s of 7.03 s"
+          ]
+        }
+      },
+      "gpu": {
+        "win": {
+          "files": [
+            "studio/stingers/gpu_win.mp3"
+          ],
+          "gain": 0.7046,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 2.83,
+          "fileLoudness": -11.21,
+          "targetLoudness": -14.25,
+          "peakDb": -1.5,
+          "bytes": 58011,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": "hf_20261124_125836_266e0dee-e394-4508-824e-18649388591f.mp3",
+              "input": "stingers/gpu_win.mp3"
+            }
+          ],
+          "notes": [
+            "kept 0.000–2.830 s of 4.05 s"
+          ]
+        },
+        "jackpot": {
+          "files": [
+            "studio/stingers/gpu_jackpot.mp3"
+          ],
+          "gain": 0.8633,
+          "pitchVar": 0,
+          "gainVar": 0,
+          "mode": "replace",
+          "duration": 7.394,
+          "fileLoudness": -10.98,
+          "targetLoudness": -12.25,
+          "peakDb": -1.5,
+          "bytes": 149440,
+          "source": [
+            {
+              "generator": "Higgsfield",
+              "model": "not recorded per file (ElevenLabs Music v2.5 or Mirelo text-to-audio)",
+              "job": "hf_20261124_125835_30859637-142c-4179-a16e-9fd48994eaaf.mp3",
+              "input": "stingers/gpu_jackpot.mp3"
+            }
+          ],
+          "notes": [
+            "lead trimmed 6 ms",
+            "kept 0.006–7.400 s of 7.52 s"
+          ]
+        }
+      }
+    },
+    "sfx": {
+      "start_game": {
+        "files": [
+          "studio/sfx/start_coin.wav"
+        ],
+        "gain": 1.4666,
+        "pitchVar": 0,
+        "gainVar": 0,
+        "mode": "replace",
+        "duration": 2.494,
+        "fileLoudness": -19.43,
+        "targetLoudness": -16.1,
+        "peakDb": -1,
+        "bytes": 220014,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130107_5b3b832b-8c95-4c99-9fb5-8b13b853b3b1.mp3",
+            "input": "sfx/start_coin.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–2.500 s of 2.50 s",
+          "noise floor -63 dBFS RMS gated (−24 dB below -51 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "claw_descend": {
+        "files": [
+          "studio/sfx/claw_descend.wav"
+        ],
+        "gain": 0.643,
+        "pitchVar": 0.02,
+        "gainVar": 0.04,
+        "mode": "replace",
+        "duration": 1.754,
+        "fileLoudness": -16.56,
+        "targetLoudness": -20.4,
+        "peakDb": -1,
+        "bytes": 154746,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130104_4f7bb0f7-6fc8-4699-9075-13679e54dba4.mp3",
+            "input": "sfx/claw_descend.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.760 s of 2.00 s",
+          "noise floor -50 dBFS RMS gated (−24 dB below -38 dBFS)"
+        ]
+      },
+      "claw_close": {
+        "files": [
+          "studio/sfx/claw_close.wav"
+        ],
+        "gain": 0.3881,
+        "pitchVar": 0.03,
+        "gainVar": 0.05,
+        "mode": "layer",
+        "duration": 0.09,
+        "fileLoudness": -16.4,
+        "targetLoudness": -24.62,
+        "peakDb": -1,
+        "bytes": 7982,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130106_9db38de8-16b0-48bc-a34c-e164bc1b3278.mp3",
+            "input": "sfx/claw_close.mp3"
+          }
+        ],
+        "notes": [
+          "kept 0.000–0.090 s of 1.20 s",
+          "noise floor -65 dBFS RMS gated (−24 dB below -53 dBFS)"
+        ]
+      },
+      "claw_lift": {
+        "files": [
+          "studio/sfx/claw_lift.wav"
+        ],
+        "gain": 0.7618,
+        "pitchVar": 0.02,
+        "gainVar": 0.04,
+        "mode": "replace",
+        "duration": 1.254,
+        "fileLoudness": -18.03,
+        "targetLoudness": -20.4,
+        "peakDb": -1,
+        "bytes": 110646,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130106_083441a6-a4fb-479f-943b-2a4d45a26654.mp3",
+            "input": "sfx/claw_lift.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 56 ms",
+          "kept 0.056–1.310 s of 2.00 s",
+          "noise floor -43 dBFS RMS gated (−24 dB below -31 dBFS)"
+        ]
+      },
+      "chute_drop": {
+        "files": [
+          "studio/sfx/prize_drop.wav"
+        ],
+        "gain": 1.0755,
+        "pitchVar": 0.03,
+        "gainVar": 0.05,
+        "mode": "replace",
+        "duration": 0.7,
+        "fileLoudness": -19.64,
+        "targetLoudness": -19.01,
+        "peakDb": -1,
+        "bytes": 61784,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130142_210371a9-77be-416d-b074-905cd553c618.mp3",
+            "input": "sfx/prize_drop.mp3"
+          }
+        ],
+        "notes": [
+          "kept 0.000–0.700 s of 1.50 s"
+        ]
+      },
+      "empty_grab": {
+        "files": [
+          "studio/sfx/empty_grab.wav"
+        ],
+        "gain": 0.7404,
+        "pitchVar": 0.02,
+        "gainVar": 0.03,
+        "mode": "replace",
+        "duration": 1.494,
+        "fileLoudness": -12.59,
+        "targetLoudness": -15.2,
+        "peakDb": -1,
+        "bytes": 131814,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130142_d1e09d01-e920-4810-8d42-9ccd20caa2ee.mp3",
+            "input": "sfx/empty_grab.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "slip": {
+        "files": [
+          "studio/sfx/slip.wav"
+        ],
+        "gain": 0.979,
+        "pitchVar": 0.04,
+        "gainVar": 0.05,
+        "mode": "layer",
+        "duration": 2,
+        "fileLoudness": -20.45,
+        "targetLoudness": -20.64,
+        "peakDb": -1,
+        "bytes": 176444,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130141_ee29961c-096d-4184-966f-5d3edd105c0b.mp3",
+            "input": "sfx/slip.mp3"
+          }
+        ],
+        "notes": [
+          "kept 0.000–2.000 s of 2.00 s",
+          "noise floor -71 dBFS RMS gated (−24 dB below -59 dBFS)"
+        ]
+      },
+      "combo": {
+        "files": [
+          "studio/sfx/combo.wav"
+        ],
+        "gain": 0.484,
+        "pitchVar": 0,
+        "gainVar": 0.02,
+        "mode": "replace",
+        "duration": 0.674,
+        "fileLoudness": -12.95,
+        "targetLoudness": -19.25,
+        "peakDb": -1,
+        "bytes": 59490,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130144_0a3ff267-3d0f-4251-9fe6-37195d48b77f.mp3",
+            "input": "sfx/combo.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.680 s of 1.80 s"
+        ]
+      },
+      "jackpot": {
+        "files": [
+          "studio/sfx/jackpot.wav"
+        ],
+        "gain": 0.7293,
+        "pitchVar": 0,
+        "gainVar": 0,
+        "mode": "replace",
+        "duration": 2.984,
+        "fileLoudness": -15.51,
+        "targetLoudness": -18.25,
+        "peakDb": -1,
+        "bytes": 263232,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130142_8873de8b-c3c4-4c31-a46c-3e0809d5d4b7.mp3",
+            "input": "sfx/jackpot.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–3.000 s of 3.00 s",
+          "noise floor -35 dBFS RMS gated (−24 dB below -23 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "score_count": {
+        "files": [
+          "studio/sfx/score_count.wav"
+        ],
+        "gain": 0.9269,
+        "pitchVar": 0.03,
+        "gainVar": 0.05,
+        "mode": "replace",
+        "duration": 1.23,
+        "fileLoudness": -25.4,
+        "targetLoudness": -26.06,
+        "peakDb": -1,
+        "bytes": 108530,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130144_bec68daf-bba8-4657-ae52-028b3d5deae8.mp3",
+            "input": "sfx/score_count.mp3"
+          }
+        ],
+        "notes": [
+          "kept 0.000–1.230 s of 1.50 s",
+          "noise floor -65 dBFS RMS gated (−24 dB below -53 dBFS)"
+        ]
+      },
+      "sparkle": {
+        "files": [
+          "studio/sfx/sparkle.wav"
+        ],
+        "gain": 0.282,
+        "pitchVar": 0.03,
+        "gainVar": 0.05,
+        "mode": "replace",
+        "duration": 1.37,
+        "fileLoudness": -11.26,
+        "targetLoudness": -22.25,
+        "peakDb": -1,
+        "bytes": 120878,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130143_68126e26-8465-4251-9fb5-e9e199e7e0ab.mp3",
+            "input": "sfx/sparkle.mp3"
+          }
+        ],
+        "notes": [
+          "kept 0.000–1.370 s of 1.50 s",
+          "noise floor -67 dBFS RMS gated (−24 dB below -55 dBFS)"
+        ]
+      },
+      "firework": {
+        "files": [
+          "studio/sfx/firework.wav"
+        ],
+        "gain": 1.3805,
+        "pitchVar": 0.04,
+        "gainVar": 0.05,
+        "mode": "replace",
+        "duration": 1.224,
+        "fileLoudness": -20.05,
+        "targetLoudness": -17.25,
+        "peakDb": -1,
+        "bytes": 108000,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130142_f271c65c-1f56-47bb-a4ea-11bc4550f947.mp3",
+            "input": "sfx/firework.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.240 s of 2.00 s",
+          "noise floor -64 dBFS RMS gated (−24 dB below -52 dBFS)"
+        ]
+      },
+      "confetti": {
+        "files": [
+          "studio/sfx/confetti.wav"
+        ],
+        "gain": 1.6,
+        "pitchVar": 0.04,
+        "gainVar": 0.05,
+        "mode": "layer",
+        "duration": 1.384,
+        "fileLoudness": -27.73,
+        "targetLoudness": -23.25,
+        "peakDb": -1,
+        "bytes": 122112,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130218_a1646242-7877-4ffe-ac56-053bcac42e4c.mp3",
+            "input": "sfx/confetti.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.390 s of 1.50 s",
+          "noise floor -72 dBFS RMS gated (−24 dB below -60 dBFS)",
+          "needs 4.5 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "countdown_tick": {
+        "files": [
+          "studio/sfx/countdown_tick.wav"
+        ],
+        "gain": 0.7818,
+        "pitchVar": 0.01,
+        "gainVar": 0.03,
+        "mode": "replace",
+        "duration": 0.224,
+        "fileLoudness": -22.98,
+        "targetLoudness": -25.12,
+        "peakDb": -1,
+        "bytes": 19800,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130215_3697546d-51d3-4122-9648-1156a370565c.mp3",
+            "input": "sfx/countdown_tick.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–0.240 s of 0.60 s",
+          "noise floor -69 dBFS RMS gated (−24 dB below -57 dBFS)"
+        ]
+      },
+      "ui_open": {
+        "files": [
+          "studio/sfx/ui_open.wav"
+        ],
+        "gain": 0.6141,
+        "pitchVar": 0.01,
+        "gainVar": 0.03,
+        "mode": "layer",
+        "duration": 0.604,
+        "fileLoudness": -19.14,
+        "targetLoudness": -23.38,
+        "peakDb": -1,
+        "bytes": 53316,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130219_15f8d4b3-2dc6-4b8a-88b1-dab10127a92e.mp3",
+            "input": "sfx/ui_open.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.610 s of 0.80 s",
+          "noise floor -53 dBFS RMS gated (−24 dB below -41 dBFS)"
+        ]
+      },
+      "attract_chime": {
+        "files": [
+          "studio/sfx/attract_chime.wav"
+        ],
+        "gain": 0.7509,
+        "pitchVar": 0,
+        "gainVar": 0,
+        "mode": "replace",
+        "duration": 2.494,
+        "fileLoudness": -19.94,
+        "targetLoudness": -22.43,
+        "peakDb": -1,
+        "bytes": 220014,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130218_3d77e581-3411-473b-b348-387d89238d7b.mp3",
+            "input": "sfx/attract_chime.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–2.500 s of 2.50 s",
+          "noise floor -81 dBFS RMS gated (−24 dB below -69 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "restock_rain": {
+        "files": [
+          "studio/sfx/restock_rain.wav"
+        ],
+        "gain": 0.7943,
+        "pitchVar": 0.02,
+        "gainVar": 0.04,
+        "mode": "replace",
+        "duration": 1.954,
+        "fileLoudness": -21.24,
+        "targetLoudness": -23.24,
+        "peakDb": -1,
+        "bytes": 172386,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130216_2418770d-8690-4bc0-8a18-8b0fedaced16.mp3",
+            "input": "sfx/restock_rain.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.970 s of 2.00 s",
+          "noise floor -48 dBFS RMS gated (−24 dB below -36 dBFS)"
+        ]
+      },
+      "glass_tap": {
+        "files": [
+          "studio/sfx/glass_tap.wav"
+        ],
+        "gain": 0.4779,
+        "pitchVar": 0.06,
+        "gainVar": 0.12,
+        "mode": "replace",
+        "duration": 0.444,
+        "fileLoudness": -21.36,
+        "targetLoudness": -27.77,
+        "peakDb": -1,
+        "bytes": 39204,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130215_c1715db5-c905-4e06-b381-327c6ad45ab7.mp3",
+            "input": "sfx/glass_tap.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–0.460 s of 0.80 s",
+          "noise floor -69 dBFS RMS gated (−24 dB below -57 dBFS)"
+        ]
+      },
+      "calibration_ok": {
+        "files": [
+          "studio/sfx/calibration_ok.wav"
+        ],
+        "gain": 1.3431,
+        "pitchVar": 0,
+        "gainVar": 0,
+        "mode": "replace",
+        "duration": 0.104,
+        "fileLoudness": -19.94,
+        "targetLoudness": -17.38,
+        "peakDb": -1,
+        "bytes": 9216,
+        "source": [
+          {
+            "generator": "Higgsfield",
+            "model": "Mirelo text-to-audio",
+            "job": "hf_20261124_130215_81152196-ab60-488a-9887-1d25dc4a6889.mp3",
+            "input": "sfx/calibration_ok.mp3"
+          }
+        ],
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.110 s of 1.50 s",
+          "noise floor -63 dBFS RMS gated (−24 dB below -51 dBFS)"
+        ]
+      }
+    },
+    "loops": {
+      "motor_trolley": {
+        "file": "studio/loops/motor_trolley.wav",
+        "duration": 2.282018,
+        "gain": 0.4143,
+        "bytes": 201318,
+        "seamStepRatio": 0.381,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130105_326317b0-a458-4996-842a-bbccfbacd3cc.mp3",
+          "input": "sfx/motor_trolley_loop.mp3"
+        }
+      }
+    },
+    "voices": {
+      "cosmic.alien": {
+        "file": "studio/voices/cosmic/alien.wav",
+        "gain": 0.5395,
+        "duration": 1.5,
+        "bytes": 132344,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130033_6f10b7e5-33da-4947-88a2-c5c7e0ec1efc.mp3",
+          "input": "voices/cosmic.alien.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.500 s of 1.50 s",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "cosmic.astrocat": {
+        "file": "studio/voices/cosmic/astrocat.wav",
+        "gain": 0.6277,
+        "duration": 1.5,
+        "bytes": 132344,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_144437_6bfcd3f3-54c1-41d3-b2fe-5075264bc434.mp3",
+          "input": "voices/cosmic.astrocat.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.500 s of 1.50 s",
+          "noise floor -62 dBFS RMS gated (−24 dB below -50 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "cosmic.planetmonster": {
+        "file": "studio/voices/cosmic/planetmonster.wav",
+        "gain": 1.0617,
+        "duration": 1.394,
+        "bytes": 122994,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130032_701f6ae3-6d5b-4c59-b03b-b45e055b1179.mp3",
+          "input": "voices/cosmic.planetmonster.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.400 s of 1.50 s",
+          "noise floor -47 dBFS RMS gated (−24 dB below -35 dBFS)"
+        ]
+      },
+      "cosmic.spacebunny": {
+        "file": "studio/voices/cosmic/spacebunny.wav",
+        "gain": 0.5064,
+        "duration": 1.434,
+        "bytes": 126522,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125958_4a76fac2-ef4f-4c03-8f68-003a9c596f27.mp3",
+          "input": "voices/cosmic.spacebunny.mp3"
+        },
+        "notes": [
+          "lead trimmed 66 ms",
+          "kept 0.066–1.500 s of 1.50 s",
+          "noise floor -40 dBFS RMS gated (−24 dB below -28 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "cosmic.spacerobot": {
+        "file": "studio/voices/cosmic/spacerobot.wav",
+        "gain": 0.8413,
+        "duration": 1.404,
+        "bytes": 123876,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130033_b9aafba9-c3c4-4aa3-a93e-ae7b4470e62b.mp3",
+          "input": "voices/cosmic.spacerobot.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.410 s of 1.50 s",
+          "noise floor -66 dBFS RMS gated (−24 dB below -54 dBFS)"
+        ]
+      },
+      "cosmic.starbear": {
+        "file": "studio/voices/cosmic/starbear.wav",
+        "gain": 0.6968,
+        "duration": 0.634,
+        "bytes": 55962,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125958_c801171e-6e95-44e4-9dfa-335556f3600d.mp3",
+          "input": "voices/cosmic.starbear.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.640 s of 1.50 s"
+        ]
+      },
+      "gpu.bot": {
+        "file": "studio/voices/gpu/bot.wav",
+        "gain": 1.6,
+        "duration": 0.354,
+        "bytes": 31266,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130105_541fe6f5-09f0-4887-90c2-af046cae66a2.mp3",
+          "input": "voices/gpu.bot.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–0.370 s of 1.50 s",
+          "needs 4.7 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "gpu.card": {
+        "file": "studio/voices/gpu/card.wav",
+        "gain": 0.8864,
+        "duration": 1.484,
+        "bytes": 130932,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130033_490a376e-1015-43b2-b2fc-d500f1534b26.mp3",
+          "input": "voices/gpu.card.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.500 s of 1.50 s",
+          "noise floor -53 dBFS RMS gated (−24 dB below -41 dBFS)"
+        ]
+      },
+      "gpu.chief": {
+        "file": "studio/voices/gpu/chief.wav",
+        "gain": 0.9473,
+        "duration": 1.17,
+        "bytes": 103238,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130034_647a7ed2-27e6-4809-94e2-19df3f0ab044.mp3",
+          "input": "voices/gpu.chief.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.170 s of 1.50 s",
+          "noise floor -62 dBFS RMS gated (−24 dB below -50 dBFS)"
+        ]
+      },
+      "gpu.chip": {
+        "file": "studio/voices/gpu/chip.wav",
+        "gain": 0.6089,
+        "duration": 1.494,
+        "bytes": 131814,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130033_ca5d9cce-b1da-4445-a5da-e968b0b1c2a7.mp3",
+          "input": "voices/gpu.chip.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s",
+          "noise floor -71 dBFS RMS gated (−24 dB below -59 dBFS)"
+        ]
+      },
+      "gpu.fan": {
+        "file": "studio/voices/gpu/fan.wav",
+        "gain": 1.6,
+        "duration": 1.5,
+        "bytes": 132344,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130034_214cb885-7a8b-46b5-9393-7632a8548e77.mp3",
+          "input": "voices/gpu.fan.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.500 s of 1.50 s",
+          "noise floor -60 dBFS RMS gated (−24 dB below -48 dBFS)",
+          "needs 5.4 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "gpu.pixel": {
+        "file": "studio/voices/gpu/pixel.wav",
+        "gain": 1.6,
+        "duration": 1.304,
+        "bytes": 115056,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130103_0dfc2c19-9335-476d-bbe8-abde1ea9fd35.mp3",
+          "input": "voices/gpu.pixel.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.310 s of 1.50 s",
+          "needs 4.2 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "gpu.rack": {
+        "file": "studio/voices/gpu/rack.wav",
+        "gain": 1.3545,
+        "duration": 1.494,
+        "bytes": 131814,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130109_bc88d0c9-f0fc-468e-b6bf-21057856f0f6.mp3",
+          "input": "voices/gpu.rack.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s",
+          "noise floor -63 dBFS RMS gated (−24 dB below -51 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "ocean.axolotl": {
+        "file": "studio/voices/ocean/axolotl.wav",
+        "gain": 1.072,
+        "duration": 1.394,
+        "bytes": 122994,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130004_854483bc-1c58-4634-8ba3-e7059bc6f86d.mp3",
+          "input": "voices/ocean.axolotl.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.400 s of 1.50 s",
+          "noise floor -66 dBFS RMS gated (−24 dB below -54 dBFS)"
+        ]
+      },
+      "ocean.jellyfish": {
+        "file": "studio/voices/ocean/jellyfish.wav",
+        "gain": 1.0706,
+        "duration": 0.964,
+        "bytes": 85068,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_144434_02759fa8-99bc-43b9-af61-5fb6b9732b46.mp3",
+          "input": "voices/ocean.jellyfish.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.970 s of 1.50 s",
+          "noise floor -47 dBFS RMS gated (−24 dB below -35 dBFS)"
+        ]
+      },
+      "ocean.octopus": {
+        "file": "studio/voices/ocean/octopus.wav",
+        "gain": 0.5458,
+        "duration": 1.414,
+        "bytes": 124758,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_130000_debd1a07-3518-44f9-87a8-504207879c28.mp3",
+          "input": "voices/ocean.octopus.mp3"
+        },
+        "notes": [
+          "lead trimmed 46 ms",
+          "kept 0.046–1.460 s of 1.50 s",
+          "noise floor -44 dBFS RMS gated (−24 dB below -32 dBFS)"
+        ]
+      },
+      "ocean.seal": {
+        "file": "studio/voices/ocean/seal.wav",
+        "gain": 1.5678,
+        "duration": 1.494,
+        "bytes": 131814,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125958_19375b51-0dab-4963-9347-96bb38b6ea96.mp3",
+          "input": "voices/ocean.seal.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s",
+          "noise floor -54 dBFS RMS gated (−24 dB below -42 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
+        ]
+      },
+      "ocean.turtle": {
+        "file": "studio/voices/ocean/turtle.wav",
+        "gain": 1.6,
+        "duration": 0.794,
+        "bytes": 70074,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125959_74f7b3d5-6007-4ba8-9483-5f8ef24c6621.mp3",
+          "input": "voices/ocean.turtle.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.800 s of 1.50 s",
+          "noise floor -66 dBFS RMS gated (−24 dB below -54 dBFS)",
+          "needs 7.2 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "ocean.whale": {
+        "file": "studio/voices/ocean/whale.wav",
+        "gain": 0.7199,
+        "duration": 1.484,
+        "bytes": 130932,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125959_c276c25b-2172-4802-abac-5a6fcebc3088.mp3",
+          "input": "voices/ocean.whale.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.500 s of 1.50 s"
+        ]
+      },
+      "sakura.biribi": {
+        "file": "studio/voices/sakura/biribi.wav",
+        "gain": 0.5387,
+        "duration": 1.23,
+        "bytes": 108530,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125841_eab37304-fe0b-4753-81ed-d6124034eb14.mp3",
+          "input": "voices/sakura.biribi.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.230 s of 1.50 s"
+        ]
+      },
+      "sakura.bunny": {
+        "file": "studio/voices/sakura/bunny.wav",
+        "gain": 0.621,
+        "duration": 1.484,
+        "bytes": 130932,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125836_41c9a9a0-b874-46c1-a26a-9639cc73fc78.mp3",
+          "input": "voices/sakura.bunny.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.500 s of 1.50 s",
+          "noise floor -63 dBFS RMS gated (−24 dB below -51 dBFS)"
+        ]
+      },
+      "sakura.capybara": {
+        "file": "studio/voices/sakura/capybara.wav",
+        "gain": 1.6,
+        "duration": 1.484,
+        "bytes": 130932,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125839_2a283445-25c8-4e07-b603-ea4633beaf7f.mp3",
+          "input": "voices/sakura.capybara.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–1.500 s of 1.50 s",
+          "noise floor -70 dBFS RMS gated (−24 dB below -58 dBFS)",
+          "needs 10.0 dB to reach its target; capped at +4.1 dB"
+        ]
+      },
+      "sakura.monster": {
+        "file": "studio/voices/sakura/monster.wav",
+        "gain": 0.4234,
+        "duration": 1.494,
+        "bytes": 131814,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125925_e12575ed-2913-4562-9218-74bbae6d0cfc.mp3",
+          "input": "voices/sakura.monster.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s"
+        ]
+      },
+      "sakura.sakuracat": {
+        "file": "studio/voices/sakura/sakuracat.wav",
+        "gain": 0.9161,
+        "duration": 0.88,
+        "bytes": 77660,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125835_d9d697dd-8bd5-4845-8750-f1e9023ac678.mp3",
+          "input": "voices/sakura.sakuracat.mp3"
+        },
+        "notes": [
+          "kept 0.000–0.880 s of 1.50 s",
+          "noise floor -53 dBFS RMS gated (−24 dB below -41 dBFS)"
+        ]
+      },
+      "sakura.tanuki": {
+        "file": "studio/voices/sakura/tanuki.wav",
+        "gain": 1.0783,
+        "duration": 0.264,
+        "bytes": 23328,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125925_5d0cb0cb-ec97-4805-a7a8-118b0d52e59e.mp3",
+          "input": "voices/sakura.tanuki.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–0.270 s of 1.50 s",
+          "noise floor -71 dBFS RMS gated (−24 dB below -59 dBFS)"
+        ]
+      },
+      "storybook.astronaut": {
+        "file": "studio/voices/storybook/astronaut.wav",
+        "gain": 1.437,
+        "duration": 0.104,
+        "bytes": 9216,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125924_7a48a11e-af9a-4141-9117-6352895d4394.mp3",
+          "input": "voices/storybook.astronaut.mp3"
+        },
+        "notes": [
+          "lead trimmed 16 ms",
+          "kept 0.016–0.120 s of 1.50 s"
+        ]
+      },
+      "storybook.cowpony": {
+        "file": "studio/voices/storybook/cowpony.wav",
+        "gain": 1.2282,
+        "duration": 1.494,
+        "bytes": 131814,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125926_c0ce9394-326f-4592-9a01-65f55ee7459d.mp3",
+          "input": "voices/storybook.cowpony.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.500 s of 1.50 s",
+          "noise floor -63 dBFS RMS gated (−24 dB below -51 dBFS)"
+        ]
+      },
+      "storybook.dino": {
+        "file": "studio/voices/storybook/dino.wav",
+        "gain": 0.6792,
+        "duration": 1.454,
+        "bytes": 128286,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125924_f2055592-9dc0-45c9-8b60-1f8330bc5cd2.mp3",
+          "input": "voices/storybook.dino.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.460 s of 1.50 s"
+        ]
+      },
+      "storybook.hornmonster": {
+        "file": "studio/voices/storybook/hornmonster.wav",
+        "gain": 0.5465,
+        "duration": 1.35,
+        "bytes": 119114,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125923_66c5737f-3b6d-4fbd-92af-01a7a75a6a63.mp3",
+          "input": "voices/storybook.hornmonster.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.350 s of 1.50 s"
+        ]
+      },
+      "storybook.robot": {
+        "file": "studio/voices/storybook/robot.wav",
+        "gain": 0.9094,
+        "duration": 1.354,
+        "bytes": 119466,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125928_e2304c1c-182b-48d3-a842-2f5e23cd7ccd.mp3",
+          "input": "voices/storybook.robot.mp3"
+        },
+        "notes": [
+          "lead trimmed 6 ms",
+          "kept 0.006–1.360 s of 1.50 s"
+        ]
+      },
+      "storybook.scarfpuppy": {
+        "file": "studio/voices/storybook/scarfpuppy.wav",
+        "gain": 1.6,
+        "duration": 1,
+        "bytes": 88244,
+        "source": {
+          "generator": "Higgsfield",
+          "model": "Mirelo text-to-audio",
+          "job": "hf_20261124_125924_54972f33-9e49-4a70-8f53-37142c22b161.mp3",
+          "input": "voices/storybook.scarfpuppy.mp3"
+        },
+        "notes": [
+          "kept 0.000–1.000 s of 1.50 s",
+          "needs 5.2 dB to reach its target; capped at +4.1 dB"
+        ]
+      }
+    },
+    "rejected": [
+      {
+        "input": "sfx/button.mp3",
+        "reason": "a steady tonal sound for its whole 0.5 s (crest factor 12 dB, spectral flatness 0.06, no transient): not a button press; the synthesised clicks stay"
+      }
+    ],
+    "bytes": {
+      "themes": {
+        "sakura": 5632369,
+        "storybook": 5659272,
+        "ocean": 5501507,
+        "cosmic": 5542970,
+        "gpu": 5787351
+      },
+      "shared": 2360926
     }
   }
 }

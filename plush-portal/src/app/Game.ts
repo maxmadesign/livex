@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import type { AudioPort, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort } from '../core/contracts';
+import type { AudioPort, CalibrationPhase, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort, TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, Lang, RoundResult, ThemeId, Vec3 } from '../core/types';
 import { getLog, log, logError } from '../diagnostics/log';
 import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
@@ -7,8 +7,9 @@ import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
 import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
+import { readFramedEnvironment } from '../layout/frame';
 import { solveLayout, type HudLayout } from '../layout/solve';
-import { computeWindowLayout, eyeToWorld, readWindowEnvironment, type WindowLayout } from '../perspective/windowGeometry';
+import { computeWindowLayout, eyeToWorld, type WindowLayout } from '../perspective/windowGeometry';
 import type { CollectionStore } from '../persistence/collection';
 import { clearScores, loadScores, saveScores } from '../persistence/scores';
 import { CHUTE_CENTER, CLAW, FIXED_DT, GROUP, PRIZE_SENSOR, groups } from '../physics/fieldSpec';
@@ -39,7 +40,8 @@ export type ConfigurableGuide = GuidePort & {
   configure(cfg: { settings: AiSettings; uiLang: Lang; themeId: ThemeId; themeVersion: number; voiceVolume?: number }): void;
 };
 export type ConfigurableTracker = TrackerPort & {
-  configure(cfg: { camera: CameraSettings; view: ViewSettings; window: PhysicalWindow }): void;
+  /** `profile`: the active display preset (selects its stored head baseline); trackers may ignore it. */
+  configure(cfg: { camera: CameraSettings; view: ViewSettings; window: PhysicalWindow; profile?: DisplayProfileId }): void;
 };
 
 export interface LaunchParams {
@@ -133,10 +135,18 @@ export class Game {
   /** Difficulty the current round is played (and scored) with: latched with the round's parameters. */
   private roundDifficulty: ScoringDifficulty = 'arcade';
   private popupId = 0;
-  /** Light show: the mode last sent, the mode the game is in, and how long a win show still runs. */
+  /**
+   * Light show: the persistent mode last sent ('idle' / 'attract'). Timed shows are started by
+   * `celebrate()` itself (epic: 'win', legendary: 'jackpot'); the game adds 'jackpot' for a ×3 combo.
+   */
   private lightSent: LightMode | null = null;
-  private lightWin: LightMode = 'win';
-  private lightWinTime = 0;
+  /** Cancel a running win / jackpot show before the next mode is sent (new player, idle reset). */
+  private lightCancel = false;
+  /** Round whose win sound (tier stinger + character voice) already played at the prize exit. */
+  private winSoundRound = -1;
+  /** Last calibration state seen from the tracker (sounds on its transitions). */
+  private calPhase: CalibrationPhase = 'idle';
+  private calRemaining = 0;
   private ctaTimer = 1.2;
   private ctaSide = 0;
   /** Effects already shown in this round (each fires once). */
@@ -202,7 +212,7 @@ export class Game {
         this.rebuildScene(true);
         this.setPaused('context', false);
       };
-      this.toyVisuals = new ToyVisuals(this.library, { lod: s.graphics.lod, fur: s.graphics.fur, deform: s.graphics.deform });
+      this.toyVisuals = new ToyVisuals(this.library, { lod: s.graphics.lod, fur: s.graphics.fur, deform: s.graphics.deform, textures: s.graphics.textures });
       this.effects = new Effects();
       this.stage.scene.add(this.toyVisuals.group, this.effects.group);
 
@@ -228,7 +238,7 @@ export class Game {
       this.setBoot(1, 'ready');
 
       this.offs.push(settings.subscribe(() => this.onSettingsChanged()));
-      this.offs.push(this.deps.tracker.subscribe((status) => ui.setState({ tracker: status })));
+      this.offs.push(this.deps.tracker.subscribe((status) => this.onTrackerStatus(status)));
       this.offs.push(this.deps.audio.subscribe((status) => ui.setState({ audio: status })));
       this.offs.push(this.deps.guide.subscribe((line, status) => ui.setState({ guideLine: line, guideStatus: status })));
       window.addEventListener('resize', this.onResize);
@@ -332,9 +342,11 @@ export class Game {
 
   private measure(): void {
     const canvas = this.deps.canvas;
-    const env = readWindowEnvironment(canvas);
     const profile = this.applied.profiles[this.profile];
-    this.hud = solveLayout(this.profile, profile.layout, env.viewportW, env.viewportH);
+    // Portrait presets may simulate their 9:16 screen in a window of another shape: env and insets
+    // are then those of the box (src/layout/frame.ts); otherwise the canvas is measured as before.
+    const { env, insets } = readFramedEnvironment(canvas, this.profile, profile.layout);
+    this.hud = solveLayout(this.profile, profile.layout, env.viewportW, env.viewportH, insets);
     this.layout = computeWindowLayout(env, profile.view, this.hud.floorY);
     if (this.stage) {
       this.stage.resize(env.viewportW, env.viewportH, window.devicePixelRatio || 1);
@@ -456,7 +468,8 @@ export class Game {
     this.toyVisuals.sync(this.core.phys.toys.values());
     this.safeFx(() => this.fx.aura(null));
     this.auraOn = false;
-    this.lightWinTime = 0;
+    // A demo round's win / jackpot show ends with the demo.
+    this.lightCancel = true;
     this.publishScore(null);
     this.deps.audio.playSfx('start_game');
     if (!this.deps.ui.getState().firstPlayDone) {
@@ -517,6 +530,24 @@ export class Game {
     this.idle.touch();
   };
 
+  /** True while a calibration countdown or capture is running. */
+  private calibrating(): boolean {
+    return this.calPhase === 'countdown' || this.calPhase === 'capturing';
+  }
+
+  /** Tracker status: to the UI store, plus the calibration sounds (a tick per second, a chime when done). */
+  private onTrackerStatus(status: TrackerStatus): void {
+    this.deps.ui.setState({ tracker: status });
+    const cal = status.calibration;
+    const { audio } = this.deps;
+    if (cal.phase === 'done' && this.calPhase !== 'done') audio.playSfx('calibration_ok');
+    else if (cal.phase === 'countdown' && cal.remaining > 0 && (this.calPhase !== 'countdown' || cal.remaining !== this.calRemaining)) audio.playSfx('countdown_tick');
+    this.calPhase = cal.phase;
+    this.calRemaining = cal.remaining;
+    // Starting a calibration counts as activity: the idle reset must not cancel it.
+    if (this.calibrating()) this.idle.touch();
+  }
+
   /** Settings → System → Reset scores (best session score and lifetime points). */
   resetScores(): void {
     this.scores.resetAll();
@@ -547,7 +578,7 @@ export class Game {
    * and the machine goes back to the self-playing attract mode.
    */
   idleReset(reason: 'idle' | 'debug' = 'idle'): void {
-    log('info', 'round', reason === 'idle' ? `idle reset (${this.applied.system.idleSeconds} s without input)` : 'idle reset (requested through the debug API)');
+    log('info', 'round', reason === 'idle' ? `idle reset (${this.committed.system.idleSeconds} s without input)` : 'idle reset (requested through the debug API)');
     const { ui, guide, tracker } = this.deps;
     this.closeDialogs();
     guide.silence();
@@ -557,6 +588,7 @@ export class Game {
     this.scores.resetSession();
     ui.setState({ result: null, prize: null, scorePopups: [], toast: null });
     if (!this.attract.active) this.attract.enter('idle_reset');
+    this.lightCancel = true;
     this.lossStreak = 0;
     this.retryPrompted = false;
     this.restockQueue = this.core.field.missing();
@@ -635,8 +667,15 @@ export class Game {
         this.toyVisuals.focus = e.toy;
       }
     });
+    controller.events.on('liftStarted', (e) => {
+      audio.playSfx('claw_lift');
+      const toy = this.core.grip.target;
+      // The character squeals as it leaves the pile (each character has its own voice).
+      if (e.holding && toy) audio.playCharacter(toy.asset.id, 'lift', this.voiceOptions(toy, 0.25));
+    });
     controller.events.on('slipped', (e) => {
       audio.playSfx('slip');
+      audio.playCharacter(e.toy.asset.id, 'slip', this.voiceOptions(e.toy, 0));
       if (this.toyPosition(e.toy, _p)) this.burstAt('slip', _p, rarityOf(e.toy.asset.id));
     });
     controller.events.on('prizeDetected', (e) => this.onPrizeExit(e.roundId, e.toy));
@@ -676,7 +715,11 @@ export class Game {
     return out.set(p[0]!, p[1]!, p[2]!);
   }
 
-  /** A world position on screen, in CSS pixels (null when behind the viewer). */
+  /**
+   * A world position in CSS pixels relative to the game's box (the canvas), null when behind the
+   * viewer. Score popups are laid out inside that box, which is the whole window except when a
+   * 9:16 screen is simulated in a window of another shape (src/layout/frame.ts).
+   */
   private toScreen(pos: Vec3Like): { x: number; y: number } | null {
     const camera = this.stage.camera;
     _v.set(pos.x, pos.y, pos.z).project(camera);
@@ -684,7 +727,13 @@ export class Game {
     const rect = this.deps.canvas.getBoundingClientRect();
     const w = rect.width || this.hud.vw;
     const h = rect.height || this.hud.vh;
-    return { x: rect.left + ((_v.x + 1) / 2) * w, y: rect.top + ((1 - _v.y) / 2) * h };
+    return { x: ((_v.x + 1) / 2) * w, y: ((1 - _v.y) / 2) * h };
+  }
+
+  /** Character voice options: panned to where the toy is, quieter in demo rounds. */
+  private voiceOptions(toy: ToyBody, delay: number): { delay: number; pan: number; volume?: number } {
+    const pan = Math.max(-1, Math.min(1, (toy.pose.pos[0] ?? 0) * 1.6));
+    return this.core.machine.demo ? { delay, pan, volume: 0.7 } : { delay, pan };
   }
 
   /**
@@ -700,14 +749,19 @@ export class Game {
     this.celebrate = Math.max(this.celebrate, TIER_LED[tier]);
     const award = this.settleRound(roundId, 'won', toy.asset.id, demo);
     const streak = award ? award.streak : 0;
-    const jackpot = tier === 'legendary' || (award !== null && award.comboMultiplier >= 3);
+    // The light show escalates with the tier: celebrate() starts the 'win' show for epic and the
+    // 'jackpot' show for legendary by itself; common and rare get particles and a flash only.
+    // A ×3 combo earns the jackpot show whatever the tier.
     this.safeFx(() => this.fx.celebrate(tier, EXIT_POS));
+    if (tier !== 'legendary' && award !== null && award.comboMultiplier >= 3) this.safeFx(() => this.fx.lightShow('jackpot'));
     this.burstAt('score', EXIT_POS, tier);
     if (streak >= 2) this.burstAt('combo', EXIT_POS, tier, Math.min(2, 0.6 + streak * 0.25));
-    this.lightWin = jackpot ? 'jackpot' : 'win';
-    this.lightWinTime = ATTRACT_TIMING.winShow * (jackpot ? 1.4 : 1);
-    // Rarer prizes get the bigger sound: the unlock chime on top of the drop (no new audio files).
-    if (tier === 'epic' || tier === 'legendary') audio.playSfx('collect_unlock', { delay: 0.25, volume: tier === 'legendary' ? 1 : 0.7, pitch: tier === 'legendary' ? 1.12 : 1 });
+    // Tier-aware win sound (stinger, sparkle / confetti / firework, jackpot fanfare) and the
+    // character's own happy voice; a streak adds the combo hit.
+    audio.playWin(this.themeId, tier, demo ? { volume: 0.7 } : undefined);
+    audio.playCharacter(toy.asset.id, 'win', this.voiceOptions(toy, 0));
+    if (streak >= 2) audio.playSfx('combo', { delay: 0.5 });
+    this.winSoundRound = roundId;
     if (award) {
       const at = this.toScreen(EXIT_POS);
       if (at) this.addPopup(at, award);
@@ -734,6 +788,8 @@ export class Game {
 
   private addPopup(at: { x: number; y: number }, award: ScoreAward): void {
     const popups = this.deps.ui.getState().scorePopups.slice(-5);
+    // The points counter ticks up as the popup rises.
+    if (award.total > 0) this.deps.audio.playSfx('score_count', { delay: 0.3 });
     popups.push({
       id: ++this.popupId,
       x: at.x,
@@ -798,13 +854,15 @@ export class Game {
       const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
       if (toy && this.toyPosition(toy, _p)) this.burstAt('drop', _p.setY(_p.y + 0.06), rarityOf(toy.asset.id));
     }
-    if (result.demo) {
-      if (result.outcome === 'won') audio.playSfx('win', { volume: 0.7 });
-      return;
+    // The win sound normally played when the prize passed the exit; this only covers a win the exit
+    // event did not report.
+    if (result.outcome === 'won' && this.winSoundRound !== result.roundId) {
+      this.winSoundRound = result.roundId;
+      audio.playWin(this.themeId, rarityOf(result.targetTypeId), result.demo ? { volume: 0.7 } : undefined);
     }
+    if (result.demo) return;
     if (result.outcome === 'won') {
       this.lossStreak = 0;
-      audio.playSfx('win');
       const prize = ui.getState().prize;
       if (prize?.isNew) audio.playSfx('collect_unlock', { delay: 0.9 });
       this.emitGuide('prize_won', result);
@@ -911,10 +969,14 @@ export class Game {
     }
     this.restockQueue--;
     this.toyVisuals.sync(this.core.phys.toys.values(), true);
+    if (!this.deps.ui.getState().restocking) {
+      // Once per restock: the toys start raining in.
+      this.deps.audio.playSfx('restock_rain', { volume: 0.9 });
+      this.deps.ui.setState({ restocking: true });
+    }
     this.deps.audio.playSfx('restock_drop', { volume: 0.7 });
     const p = toy.pose.pos;
     this.burstAt('restock', _p.set(p[0]!, p[1]!, p[2]!), rarityOf(toy.asset.id));
-    if (!this.deps.ui.getState().restocking) this.deps.ui.setState({ restocking: true });
   }
 
   /* ---------------------------------------------------------------- guide */
@@ -978,7 +1040,7 @@ export class Game {
     this.effects.setIntensity(graphics.fxIntensity);
     this.effects.setLightShowEnabled(graphics.lightShow);
     this.effects.setViewportHeight(this.stage.effective.height);
-    this.toyVisuals.setQuality({ lod: graphics.lod, fur: graphics.fur, deform: graphics.deform });
+    this.toyVisuals.setQuality({ lod: graphics.lod, fur: graphics.fur, deform: graphics.deform, textures: graphics.textures });
     this.deps.ui.setState({ effective: { ...this.stage.effective }, autoReductions: reductions });
   }
 
@@ -988,6 +1050,8 @@ export class Game {
       camera: this.applied.camera,
       view,
       window: { widthM: this.layout.physWidth, heightM: this.layout.physHeight, centerOffsetM: [this.layout.physOffsetX, this.layout.physOffsetY] },
+      // The active preset reaches the tracker even when no calibration overlay is mounted.
+      profile: this.profile,
     });
   }
 
@@ -1000,6 +1064,7 @@ export class Game {
       const a = next.audio;
       audio.setVolumes({ master: a.master, music: a.music, sfx: a.sfx, voice: a.voice, muted: a.muted, ducking: a.ducking });
       audio.setMusicTrack(a.track);
+      audio.setAttractChime(a.attractChime);
       if (!prev || prev.audio.outputDevice !== a.outputDevice) {
         if (a.outputDevice || prev) void audio.setOutputDevice(a.outputDevice);
       }
@@ -1169,8 +1234,11 @@ export class Game {
     }
     if (this.pendingLayout && (this.layoutTimer -= dt) <= 0) this.applyPendingLayout();
     // Idle reset: wall clock, also while paused by a dialog. A player round that is still running counts as activity.
+    // A running calibration countdown counts as activity too: somebody stands in front of the camera.
+    // The limit is the applied value: a time only previewed in the open settings dialog (typed or
+    // imported into the draft) must not close the very dialog it is being edited in.
     const m = core.machine;
-    if (this.idle.due(this.applied.system.idleSeconds, m.busy && !m.demo && !paused) && this.needsIdleReset()) this.idleReset();
+    if (this.idle.due(this.committed.system.idleSeconds, (m.busy && !m.demo && !paused) || this.calibrating()) && this.needsIdleReset()) this.idleReset();
 
     const alpha = paused ? 1 : this.stepper.alpha;
     const grip = core.grip;
@@ -1279,8 +1347,13 @@ export class Game {
     }
 
     const attract = this.attract.active;
-    if (this.lightWinTime > 0) this.lightWinTime = Math.max(0, this.lightWinTime - dt);
-    const mode: LightMode = this.lightWinTime > 0 ? this.lightWin : attract ? 'attract' : 'idle';
+    // 'idle' / 'attract' only set the mode a timed show returns to; 'off' cancels the show.
+    if (this.lightCancel) {
+      this.lightCancel = false;
+      this.lightSent = null;
+      this.safeFx(() => this.fx.lightShow('off'));
+    }
+    const mode: LightMode = attract ? 'attract' : 'idle';
     if (mode !== this.lightSent) {
       this.lightSent = mode;
       this.safeFx(() => this.fx.lightShow(mode));
@@ -1315,6 +1388,8 @@ export class Game {
 
   private updateAudio(dt: number): void {
     const { audio } = this.deps;
+    // Attract / demo mode: the engine plays a soft chime every 20–30 s (no-op when unchanged).
+    audio.setAttract(this.attract.active);
     const claw = this.core.claw;
     const speed = Math.hypot(claw.trolleyVX, claw.trolleyVZ);
     const max = Math.max(0.1, this.core.controller.activeParams.moveSpeed);
@@ -1525,7 +1600,7 @@ export class Game {
       /** Points system: HUD state, player and demo totals. */
       score: () => ({ ui: this.deps.ui.getState().score, player: this.scores.totals(false), demo: this.scores.totals(true), popups: this.deps.ui.getState().scorePopups }),
       /** Attract mode and the idle timer. */
-      attract: () => ({ active: this.attract.active, idleSeconds: this.idle.idleSeconds(), limit: this.applied.system.idleSeconds, light: this.lightSent }),
+      attract: () => ({ active: this.attract.active, idleSeconds: this.idle.idleSeconds(), limit: this.committed.system.idleSeconds, light: this.lightSent }),
       /** Runs the idle reset now (as if nobody had touched the machine for system.idleSeconds). */
       idleReset: () => this.idleReset('debug'),
       claw: CLAW,

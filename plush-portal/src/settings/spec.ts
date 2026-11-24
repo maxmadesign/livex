@@ -184,6 +184,11 @@ interface ProfileDefaults {
   /** Side / top-bottom margin as a fraction of the viewport (default 0.035 / 0.02). */
   marginX?: number;
   marginY?: number;
+  /**
+   * Portrait kiosk presets: 'simulate916' shows the game in a centred 9:16 box that stands for the
+   * real screen when the browser window has another shape (src/layout/frame.ts). Default 'fill'.
+   */
+  frame?: 'simulate916' | 'fill';
 }
 
 function profileSpec(d: ProfileDefaults) {
@@ -209,6 +214,12 @@ function profileSpec(d: ProfileDefaults) {
       showGuides: bool(false),
       /** Normalised Y of the front edge of the play floor in the 3D scene. */
       floorY: num(d.floorY, 0.3, 0.85, 0.005),
+      /**
+       * simulate916: lay the game out in the largest centred 9:16 box of the browser window and treat
+       * that box as the preset's whole physical screen (portrait presets only; ignored elsewhere).
+       * fill: use the whole browser window, whatever its shape.
+       */
+      frame: en(d.frame ?? 'fill', ['simulate916', 'fill'] as const),
     },
     view: {
       /** Physical size of the full screen in metres (phones go down to ~0.06 m). */
@@ -288,6 +299,7 @@ const PROFILE_DEFAULTS: Record<DisplayProfileId, ProfileDefaults> = {
     screenH: 0.708,
     bottomElevation: 1.0,
     windowMode: 'fullscreen',
+    frame: 'simulate916',
     eye: [0, 0.2, 0.62],
     camPos: [0, 0.37, 0],
     camPitch: 8,
@@ -307,6 +319,7 @@ const PROFILE_DEFAULTS: Record<DisplayProfileId, ProfileDefaults> = {
     screenH: 1.904,
     bottomElevation: 0.12,
     windowMode: 'fullscreen',
+    frame: 'simulate916',
     eye: [0, 0.5, 0.95],
     camPos: [0, 0.98, 0],
     camPitch: 18,
@@ -460,6 +473,8 @@ export const settingsSpec = {
     track: en('theme', ['theme', ...THEME_IDS] as const),
     ducking: num(0.6, 0, 1, 0.05),
     outputDevice: str('', 256, 'live', true),
+    /** A soft chime every 20–30 s while the machine shows its attract / demo mode. */
+    attractChime: bool(true),
   },
   ai: {
     enabled: bool(true),

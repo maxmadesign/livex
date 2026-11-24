@@ -34,9 +34,29 @@ export const SFX_NAMES = [
   'restock_drop', // a new toy is dropped in
   'theme_sting', // short theme motif when a theme is selected
   'countdown_tick', // optional aim timer
-  'start_game', // attract -> play
+  'start_game', // attract -> play (coin)
+  // Dramatic layer (round 3). Each has a studio sample and a synthesised fallback.
+  'claw_lift', // winch starts lifting (with or without a toy)
+  'combo', // a win that extends a streak
+  'score_count', // the points counter ticking up
+  'sparkle', // rare-tier glitter (also layered under a character's win voice)
+  'firework', // epic / legendary burst
+  'confetti', // epic popper
+  'jackpot', // legendary bells (layered on the theme's jackpot fanfare)
+  'attract_chime', // soft periodic chime while the machine is in attract / demo mode
+  'restock_rain', // toys start raining into the machine (once per restock)
+  'calibration_ok', // head-tracking calibration finished
+  'plush_squeak', // generic plush character sound (characters without their own voice)
 ] as const;
 export type SfxName = (typeof SFX_NAMES)[number];
+
+/** Moments a plush character makes its own sound. */
+export const CHARACTER_MOMENTS = ['lift', 'win', 'slip'] as const;
+export type CharacterMoment = (typeof CHARACTER_MOMENTS)[number];
+
+/** Rarity tiers as the audio engine sees them (same ids as src/game/rarity.ts). */
+export const WIN_TIERS = ['common', 'rare', 'epic', 'legendary'] as const;
+export type WinTier = (typeof WIN_TIERS)[number];
 
 /** Continuous sounds driven by a level in 0..1; they start, change and stop smoothly. */
 export const LOOP_NAMES = ['motor_trolley', 'motor_winch'] as const;
@@ -101,6 +121,24 @@ export interface AudioPort {
   setMusicTrack(track: ThemeId | 'theme'): void;
   /** Plays a short preview of a track (settings UI); null stops the preview. */
   previewTrack(themeId: ThemeId | null): void;
+  /**
+   * A plush character's own voice: 'lift' (just lifted by the claw), 'win' (prize delivered:
+   * brighter, layered with a sparkle) or 'slip' (dropped: lower). The same character never
+   * repeats (or steps back to a less important moment) within its cooldown, but may escalate
+   * lift → slip → win, cutting its previous voice short; unknown ids use a generic plush
+   * squeak. Plays on the SFX bus.
+   */
+  playCharacter(assetId: string, moment: CharacterMoment, options?: { delay?: number; pan?: number; volume?: number }): void;
+  /**
+   * Tier-aware win: common = the theme's win stinger; rare = + sparkle; epic = + firework and
+   * confetti; legendary = the theme's jackpot fanfare + jackpot bells + firework. The music is
+   * ducked under the stinger; a second win while one is still ringing is ignored.
+   */
+  playWin(themeId: ThemeId, tier: WinTier, options?: { delay?: number; volume?: number }): void;
+  /** Attract / demo mode: while active (and the chime is enabled) a soft chime plays every 20–30 s. */
+  setAttract(active: boolean): void;
+  /** Setting `audio.attractChime`. */
+  setAttractChime(enabled: boolean): void;
   /** Plays encoded audio (mp3/wav/...) or raw samples on the voice bus; ducks the music meanwhile. */
   playVoice(data: ArrayBuffer | AudioBuffer, options?: { volume?: number; rate?: number }): VoiceHandle;
   /** Low-level access for synthesised voices (babble): returns the voice bus input, or null when locked. */

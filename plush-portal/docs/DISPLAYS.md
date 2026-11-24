@@ -16,6 +16,7 @@ configuration file can serve a desk, a 32" kiosk, an 86" wall and a phone.
 - [What the solver guarantees](#what-the-solver-guarantees)
 - [Four different "sizes"](#four-different-sizes)
 - [Window ↔ cabinet mapping](#window--cabinet-mapping)
+- [Simulated 9:16 screen](#simulated-916-screen)
 - [Installing on an 86" portrait display](#installing-on-an-86-portrait-display)
 - [32" portrait display](#32-portrait-display)
 - [Desktop](#desktop)
@@ -42,6 +43,7 @@ editable under *Settings → Layout* and *Settings → Camera & Parallax*.
 | Screen size (m) | 0.531 × 0.299 (24" 16:9) | 0.398 × 0.708 | 1.071 × 1.904 | 0.141 × 0.065 = *estimate from CSS pixels* (see [Phones](#phones)) |
 | Bottom edge above floor (m) | 0.95 | 1.00 | 0.12 | 1.10 |
 | Game window | browser window (approximate) | fills the screen | fills the screen | browser window (size estimated) |
+| Simulate 9:16 screen ([details](#simulated-916-screen)) | — | **on** | **on** | — |
 | Reference eye (right, up, distance from screen centre; m) | 0, 0.14, 0.62 | 0, 0.20, 0.62 | 0, 0.50, 0.95 | 0, 0, **0.35** |
 | Camera position (from screen centre; m) / tilt down | 0, 0.16, 0 / 4° | 0, 0.37, 0 / 8° | 0, 0.98, 0 / 18° | −0.065, 0, 0 / 0° (left end of a phone turned top-to-the-left) |
 | Largest view offset x, y, z (m) | 0.30, 0.22, 0.30 | 0.40, 0.30, 0.35 | 0.70, 0.50, 0.55 | 0.12, 0.09, 0.15 |
@@ -132,7 +134,7 @@ The phone preset's numbers are in [Phones](#phones).
 
 | Size | What it is | Who sets it | Used for |
 | --- | --- | --- | --- |
-| **CSS size** | Viewport in CSS pixels (`innerWidth × innerHeight`) | Browser window / OS scaling | All layout maths. The HUD is laid out in CSS pixels and rendered by the browser at native sharpness. |
+| **CSS size** | Viewport in CSS pixels (`innerWidth × innerHeight`; for a portrait preset in a window of another shape, the [simulated 9:16 box](#simulated-916-screen)) | Browser window / OS scaling | All layout maths. The HUD is laid out in CSS pixels and rendered by the browser at native sharpness. |
 | **Device pixel ratio** | Physical pixels per CSS pixel | OS display scaling, browser zoom | Sharpness of the HUD; starting point for the 3D resolution. |
 | **Physical size** | Metres of glass (`screenW`, `screenH`, `bottomElevation`) | You, in *Camera & Parallax → Screen & installation* | Window Perspective only: converting the tracked eye position (metres) into the scene. It cannot be detected by a browser. |
 | **Internal 3D resolution** | Size of the WebGL drawing buffer | Graphics settings | Cost and sharpness of the 3D view only. |
@@ -188,6 +190,66 @@ The screen is treated as a pane of glass in the front of the cabinet
 Without tracking the eye is the preset's **reference eye**. Tracking,
 calibration, filtering and loss handling are in [CALIBRATION.md](CALIBRATION.md).
 
+## Simulated 9:16 screen
+
+The two portrait presets are designed for a 9:16 panel. When one of them is opened in a
+browser window of another shape — a laptop, a landscape monitor, a narrow phone — the game
+**simulates the portrait screen**: everything (3D view, HUD, score, attract call to action,
+calibration countdown, dialogs, toasts, the boot screen) is laid out in the largest centred
+9:16 box of the window, and outside it there is only a dark surround with a faint glow in the
+theme's colour. The surround shows no game UI and takes no input (keyboard shortcuts still work).
+
+Setting: *Settings → Layout → Simulate 9:16 screen* (`profiles.<id>.layout.frame`:
+`simulate916` = on, `fill` = off), one value per portrait preset, **on by default**. It is
+shown for `portrait32` and `portrait86` only; `desktop` and `mobile` always use the whole window.
+It is a live value: switching it re-lays-out the game at once (also while the dialog is open).
+
+| Window (CSS px) | Box (CSS px) | Notes |
+| --- | --- | --- |
+| 1280 × 720 | 405 × 720 at x = 437 | laptop |
+| 1920 × 1080 | 608 × 1080 at x = 656 | landscape monitor |
+| 1080 × 1857 | 1045 × 1857 at x = 17 | 1080p portrait panel with browser bars (3.4 % off 9:16) |
+| 1080 × 1920, 2160 × 3840, 720 × 1280 | the whole window | already 9:16 |
+| 390 × 844 | 390 × 693 at y = 75 | narrower than 9:16: bars above and below |
+
+Rules (`src/layout/frame.ts`, pure functions, tested in `tests/unit/layout/frame.test.ts`):
+
+- **Box** = the largest 9:16 rectangle that fits the viewport (`innerWidth × innerHeight`),
+  centred, in whole CSS pixels. A viewport within **2 %** of 9:16 is used whole, so a real
+  kiosk in full screen is never letterboxed by rounding. The box is recomputed on every
+  resize, orientation change and full-screen change.
+- **Layout.** `solveLayout` is called with the box size (`solveFramed` for the HUD,
+  `readFramedEnvironment` in the game's resize path), so every rule of
+  [What the solver guarantees](#what-the-solver-guarantees) holds inside the box: the
+  86" safe band 0.25–0.75 is measured on the **box height** (180–540 px of a 720 px box),
+  dialogs are placed and scroll inside the box, the floor line is a fraction of the box. The
+  "+N" score popups follow too: `Game.toScreen` projects the prize exit into coordinates
+  relative to the box (the canvas), not to the window. A
+  simulated screen has the same normalised layout as the real one (to a pixel of rounding).
+  Screen cut-outs only count where they reach into the box.
+- **3D view.** The canvas is the box: CSS size, internal resolution (box × pixel ratio ×
+  render scale, then the pixel budget) and the off-axis frustum all follow the box.
+- **Window Perspective.** The box is treated as the preset's **whole physical screen**:
+  width = the shorter of *Screen width / height* (0.398 m on the 32" preset, 1.071 m on the
+  86" one), height = width × 16 / 9 (0.708 m, 1.904 m), centred on the screen. The scale and
+  the head-tracking eye mapping are therefore exactly those of the real panel (2.66 and 0.99),
+  even on a laptop; *Game window* does not apply while the screen is simulated. If you enter a
+  screen size that is not 9:16 the width is kept and the height follows the box.
+- **Implementation.** The outer `.pp-root` (`data-testid="root"`, `data-frame="simulate916"`)
+  is positioned on the box by `src/ui/App.tsx`; `src/ui/frame.css` gives it layout + paint
+  containment, so every `position: fixed` layer inside is positioned in the box and nothing
+  paints outside it, and container units for the few viewport-relative sizes. The game computes
+  the box itself (it does not wait for React to resize the canvas); after the box changes to or
+  from a simulated screen the page sends one `resize` event so the game measures the committed
+  canvas.
+- *Settings → Layout* shows the box, the window and the physical size used.
+- End-to-end check: `tests/e2e/23-frame.spec.ts` opens portrait32 and portrait86 in a 1280 × 720
+  window (box 405 × 720 centred, canvas = box, HUD and call to action inside it, the 86" band on the box,
+  a score popup inside the box, START by click) and a 720 × 1280 window (no box).
+
+Turn it off when the browser window *is* the screen but not exactly 9:16 — for example a
+portrait panel driven at a non-9:16 resolution — so the game uses every pixel as before.
+
 ## Installing on an 86" portrait display
 
 Assumed by the defaults — change the numbers if your installation differs:
@@ -216,14 +278,21 @@ Steps:
 4. **Mount the camera** centred on the top edge, tilted down so that a person
    standing at playing distance is fully in frame. Enter its position relative
    to the screen centre and its tilt, rotation and field of view under *Camera mounting*.
-5. **Calibrate** with a person of typical height at the usual distance
-   (*Quick calibration*, [CALIBRATION.md](CALIBRATION.md)).
+5. **Calibrate** with a person of typical height at the usual distance: the countdown
+   calibration runs by itself when the camera starts (*Calibrate when the camera starts*); to
+   repeat it, use **Calibrate now** in *Camera & Parallax* or the camera button
+   (*Recalibrate view*) in the control-panel menu — on 86" the top bar's camera chip is above
+   the reachable band, so the action is in the panel instead ([CALIBRATION.md](CALIBRATION.md)).
 6. **Layout.** Turn on *Show safe-zone guides*. Check with the shortest and the
    tallest expected player that the panel is comfortable; move *Control panel
    height* or the zone if not. For children-only venues a lower anchor (0.65–0.70) and zone is reasonable.
 7. **Graphics.** Start with Medium and read
    [PERFORMANCE.md](PERFORMANCE.md) before raising the pixel budget — 8.3 MP is a lot for an integrated GPU.
 8. **Lock.** *System → Public display lock* hides the full settings behind a PIN.
+9. **Idle reset.** *System → Reset after no input* (default 60 s) returns the machine to its
+   self-playing attract mode when a player walks away: dialogs close, the session score is
+   cleared, and the call to action ("TAP TO PLAY") is shown in the middle of the 0.25–0.75 band,
+   larger than START. The automated check `tests/e2e/22-idle-attract.spec.ts` measures it at 1080 × 1920.
 
 Real-device checks that nobody has done yet:
 
@@ -336,7 +405,9 @@ over the phone's width), so the toys are not smaller than sideways.
   allows both; Safari on iPhone allows neither for a page — every refusal is ignored.
   Leaving full screen releases the lock. Pausing when the page is hidden is unchanged.
 - **First run on a phone** (phone preset on a touch screen, once per device, never over
-  `?quality=`, never into an open settings draft): the *Safe* graphics preset — 30 fps
+  `?quality=`, never into an open settings draft): applied in `src/app/bootstrap.ts` before the
+  game is created when the preset is already known (so the first frame is already Safe), else
+  when the phone preset is picked: the *Safe* graphics preset — 30 fps
   target, 512 textures, no fur shells, pixel-density cap 1.25 and at most 0.7 MP of 3D
   pixels. If that preset is ever raised above 1.5 device pixels per CSS pixel, the phone
   setup lowers the cap (and the preset then shows as *Custom*).
@@ -372,6 +443,10 @@ physical width at a pixel ratio of 3):
 | Pixel 5 in Chrome @ 802 × 293 | 0.560 | 56 / 120 / 44 | pad 16–189, button 666–786 (cabinet 282–520) | side 0.30–0.45 | 0.700 | 131 mm, ×27.2 | no |
 | iPhone 15 Pro upright in Safari @ 393 × 659 | 0.655 | 57 / 123 / 44 | panel 0.606–0.975 | above panel 0.51–0.60 | 0.501 | 64 mm, ×16.5 | no |
 | Pixel 7 upright, full screen @ 412 × 915 | 0.680 | 68 / 146 / 44 | panel 0.673–0.975 | above panel 0.60–0.67 | 0.594 | 67 mm, ×15.8 | no |
+
+End-to-end check: `tests/e2e/24-phone.spec.ts` plays a round with taps on an emulated 844 × 390
+phone (touch targets ≥ 44 px, no overlaps, pad left / big button right, the call to action between them,
+hold-to-move with a finger).
 
 Testing without a phone: Playwright's phone devices (e.g. `devices['iPhone 15 Pro landscape']`,
 `devices['Pixel 7']`) emulate size, pixel ratio and a coarse pointer, but **no cut-outs**;

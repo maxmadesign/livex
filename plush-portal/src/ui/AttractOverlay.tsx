@@ -84,7 +84,11 @@ export function AttractOverlay({ layout }: { layout: HudLayout }) {
   const paused = useUi((s) => s.paused);
   const themeBusy = useUi((s) => s.themeBusy);
   const scoring = useUi((s) => s.score.enabled);
+  const calibrating = useUi((s) => s.tracker.calibration.phase !== 'idle');
   if (!(phase === 'ATTRACT' || demo) || modal !== null || themeBusy) return null;
+  // Phones: the compact calibration card (src/ui/CalibrationOverlay.tsx) sits where the call to
+  // action is, so the call to action steps aside while a calibration (or its result card) is shown.
+  if (layout.controls && calibrating) return null;
   const { cx, cy, w, h } = ctaGeometry(layout, scoring ? scoreHudRect(layout) : null);
   // The keyboard hint only where a keyboard is likely (landscape desks, no touch screen).
   const keys = layout.panelStyle === 'split' && !layout.controls && !hasCoarsePointer();

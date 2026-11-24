@@ -4,6 +4,7 @@ import '@fontsource/noto-sans-sc/500.css';
 import '@fontsource/m-plus-rounded-1c/700.css';
 import './ui/hud.css';
 import './ui/game.css';
+import './ui/frame.css';
 import './ui/calibration.css';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';

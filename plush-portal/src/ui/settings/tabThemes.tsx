@@ -72,6 +72,12 @@ function ToyList({ theme }: { theme: ThemeId }) {
               <small>{a.kind[lang]}</small>
               <small>{t('themes.size', { h: (a.size[1] * 100).toFixed(0), g: Math.round(a.mass * 1000) })}</small>
               <small>{t(`themes.status.${entry ? 'user-import' : a.source.status}`)}</small>
+              {!entry && a.source.method === 'ai-generated' ? (
+                // Provenance of the generated model; the generator and the licence note are on hover.
+                <small className="pp-gen" data-testid={`toy-gen-${a.id}`} title={`${a.source.generator}\n${a.source.license}`}>
+                  {t('themes.aiGenerated')}
+                </small>
+              ) : null}
               <div className="pp-control" style={{ justifyContent: 'center', marginTop: 4 }}>
                 <button type="button" role="switch" className="pp-toggle" aria-checked={on} aria-label={t('themes.enabled')} onClick={() => toggle(a.id)} data-testid={`toy-toggle-${a.id}`} />
               </div>
@@ -101,6 +107,11 @@ function ToyList({ theme }: { theme: ThemeId }) {
           );
         })}
       </div>
+      {assets.some((a) => a.source.method === 'ai-generated') ? (
+        <p className="pp-note" data-testid="toy-provenance">
+          {t('themes.aiGenerated.note')}
+        </p>
+      ) : null}
     </>
   );
 }

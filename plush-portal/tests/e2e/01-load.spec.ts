@@ -19,7 +19,8 @@ test.describe('1. production build loads cleanly', () => {
     expect(w.failedRequests, 'failed requests').toEqual([]);
     expect(w.badResponses, 'HTTP >= 400').toEqual([]);
     // Everything comes from this origin: no CDN, no remote model / font / analytics hosts.
-    const foreign = requests.filter((u) => !u.startsWith('http://127.0.0.1:8799/') && !u.startsWith('data:') && !u.startsWith('blob:'));
+    const origin = new URL(page.url()).origin;
+    const foreign = requests.filter((u) => !u.startsWith(`${origin}/`) && !u.startsWith('data:') && !u.startsWith('blob:'));
     expect(foreign, 'requests to other origins').toEqual([]);
     const appLog = await plush<string[]>(page, (p) => p.log());
     expect(appLog.filter((l) => l.startsWith('[error]'))).toEqual([]);
@@ -36,6 +37,8 @@ test.describe('1. production build loads cleanly', () => {
     const chooser = page.getByTestId('device-chooser');
     await expect(chooser).toBeVisible();
     expect((await state(page)).paused).toBe(true);
+    // One card per display preset: desktop, 32" portrait, 86" portrait and phone.
+    await expect(chooser.locator('button[data-testid^="device-"]')).toHaveCount(4);
     await page.getByTestId('device-portrait86').click({ force: true });
     await expect(chooser).toHaveCount(0);
     // The tutorial follows on a first run; close it.

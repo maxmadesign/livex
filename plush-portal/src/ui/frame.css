@@ -1,0 +1,45 @@
+/* Simulated 9:16 screen of the portrait presets (Settings → Layout → "Simulate 9:16 screen";
+   src/layout/frame.ts, src/ui/App.tsx). Imported after game.css.
+
+   The outer .pp-root (data-testid="root") is the box. Layout + paint containment make it the
+   containing block of every `position: fixed` layer inside (the shell's .pp-root, dialogs,
+   backdrops, toasts) and clip anything that would paint outside it; container units let the few
+   viewport-relative sizes (boot screen) follow the box instead of the window. */
+
+.pp-root[data-frame="simulate916"] {
+  contain: layout paint;
+  container-type: size;
+}
+
+/* The box inside a window of another shape: a screen standing in a calm, dark room. */
+.pp-root[data-frame="simulate916"][data-letterbox="true"] {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 7px #0c0a10,
+    0 0 0 8px rgba(255, 255, 255, 0.05),
+    0 28px 90px rgba(0, 0, 0, 0.6),
+    0 0 160px color-mix(in srgb, var(--c-glow) 16%, transparent);
+}
+
+.pp-surround { display: none; }
+.pp-surround[data-frame="simulate916"] {
+  display: block;
+  position: fixed;
+  inset: 0;
+  /* It has no handlers: a tap here does nothing. It still takes the touches (instead of letting
+     them fall through to #root) so that touch-action applies: no pinch / double-tap zoom of the
+     page in the surround (iPad Safari ignores user-scalable=no). */
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background:
+    radial-gradient(ellipse 55% 75% at 50% 50%, color-mix(in srgb, var(--c-glow) 12%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 40%, #1a1422 0%, #110c17 55%, #07050a 100%);
+}
+
+/* Boot screen: sized from the box, not the window (hud.css uses vmin / vw). */
+.pp-root[data-frame="simulate916"] .pp-boot { padding: 6cqmin; }
+.pp-root[data-frame="simulate916"] .pp-boot h1 { font-size: clamp(34px, 8cqmin, 96px); }
+.pp-root[data-frame="simulate916"] .pp-boot .bar { width: min(70cqw, 520px); }
+.pp-root[data-frame="simulate916"] .pp-boot p { font-size: clamp(15px, 2.6cqmin, 26px); }

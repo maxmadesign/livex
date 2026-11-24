@@ -668,8 +668,9 @@ export const spacerobot: PlushDesign = {
       seams: false,
       detail: 1.3,
       parts: [
-        cyl('keyStem', [0, 7.4, -5.0], 0.55, 0.8, 0.3, STAR_YELLOW, { rot: [90, 0, 0], k: 0, collide: 'appendage', group: 'key' }),
-        ring('keyLoop', [0, 7.4, -6.5], 1.25, 0.5, STAR_YELLOW, { rot: [0, 0, 90], k: 0.3, soft: 0.4, collide: 'appendage', group: 'key' }),
+        // Decoration only: the generated model has no wind-up key, so it gets no collider either.
+        cyl('keyStem', [0, 7.4, -5.0], 0.55, 0.8, 0.3, STAR_YELLOW, { rot: [90, 0, 0], k: 0, collide: 'none', group: 'key' }),
+        ring('keyLoop', [0, 7.4, -6.5], 1.25, 0.5, STAR_YELLOW, { rot: [0, 0, 90], k: 0.3, soft: 0.4, collide: 'none', group: 'key' }),
       ],
     },
   ],

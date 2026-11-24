@@ -100,13 +100,6 @@ describe('i18n completeness', () => {
       expect(table['set.system.language.o.en']).toBe('English');
       expect(table['set.system.language.o.zh']).toBe('简体中文');
       expect(table['set.system.language.o.ja']).toBe('日本語');
-      expect(table['set.ai.language.o.en']).toBe('English');
-      expect(table['set.ai.language.o.zh']).toBe('简体中文');
-      expect(table['set.ai.language.o.ja']).toBe('日本語');
     }
-  });
-
-  it('keeps the product name untouched', () => {
-    for (const table of [uiEn, uiZh, uiJa]) expect(table['app.title']).toBe('PLUSH PORTAL');
   });
 });

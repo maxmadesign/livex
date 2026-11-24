@@ -47,6 +47,7 @@ export function AudioTab() {
       </div>
       <Section title={t('sec.audio.music')} />
       <Field path="audio.track" />
+      <Field path="audio.attractChime" />
       <Row label={t('audio.preview')} stack>
         <div className="pp-seg" data-testid="track-previews">
           {THEME_IDS.map((id) => (

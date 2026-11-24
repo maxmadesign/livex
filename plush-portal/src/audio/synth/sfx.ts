@@ -247,6 +247,31 @@ function themeSting(theme: ThemeId, rng: Rng): Float32Array {
   return room(c.buf, 0.4, 0.9, 0.3);
 }
 
+/** Rubber squeeze-toy squeak: a bright, vibrato-rich glide through a resonant body. */
+function squeak(rng: Rng, f0: number, f1: number, seconds: number): Float32Array {
+  const n = Math.round(seconds * SR);
+  const out = new Float32Array(n);
+  const body = Biquad.bandpass(1900, 1.4);
+  const lp = Biquad.lowpass(5200, 0.7);
+  let phase = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    const vib = 1 + 0.035 * Math.sin((TAU * 31 * i) / SR);
+    const freq = (f0 + (f1 - f0) * Math.sin((t * Math.PI) / 2)) * vib;
+    phase += freq / SR;
+    const ph = TAU * phase;
+    const tone = Math.sin(ph) * 0.6 + Math.sin(2 * ph) * 0.3 + Math.sin(3 * ph) * 0.18 + Math.sin(4 * ph) * 0.08;
+    const env = Math.min(1, i / (0.008 * SR)) * Math.pow(1 - t, 0.6);
+    out[i] = lp.process(body.process(tone + (rng() * 2 - 1) * 0.08) * 1.6 + tone * 0.35) * env;
+  }
+  return out;
+}
+
+/** Short high-passed noise tick used for crackles and paper. */
+function crackle(rng: Rng, freq: number, ms: number): Float32Array {
+  return noiseBurst(ms / 1000 + 0.02, rng, { type: 'bp', freq, q: 1.3, attackMs: 0.3, decayTau: ms / 1000 / 3 });
+}
+
 /* ------------------------------------------------------------------ recipes */
 
 export const SFX_RECIPES: Record<SfxName, SfxRecipe> = {
@@ -576,6 +601,152 @@ export const SFX_RECIPES: Record<SfxName, SfxRecipe> = {
       c.add(cut(mallet(MALLETS.glockenspiel, f('c7'), 0.8, rng), 0.26), 0.64, 0.6);
       c.add(sineGlide(170, 80, 0.14, { glideTau: 0.03, ampTau: 0.04, attackMs: 2 }), 0.64, 0.6);
       return room(c.buf, 0.35, 0.9, 0.2);
+    },
+  },
+  /* ---- dramatic layer: synthesised stand-ins for the studio samples (same names; gains put
+     each at about the loudness its studio sample plays at, see docs/AUDIO.md) ---- */
+  claw_lift: {
+    variants: 1,
+    gain: 0.32,
+    pitchVar: 0.02,
+    gainVar: 0.04,
+    render: (_v, rng) => {
+      const c = new Canvas(0.78);
+      c.add(tick(rng, 1700, 6), 0, 0.5);
+      c.add(servo(0.74, 240, 430, 22, rng, { noise: 0.1, bright: 0.5 }), 0.01, 0.8);
+      return c.buf;
+    },
+  },
+  combo: {
+    variants: 1,
+    gain: 0.54,
+    pitchVar: 0,
+    gainVar: 0.02,
+    render: (_v, rng) => {
+      const c = new Canvas(0.8);
+      ['c6', 'e6', 'g6', 'c7'].forEach((n, i) => c.add(softPluck(SOFT_PLUCKS.arcade, f(n), 0.07, 0.7 + i * 0.06), i * 0.055, 0.6));
+      c.add(fmBell(f('g7'), 0.5, { ratio: 2, index: 1.4, decay: 0.5 }), 0.22, 0.25);
+      c.add(subBass(f('c3'), 0.2, 0.7, { harm2: 0.3 }), 0.22, 0.4);
+      return room(c.buf, 0.3, 0.8, 0.2);
+    },
+  },
+  score_count: {
+    variants: 3,
+    gain: 0.15,
+    pitchVar: 0.02,
+    gainVar: 0.06,
+    render: (v, rng) => {
+      const c = new Canvas(0.14);
+      c.add(cut(mallet(MALLETS.glockenspiel, f(['e6', 'g6', 'b6'][v]!), 0.6, rng), 0.11), 0, 0.8);
+      c.add(tick(rng, 2600, 4), 0, 0.15);
+      return c.buf;
+    },
+  },
+  sparkle: {
+    variants: 1,
+    gain: 0.3,
+    pitchVar: 0.02,
+    gainVar: 0.05,
+    render: (v, rng) => {
+      const c = new Canvas(0.95);
+      const notes = v === 0 ? ['e6', 'g#6', 'b6', 'e7', 'g#7'] : ['f#6', 'a6', 'c#7', 'f#7', 'a7'];
+      notes.forEach((n, i) => c.add(cut(mallet(MALLETS.celesta, f(n), 0.5 + i * 0.05, rng), 0.5), i * 0.045, 0.55));
+      c.add(noiseBurst(0.45, rng, { type: 'bp', freq: 4200, freqEnd: 6500, q: 1.6, attackMs: 60, decayTau: 0.12 }), 0.02, 0.05);
+      return room(c.buf, 0.35, 0.9, 0.25);
+    },
+  },
+  firework: {
+    variants: 1,
+    gain: 1.0,
+    pitchVar: 0.04,
+    gainVar: 0.05,
+    render: (v, rng) => {
+      const c = new Canvas(1.1);
+      // Whistle up, boom, then crackles.
+      c.add(sineGlide(700 + v * 90, 2100 + v * 200, 0.32, { glideTau: 0.25, ampTau: 0.3, attackMs: 25 }), 0, 0.12);
+      const boom = 0.34;
+      c.add(sineGlide(130, 42, 0.55, { glideTau: 0.08, ampTau: 0.18, attackMs: 2, harm2: 0.2 }), boom, 0.95);
+      c.add(noiseBurst(0.6, rng, { type: 'lp', freq: 1100, freqEnd: 300, q: 0.6, attackMs: 2, decayTau: 0.16 }), boom, 0.7);
+      for (let k = 0; k < 10; k++) c.add(crackle(rng, 2200 + rng() * 2200, 8 + rng() * 10), boom + 0.18 + rng() * 0.55, 0.18 + rng() * 0.1);
+      return room(c.buf, 0.3, 1.2, 0.22);
+    },
+  },
+  confetti: {
+    variants: 1,
+    gain: 0.6,
+    pitchVar: 0.04,
+    gainVar: 0.05,
+    render: (_v, rng) => {
+      const c = new Canvas(0.75);
+      c.add(noiseBurst(0.05, rng, { type: 'bp', freq: 1500, q: 0.9, attackMs: 0.4, decayTau: 0.01 }), 0, 0.9);
+      c.add(sineGlide(420, 180, 0.06, { glideTau: 0.02, ampTau: 0.02, attackMs: 0.5 }), 0, 0.5);
+      c.add(noiseBurst(0.6, rng, { type: 'bp', freq: 2600, q: 0.5, attackMs: 30, decayTau: 0.18 }), 0.04, 0.16);
+      for (let k = 0; k < 9; k++) c.add(crackle(rng, 2800 + rng() * 1800, 5 + rng() * 6), 0.06 + rng() * 0.55, 0.12);
+      return c.buf;
+    },
+  },
+  jackpot: {
+    variants: 1,
+    gain: 0.6,
+    pitchVar: 0,
+    gainVar: 0,
+    render: (_v, rng) => {
+      const c = new Canvas(1.15);
+      ['c6', 'e6', 'g6', 'c7', 'e7', 'g7'].forEach((n, i) => c.add(fmBell(f(n), 0.55 + i * 0.05, { ratio: 3.5, index: 1.6, decay: 0.7 }), i * 0.06, 0.32));
+      ['c7', 'e7', 'g7'].forEach((n) => c.add(fmBell(f(n), 0.7, { ratio: 3.5, index: 1.4, decay: 0.9 }), 0.42, 0.3));
+      for (let k = 0; k < 6; k++) c.add(cut(mallet(MALLETS.glockenspiel, f(k % 2 ? 'g6' : 'c7'), 0.55, rng), 0.12), 0.42 + k * 0.07, 0.25);
+      c.add(subBass(f('c3'), 0.4, 0.8, { harm2: 0.3 }), 0.42, 0.45);
+      return room(c.buf, 0.4, 1.1, 0.18);
+    },
+  },
+  attract_chime: {
+    variants: 1,
+    gain: 0.31,
+    pitchVar: 0,
+    gainVar: 0,
+    render: (_v, rng) => {
+      const c = new Canvas(1.1);
+      ['e6', 'g#6', 'b6', 'e7'].forEach((n, i) => c.add(cut(mallet(MALLETS.celesta, f(n), 0.55, rng), 0.6), i * 0.15, 0.6));
+      return room(c.buf, 0.45, 1.0, 0.25);
+    },
+  },
+  restock_rain: {
+    variants: 1,
+    gain: 0.57,
+    pitchVar: 0.03,
+    gainVar: 0.05,
+    render: (_v, rng) => {
+      const c = new Canvas(1.2);
+      c.add(noiseBurst(0.9, rng, { type: 'bp', freq: 900, freqEnd: 400, q: 0.6, attackMs: 120, decayTau: 0.3 }), 0, 0.12);
+      for (let k = 0; k < 7; k++) c.add(pomf(rng, 0.85 + rng() * 0.4, 0.6 + rng() * 0.5), 0.08 + k * 0.12 + rng() * 0.05, 0.45 + rng() * 0.25);
+      return c.buf;
+    },
+  },
+  calibration_ok: {
+    variants: 1,
+    gain: 0.55,
+    pitchVar: 0,
+    gainVar: 0,
+    render: (_v, rng) => {
+      const c = new Canvas(0.75);
+      c.add(cut(mallet(MALLETS.glockenspiel, f('g6'), 0.7, rng), 0.25), 0, 0.7);
+      c.add(cut(mallet(MALLETS.glockenspiel, f('c7'), 0.8, rng), 0.5), 0.11, 0.8);
+      c.add(subBass(f('c3'), 0.18, 0.6), 0.11, 0.3);
+      return room(c.buf, 0.3, 0.8, 0.15);
+    },
+  },
+  plush_squeak: {
+    variants: 2,
+    gain: 0.69,
+    pitchVar: 0.03,
+    gainVar: 0.05,
+    render: (v, rng) => {
+      const c = new Canvas(0.5);
+      // "Squee-ak": a rising squeeze, then a shorter falling release.
+      c.add(squeak(rng, 820 + v * 70, 1250 + v * 90, 0.16), 0, 0.8);
+      c.add(squeak(rng, 1150 + v * 80, 760 + v * 60, 0.12), 0.18, 0.6);
+      c.add(pomf(rng, 1.15, 0.5), 0, 0.25);
+      return c.buf;
     },
   },
 };

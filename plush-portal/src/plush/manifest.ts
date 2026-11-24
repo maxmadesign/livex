@@ -125,6 +125,12 @@ export interface FitReport {
    * out of the proxies, or the proxies reach far beyond the mesh). Never corrected automatically.
    */
   verdict: 'ok' | 'check' | 'mismatch';
+  /**
+   * SHA-256 of the procedural model file the generated mesh was fitted to (its shape, softness
+   * transfer and the proxies the verdict was measured against). When the design is re-baked with
+   * a different shape this no longer matches and the import refits the model.
+   */
+  reference?: string;
 }
 
 /** A textured model (e.g. AI-generated) drawn instead of the procedural mesh; physics still uses the proxies. */

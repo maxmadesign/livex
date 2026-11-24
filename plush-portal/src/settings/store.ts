@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { migrateGuideLanguage } from '../ai/settingsMigration';
 import { DISPLAY_PROFILE_IDS, type DisplayProfileId } from '../core/types';
 import { readJson, writeJson } from '../persistence/storage';
 import {
@@ -75,8 +76,9 @@ export function migrate(raw: unknown): unknown {
   const o = raw as { version?: unknown; settings?: unknown };
   if (typeof o.version !== 'number' || o.settings === undefined) return null;
   if (o.version > SETTINGS_VERSION) return null; // written by a newer build: fall back to defaults
-  // v1 is the first public layout; later changes within it are upgraded key by key.
-  return migrateIdleSetting(o.settings);
+  // v1 is the first public layout; later changes within it are upgraded key by key
+  // (system.attractIdleSec → system.idleSeconds, ai.language → ai.voiceLanguage).
+  return migrateGuideLanguage(migrateIdleSetting(o.settings));
 }
 
 /** True when the stored data was written by a newer build (it is then left untouched). */

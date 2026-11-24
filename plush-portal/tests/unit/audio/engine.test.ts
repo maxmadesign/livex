@@ -10,9 +10,14 @@ import { createAudioEngine, type AudioEnv } from '../../../src/audio/index';
 import { buildSynthManifest, renderFileByKey, themeOfMusicFile, type AudioManifest } from '../../../src/audio/synth/index';
 import type { AudioPort, AudioVolumes } from '../../../src/core/contracts';
 
-const realManifest = JSON.parse(
+const shippedManifest = JSON.parse(
   readFileSync(path.join(fileURLToPath(new URL('../../..', import.meta.url)), 'public', 'audio', 'manifest.json'), 'utf8'),
-) as AudioManifest;
+) as AudioManifest & { studio?: unknown };
+/**
+ * These tests cover the synthesised set (and the fallback synthesiser) on their own: the
+ * manifest without its optional studio section. Studio recordings: tests/unit/audio/studio.test.ts.
+ */
+const realManifest: AudioManifest = (({ studio: _studio, ...rest }) => rest)(shippedManifest);
 
 /* ------------------------------------------------------------ fake web audio */
 

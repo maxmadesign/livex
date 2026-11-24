@@ -100,4 +100,51 @@ describe('stored settings housekeeping', () => {
     // migrate() itself leaves unrelated payloads alone.
     expect(migrate({ version: SETTINGS_VERSION, settings: { a: 1 } })).toEqual({ a: 1 });
   });
+
+  it('retires ai.language: old values map onto ai.voiceLanguage on load and on import', () => {
+    expect(getFieldAt('ai.language')).toBeNull();
+    expect(defaultSettings().ai.voiceLanguage).toBe('en');
+    const old = (language: string, uiLang: string, voiceLanguage?: string) =>
+      stored((s) => {
+        delete s.ai!.voiceLanguage;
+        s.ai!.language = language;
+        s.system!.language = uiLang;
+        if (voiceLanguage !== undefined) s.ai!.voiceLanguage = voiceLanguage;
+      });
+    const load = (raw: string) => {
+      data.set(KEY, raw);
+      return createSettingsStore().getState().settings;
+    };
+    // An explicit Chinese / Japanese guide that matched the interface keeps following it.
+    expect(load(old('zh', 'zh')).ai.voiceLanguage).toBe('ui');
+    expect(load(old('ja', 'ja')).ai.voiceLanguage).toBe('ui');
+    // Everything else, including the old default 'ui', becomes the new default: English.
+    expect(load(old('ui', 'zh')).ai.voiceLanguage).toBe('en');
+    expect(load(old('en', 'ja')).ai.voiceLanguage).toBe('en');
+    expect(load(old('ja', 'zh')).ai.voiceLanguage).toBe('en');
+    expect(load(old('xx', 'en')).ai.voiceLanguage).toBe('en');
+    // A value saved by this build wins over the old key; the old key is dropped on write-back.
+    const kept = load(old('zh', 'zh', 'en'));
+    expect(kept.ai.voiceLanguage).toBe('en');
+    expect((kept.ai as Record<string, unknown>).language).toBeUndefined();
+    expect(JSON.parse(data.get(KEY)!).settings.ai.language).toBeUndefined();
+    // Both retired settings migrate together in one payload.
+    const both = load(
+      stored((s) => {
+        delete s.ai!.voiceLanguage;
+        s.ai!.language = 'ja';
+        s.system!.language = 'ja';
+        s.system!.attractIdleSec = 120;
+        delete s.system!.idleSeconds;
+      }),
+    );
+    expect(both.ai.voiceLanguage).toBe('ui');
+    expect(both.system.idleSeconds).toBe(120);
+    // Imported files go through the same migration.
+    const store = createSettingsStore();
+    const file = JSON.parse(old('zh', 'zh')) as { settings: unknown };
+    const r = store.getState().importJson(JSON.stringify({ app: 'plush-portal', version: SETTINGS_VERSION, settings: file.settings }));
+    expect(r.ok).toBe(true);
+    expect(store.getState().settings.ai.voiceLanguage).toBe('ui');
+  });
 });

@@ -140,6 +140,14 @@ export function verdictFor(gen: { share: number; p95: number }, base: { share: n
   return 'ok';
 }
 
+/**
+ * Identifies the procedural design a generated model was fitted to: its model file (shape and
+ * softness) plus its collision proxies (what the verdict measures against).
+ */
+export function referenceHash(proceduralGlb: Uint8Array, asset: Pick<PlushAsset, 'proxies'>): string {
+  return createHash('sha256').update(proceduralGlb).update(JSON.stringify(asset.proxies)).digest('hex');
+}
+
 const round = (v: number, digits = 4) => Number(v.toFixed(digits));
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(0)} KB`;
 
@@ -159,10 +167,16 @@ async function importOne(asset: PlushAsset, rawPath: string, meta: JobMeta | und
   const base = `${asset.theme}/${asset.slug}.gen`;
   const glbRel = `assets/plush/${base}.glb`;
   const textured = asset.model.textured;
+  const procPath = join(PROJECT_ROOT, 'public', asset.model.path);
+  if (!existsSync(procPath)) throw new Error(`procedural model ${asset.model.path} is missing (run "npm run assets:plush" first)`);
+  const procBytes = new Uint8Array(readFileSync(procPath));
+  const reference = referenceHash(procBytes, asset);
   const upToDate =
     !args.force &&
     textured !== undefined &&
     asset.source.rawSha256 === sha &&
+    // Fitted to the current design (entries imported before the hash existed are taken as current).
+    (textured.fit?.reference === undefined || textured.fit.reference === reference) &&
     textured.path === glbRel &&
     asset.source.note.includes(`importer v${IMPORTER_VERSION}`) &&
     existsSync(join(PROJECT_ROOT, 'public', glbRel)) &&
@@ -178,17 +192,15 @@ async function importOne(asset: PlushAsset, rawPath: string, meta: JobMeta | und
 
   const raw = await readRawModel(data);
   const { mesh: clean, removedTriangles, mergedVertices } = cleanMesh(raw.mesh);
-  const procPath = join(PROJECT_ROOT, 'public', asset.model.path);
-  if (!existsSync(procPath)) throw new Error(`procedural model ${asset.model.path} is missing (run "npm run assets:plush" first)`);
-  const reference = await readReference(new Uint8Array(readFileSync(procPath)));
+  const procedural = await readReference(procBytes);
   const override = OVERRIDES[asset.id] ?? {};
-  const fit = fitToReference(clean, reference, { yawDeg: args.yaw.get(asset.id) ?? override.yawDeg, scaleBias: args.scale.get(asset.id) ?? override.scale });
+  const fit = fitToReference(clean, procedural, { yawDeg: args.yaw.get(asset.id) ?? override.yawDeg, scaleBias: args.scale.get(asset.id) ?? override.scale });
   const fitted = transformMesh(clean, fit);
   const roughness = raw.textures.metallicRoughness ? await decodeImage(raw.textures.metallicRoughness) : null;
-  transferAttributes(fitted, reference, { roughness, proxies: asset.proxies });
+  transferAttributes(fitted, procedural, { roughness, proxies: asset.proxies });
 
   const gen = measureOutside(fitted.position, fitted.indices, asset.proxies);
-  const baseline = measureOutside(reference.position, reference.indices, asset.proxies);
+  const baseline = measureOutside(procedural.position, procedural.indices, asset.proxies);
   const gaps = proxyGaps(fitted.position, fitted.indices, asset.proxies);
   const verdict = verdictFor(gen, baseline, gaps.p95);
   const b = bounds(fitted.position);
@@ -207,6 +219,7 @@ async function importOne(asset: PlushAsset, rawPath: string, meta: JobMeta | und
     proxyGapP95: round(gaps.p95),
     proxyGapMax: round(gaps.max),
     verdict,
+    reference,
   };
 
   const { lods, seams } = await buildLods(fitted);

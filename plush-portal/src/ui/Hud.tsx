@@ -12,6 +12,7 @@ import { labelEm } from '../layout/labelFit';
 import { requestImmersive } from '../layout/phone';
 import { hasCoarsePointer, type Rect } from '../layout/solve';
 import { usePhoneGuards, usePhoneSetup } from './useHudLayout';
+import { reductionLabelKey, visibleReductions } from '../app/AdaptiveQuality';
 
 type Direction = 'left' | 'right' | 'back' | 'front';
 
@@ -177,11 +178,35 @@ function StatusLine() {
   );
 }
 
-/** Compact menu inside the reachable zone: settings (same dialog as the corner "i"), collection, theme, help. */
-function PanelMenu({ compact }: { compact: boolean }) {
+/** True when the top bar lies inside the interactive safe zone (not on 86" portrait, where it is above it). */
+function topBarReachable(layout: HudLayout): boolean {
+  const b = layout.topBar;
+  return b.y >= layout.safeTop - 1 && b.y + b.h <= layout.safeBottom + 1;
+}
+
+/** Starts the countdown calibration with the configured length (camera chip and panel menu). */
+function useRecalibrate(): { show: boolean; busy: boolean; run: () => void } {
+  const app = useApp();
+  const enabled = useSettings((s) => s.camera.enabled);
+  const state = useUi((s) => s.tracker.state);
+  const busy = useUi((s) => s.tracker.calibration.phase === 'countdown' || s.tracker.calibration.phase === 'capturing');
+  return {
+    show: enabled && !app.launch.noCamera && CAMERA_RUNNING.has(state),
+    busy,
+    run: () => app.tracker.startCalibration(app.settings.getState().settings.camera.calibrationSeconds),
+  };
+}
+
+/**
+ * Compact menu inside the reachable zone: settings (same dialog as the corner "i"), collection, theme,
+ * help, and "Recalibrate view" where the camera chip in the top bar cannot be reached (86" portrait).
+ */
+function PanelMenu({ compact, layout }: { compact: boolean; layout: HudLayout }) {
   const t = useT();
   const { open } = useModals();
   const owned = useCollection((s) => Object.keys(s.counts).length);
+  const recal = useRecalibrate();
+  const recalHere = recal.show && !topBarReachable(layout);
   return (
     <div className="pp-menu" data-testid="panel-menu">
       <button type="button" className="pp-btn small soft" onClick={() => open('settings')} aria-label={t('hud.settings')} data-testid="menu-settings">
@@ -199,6 +224,21 @@ function PanelMenu({ compact }: { compact: boolean }) {
       <button type="button" className="pp-btn small soft" onClick={() => open('tutorial')} aria-label={t('tutorial.show')} data-testid="menu-help">
         <IconHelp />
       </button>
+      {recalHere ? (
+        <button
+          type="button"
+          className="pp-btn small soft"
+          onClick={recal.run}
+          disabled={recal.busy}
+          data-busy={recal.busy}
+          title={t('calibration.recalibrate')}
+          aria-label={t('calibration.recalibrate')}
+          data-testid="menu-recalibrate"
+        >
+          <IconCamera />
+          {compact ? null : <span>{t('calibration.recalibrate')}</span>}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -253,7 +293,7 @@ function PhonePanel({ layout, padDisabled }: { layout: HudLayout; padDisabled: b
           <StatusLine />
         </div>
         <div className="pp-slot menu" style={rel(c.menu)}>
-          <PanelMenu compact />
+          <PanelMenu compact layout={layout} />
         </div>
         <div className="pp-slot action" style={rel(c.action)} data-testid="slot-action">
           <ActionButton />
@@ -281,7 +321,7 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
         </div>
         <div className="pp-cluster" style={{ alignSelf: 'flex-end', background: 'none', boxShadow: 'none', backdropFilter: 'none', padding: 0, maxWidth: '44%' }}>
           <StatusLine />
-          <PanelMenu compact={false} />
+          <PanelMenu compact={false} layout={layout} />
         </div>
         <div className="pp-cluster">
           <ActionButton />
@@ -296,7 +336,7 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
         <DPad disabled={padDisabled} />
         <ActionButton />
       </div>
-      <PanelMenu compact />
+      <PanelMenu compact layout={layout} />
     </div>
   );
 }
@@ -320,11 +360,10 @@ const CAMERA_TONE: Record<TrackerState, 'live' | 'warn' | 'off' | 'idle'> = {
 const CAMERA_RUNNING: ReadonlySet<TrackerState> = new Set(['searching', 'tracking', 'lost']);
 
 function CameraChip({ withText, reachable }: { withText: boolean; reachable: boolean }) {
-  const app = useApp();
   const t = useT();
   const enabled = useSettings((s) => s.camera.enabled);
   const state = useUi((s) => s.tracker.state);
-  const calibrating = useUi((s) => s.tracker.calibration.phase === 'countdown' || s.tracker.calibration.phase === 'capturing');
+  const recal = useRecalibrate();
   const shown: TrackerState = enabled ? state : 'off';
   const chip = (
     <span className="pp-chip" data-testid="camera-chip" data-state={shown} title={t(`camera.short.${shown}`)}>
@@ -334,8 +373,9 @@ function CameraChip({ withText, reachable }: { withText: boolean; reachable: boo
     </span>
   );
   // With the camera on, the chip offers a quick recalibration (countdown, then the current head
-  // position becomes the neutral view). Only where it can be reached (not above the 86" safe zone).
-  if (!enabled || !CAMERA_RUNNING.has(state) || !reachable) return chip;
+  // position becomes the neutral view). Only where it can be reached; on 86" portrait the panel
+  // menu carries the same action inside the safe zone.
+  if (!recal.show || !reachable) return chip;
   return (
     <span className="pp-camgroup">
       {chip}
@@ -343,14 +383,14 @@ function CameraChip({ withText, reachable }: { withText: boolean; reachable: boo
         type="button"
         className="pp-chip pp-recal"
         data-testid="camera-recalibrate"
-        data-busy={calibrating}
-        disabled={calibrating}
-        title={t('camera.calibrate')}
-        aria-label={t('camera.calibrate')}
-        onClick={() => app.tracker.startCalibration(app.settings.getState().settings.camera.calibrationSeconds)}
+        data-busy={recal.busy}
+        disabled={recal.busy}
+        title={t('calibration.recalibrate')}
+        aria-label={t('calibration.recalibrate')}
+        onClick={recal.run}
       >
         <IconAgain style={{ width: '1.05em', height: '1.05em' }} />
-        {withText ? <span>{t('sec.camera.calibrate')}</span> : null}
+        {withText ? <span>{t('calibration.recalibrate')}</span> : null}
       </button>
     </span>
   );
@@ -366,7 +406,7 @@ function TopBar({ layout }: { layout: HudLayout }) {
   const iSize = Math.max(layout.touch * 0.7, 44);
   // Where the top bar lies outside the interactive safe zone (86" portrait) the theme name is
   // only a label; themes are opened from the control panel. The "i" is the one deliberate exception.
-  const reachable = b.y >= layout.safeTop - 1 && b.y + b.h <= layout.safeBottom + 1;
+  const reachable = topBarReachable(layout);
   return (
     <>
       <div className="pp-topbar" style={{ left: b.x, top: b.y, width: b.w - iSize - 14 * layout.unit, minHeight: b.h }}>
@@ -529,7 +569,7 @@ function PerfPanel({ layout }: { layout: HudLayout }) {
     `${t('perf.fps')} ${perf.fps.toFixed(1)}  ${t('perf.frame')} ${perf.frameMs.toFixed(1)} ms  ${t('perf.p95')} ${perf.frameP95.toFixed(1)} ms`,
     `${t('perf.physics')} ${perf.physicsMs.toFixed(2)} ms (${perf.stepsPerFrame.toFixed(1)}/f)  ${t('perf.tracking')} ${perf.trackingFps > 0 ? `${perf.trackingMs.toFixed(1)} ms @ ${perf.trackingFps.toFixed(0)} Hz` : '—'}`,
     `${t('perf.calls')} ${perf.calls}  ${t('perf.tris')} ${(perf.triangles / 1000).toFixed(0)}k`,
-    `${t('perf.res')} ${eff.width}×${eff.height} (${eff.megapixels.toFixed(2)} MP)  ${t('perf.auto')} ${reductions.length ? reductions.join(',') : '—'}`,
+    `${t('perf.res')} ${eff.width}×${eff.height} (${eff.megapixels.toFixed(2)} MP)  ${t('perf.auto')} ${reductions.length ? visibleReductions(reductions).map((step) => t(reductionLabelKey(step))).join(t('graphics.listSep')) : '—'}`,
     `${t('perf.gpu')} ${perf.gpuMs === null ? na : `${perf.gpuMs.toFixed(1)} ms`}  ${t('perf.heap')} ${perf.heapMb === null ? na : `${perf.heapMb.toFixed(0)} MB`}`,
   ];
   return (

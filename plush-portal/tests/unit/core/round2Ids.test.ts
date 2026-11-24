@@ -133,7 +133,7 @@ describe('plush library: a theme without characters', () => {
 });
 
 describe('effects contract', () => {
-  it('Effects implements FxApi; the placeholders accept every call', () => {
+  it('Effects implements FxApi and accepts every call', () => {
     const effects = new Effects();
     const fx: FxApi = effects;
     const at = { x: 0, y: 0.2, z: -0.2 };
@@ -144,7 +144,8 @@ describe('effects contract', () => {
     fx.lightShow('attract');
     fx.setIntensity(1.2);
     fx.setLightShowEnabled(false);
-    expect(effects.fxState()).toEqual({ intensity: 1.2, lightShowEnabled: false, lightShow: 'attract' });
+    // fxState() also carries live counters (particles, draw calls, beams, …); only the settings are pinned.
+    expect(effects.fxState()).toMatchObject({ intensity: 1.2, lightShowEnabled: false, lightShow: 'attract' });
     effects.dispose();
   });
 });

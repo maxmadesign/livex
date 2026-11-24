@@ -227,7 +227,7 @@ function main(): void {
   const music = only === 'sfx' ? previous?.music : bakeMusic();
   const effects = only === 'music' ? (previous ? { sfx: previous.sfx, loops: previous.loops } : null) : bakeSfx();
   if (!music || !effects) throw new Error('--only needs an existing manifest for the part that is skipped; run a full bake first');
-  const manifest: AudioManifest = {
+  const manifest: AudioManifest & { studio?: unknown } = {
     version: AUDIO_MANIFEST_VERSION,
     generator: 'tools/audio/bake.ts',
     sampleRate: SR,
@@ -235,6 +235,9 @@ function main(): void {
     sfx: effects.sfx,
     loops: effects.loops,
   };
+  // The studio recordings are written by tools/audio/importStudio.ts; a bake keeps them.
+  const studio = (previous as (AudioManifest & { studio?: unknown }) | null)?.studio;
+  if (studio !== undefined) manifest.studio = studio;
   writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   console.log(`wrote  ${path.relative(ROOT, path.join(OUT, 'manifest.json'))}`);
 }

@@ -2,6 +2,7 @@ import {
   ACESFilmicToneMapping,
   AdditiveBlending,
   AgXToneMapping,
+  Box3,
   Color,
   DirectionalLight,
   HalfFloatType,
@@ -10,6 +11,7 @@ import {
   NeutralToneMapping,
   PCFShadowMap,
   PMREMGenerator,
+  PerspectiveCamera,
   PlaneGeometry,
   PointLight,
   Scene,
@@ -20,6 +22,8 @@ import {
   Vector3,
   WebGLRenderTarget,
   WebGLRenderer,
+  type BufferGeometry,
+  type Camera,
   type Object3D,
   type Texture,
 } from 'three';
@@ -37,7 +41,7 @@ import type { WindowLayout } from '../perspective/windowGeometry';
 import { CHUTE, FIELD } from '../physics/fieldSpec';
 import type { GraphicsSettings } from '../settings/spec';
 import type { ThemeDef } from '../themes/themes';
-import { ContactShadows } from './contactShadows';
+import { CONTACT_RANGE, ContactShadows } from './contactShadows';
 import { buildStudioScene, captureSize, environmentBlur, studioEnvironmentSize } from './environment';
 import { makeScratchTexture, setMaxAnisotropy } from './textures';
 
@@ -82,6 +86,15 @@ export const CONTACT_SHADOWS: Record<GraphicsSettings['shadows'], { size: number
   high: { size: 512, every: 1 },
 };
 
+/**
+ * Layer of the shadow pre-pass (see `Stage.renderShadows`): only lights are on it, so a render with
+ * a camera that sees just this layer draws no object, only the key light's shadow map.
+ */
+const SHADOW_PASS_LAYER = 31;
+
+/** Scene groups whose shadow-casting meshes are drawn into the contact-shadow map. */
+const CONTACT_GROUPS = new Set(['toys', 'claw']);
+
 /** Largest device pixel ratio honoured: the setting when present, otherwise unlimited. */
 function dprCap(g: GraphicsSettings): number {
   const value = (g as { maxDpr?: number }).maxDpr;
@@ -122,6 +135,15 @@ export class Stage {
   private glassScratches: Texture | null = null;
   private readonly contact: ContactShadows;
   private contactFrame = 0;
+  /** Camera of the shadow pre-pass: sees only `SHADOW_PASS_LAYER`. */
+  private readonly shadowPassCamera = new PerspectiveCamera();
+  /** Meshes drawn with their `userData.shadowGeometry` during the shadow passes, and their own geometry. */
+  private readonly shadowSwapped: Mesh[] = [];
+  private readonly shadowSwappedGeometry: BufferGeometry[] = [];
+  private readonly shadowHidden: Object3D[] = [];
+  private readonly clawBox = new Box3();
+  /** Diagnostics: whether the contact map was re-rendered in the last frame. */
+  contactRendered = false;
   private graphics: GraphicsSettings;
   private cssW = 1;
   private cssH = 1;
@@ -150,7 +172,9 @@ export class Stage {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFShadowMap;
-    this.renderer.shadowMap.autoUpdate = true;
+    // Updated explicitly once per frame (renderShadows), never as a side effect of a render: the
+    // composer's extra scene passes (ambient occlusion, depth of field) would otherwise redraw it.
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.info.autoReset = false;
     setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
@@ -177,6 +201,10 @@ export class Stage {
     this.key.shadow.radius = 3;
     // A lit cabinet never has pitch-black shadows: the diffuser and the walls fill them in.
     this.key.shadow.intensity = 0.88;
+    // The shadow map is rendered once per frame by a pre-pass (renderShadows) that sees only the
+    // lights; the shadow camera itself keeps drawing every layer-0 object.
+    this.key.shadow.camera.layers.enable(SHADOW_PASS_LAYER);
+    this.shadowPassCamera.layers.set(SHADOW_PASS_LAYER);
     this.scene.add(this.key, this.key.target);
 
     this.rim = new DirectionalLight(0xffffff, 1);
@@ -277,6 +305,7 @@ export class Stage {
     this.composerDirty = true;
     this.envDirty = true;
     this.studioDirty = true;
+    this.contact.invalidate();
     // GPU objects of the old context are gone: start from fresh targets.
     this.pmrem.dispose();
     this.pmrem = new PMREMGenerator(this.renderer);
@@ -404,7 +433,11 @@ export class Stage {
     }
     const contact = CONTACT_SHADOWS[graphics.shadows];
     this.contact.mesh.visible = contact.size > 0;
-    if (contact.size > 0) this.contact.setResolution(contact.size);
+    if (contact.size > 0) {
+      this.contact.setResolution(contact.size);
+      // Toys may have moved while contact shadows were off: draw a fresh map.
+      this.contact.invalidate();
+    }
 
     // Prefiltered environment resolution follows the texture tier (and the capture size while
     // the cabinet captures replace the studio, see studioEnvironmentSize).
@@ -610,23 +643,152 @@ export class Stage {
       this.useEnvironment();
     }
     this.renderer.info.reset();
-    const contact = CONTACT_SHADOWS[this.graphics.shadows];
-    if (contact.size > 0 && this.contact.mesh.visible && ++this.contactFrame >= contact.every) {
-      this.contactFrame = 0;
-      this.contactRoots.length = 0;
-      for (const child of this.scene.children) if (child.name === 'toys' || child.name === 'claw') this.contactRoots.push(child);
-      this.contact.update(this.renderer, this.scene, this.contactRoots);
+    this.contactRendered = false;
+    this.contactRoots.length = 0;
+    for (const child of this.scene.children) if (CONTACT_GROUPS.has(child.name)) this.contactRoots.push(child);
+    // View-dependent choices (toy LODs) for the camera that is about to render.
+    this.camera.updateMatrixWorld();
+    for (const root of this.contactRoots) (root.userData.onView as ((camera: Camera, height: number) => void) | undefined)?.(this.camera, this.effective.height);
+    // Shadow map and contact map, drawn with the toys' coarse shadow meshes.
+    this.useShadowGeometry(true);
+    try {
+      this.renderShadows();
+      const contact = CONTACT_SHADOWS[this.graphics.shadows];
+      if (contact.size > 0 && this.contact.mesh.visible && ++this.contactFrame >= contact.every) {
+        this.contactFrame = 0;
+        this.contactRendered = this.contact.refresh(this.renderer, this.scene, this.contactRoots, this.contactSignature());
+      }
+    } finally {
+      this.useShadowGeometry(false);
     }
     this.composer.render(dt);
   }
 
-  /** Compiles every shader used by the scene now, so the first grab does not hitch. */
-  async warmUp(): Promise<void> {
+  /**
+   * Draws the key light's shadow map, once per frame: a render with a camera that sees only the
+   * lights (no object is drawn, nothing is cleared) makes three.js update the shadow map, which the
+   * composer's passes then read without redrawing it.
+   */
+  private renderShadows(): void {
+    if (!this.key.castShadow) return;
+    const renderer = this.renderer;
+    // Every light is visible to the pre-pass too: three.js recompiles nothing when the light set of
+    // two consecutive renders is the same, but re-evaluates every lit material when it differs.
+    this.scene.traverse(this.lightOnShadowLayer);
+    const background = this.scene.background;
+    const autoClear = renderer.autoClear;
+    this.scene.background = null;
+    renderer.autoClear = false;
+    renderer.shadowMap.needsUpdate = true;
     try {
-      await this.renderer.compileAsync(this.scene, this.camera);
-    } catch {
-      this.renderer.compile(this.scene, this.camera);
+      renderer.render(this.scene, this.shadowPassCamera);
+    } finally {
+      renderer.autoClear = autoClear;
+      this.scene.background = background;
     }
+  }
+
+  /**
+   * Shadow passes (key-light map, contact map) draw meshes that carry `userData.shadowGeometry`
+   * (toys: a coarse LOD) with that geometry, and leave out meshes marked `userData.shadowSkip`
+   * (fur shells). `on = false` restores everything.
+   */
+  private useShadowGeometry(on: boolean): void {
+    if (!on) {
+      for (let i = 0; i < this.shadowSwapped.length; i++) this.shadowSwapped[i]!.geometry = this.shadowSwappedGeometry[i]!;
+      for (const o of this.shadowHidden) o.visible = true;
+      this.shadowSwapped.length = 0;
+      this.shadowSwappedGeometry.length = 0;
+      this.shadowHidden.length = 0;
+      return;
+    }
+    for (const root of this.contactRoots) root.traverse(this.swapForShadow);
+  }
+
+  private readonly lightOnShadowLayer = (o: Object3D): void => {
+    if ((o as { isLight?: boolean }).isLight) o.layers.enable(SHADOW_PASS_LAYER);
+  };
+
+  private readonly swapForShadow = (o: Object3D): void => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || !mesh.visible) return;
+    if (mesh.userData.shadowSkip) {
+      mesh.visible = false;
+      this.shadowHidden.push(mesh);
+      return;
+    }
+    const geometry = mesh.userData.shadowGeometry as BufferGeometry | undefined;
+    if (!geometry || geometry === mesh.geometry) return;
+    this.shadowSwapped.push(mesh);
+    this.shadowSwappedGeometry.push(mesh.geometry);
+    mesh.geometry = geometry;
+  };
+
+  /**
+   * A number that changes whenever the contact map would look different: the toys' change counter
+   * (`userData.contactVersion`, bumped by ToyVisuals when a toy moves or deforms) and, while any
+   * part of the claw is low enough to darken the floor, the claw's pose.
+   */
+  private contactSignature(): number {
+    let signature = 0;
+    for (const root of this.contactRoots) {
+      if (root.name === 'toys') {
+        const version = root.userData.contactVersion;
+        // Without a change counter the map is re-rendered every time.
+        signature += typeof version === 'number' ? version * 7919 : Number.NaN;
+        continue;
+      }
+      root.updateMatrixWorld();
+      this.clawBox.setFromObject(root);
+      if (this.clawBox.isEmpty() || this.clawBox.min.y > CONTACT_RANGE + 0.01) continue; // too high to darken the floor
+      let k = 1;
+      root.traverse((o) => {
+        if (!(o as Mesh).isMesh || !o.visible || !o.castShadow) return;
+        const e = o.matrixWorld.elements;
+        for (let i = 0; i < 16; i++) signature += e[i]! * (k + i * 0.618);
+        k += 1.37;
+      });
+    }
+    return signature;
+  }
+
+  /**
+   * Compiles every shader used by the scene now, so the first grab does not hitch. Materials are
+   * compiled against the composer's half-float scene target, which is where the scene is really
+   * drawn: three.js keys programs by output colour space and tone mapping, and a compile against
+   * the canvas would build variants that are never used (and the real ones on the first frame).
+   */
+  async warmUp(): Promise<void> {
+    if (this.contextLost) return;
+    if (this.composerDirty) this.buildComposer();
+    if (this.sizeDirty) this.flushSize();
+    const renderer = this.renderer;
+    const previous = renderer.getRenderTarget();
+    const pending: Promise<unknown>[] = [];
+    // Objects that appear only later (fur shells of a focused toy), offered by the scene groups.
+    const extra: Object3D[] = [];
+    for (const child of this.scene.children) {
+      const offer = child.userData.warmUpObjects as (() => Object3D[]) | undefined;
+      if (offer) extra.push(...offer());
+    }
+    // compileAsync builds the programs synchronously (with the target set) and then waits for them.
+    renderer.setRenderTarget(this.composer.readBuffer);
+    try {
+      pending.push(renderer.compileAsync(this.scene, this.camera));
+      for (const object of extra) pending.push(renderer.compileAsync(object, this.camera, this.scene));
+      // Height materials of the contact pass (binds its own target): the claw's is otherwise built
+      // the first time the claw comes down to the toys.
+      if (CONTACT_SHADOWS[this.graphics.shadows].size > 0 && this.contact.mesh.visible) {
+        const roots = this.scene.children.filter((child) => CONTACT_GROUPS.has(child.name));
+        pending.push(this.contact.compile(renderer, this.scene, roots));
+      }
+    } catch {
+      renderer.compile(this.scene, this.camera);
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+    await Promise.all(pending);
+    for (const object of extra) (object as { dispose?: () => void }).dispose?.();
   }
 
   get msaaSamples(): number {

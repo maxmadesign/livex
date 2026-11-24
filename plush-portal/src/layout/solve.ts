@@ -1,6 +1,7 @@
 import type { DisplayProfileId } from '../core/types';
 import { floorLimits, machineSpan } from '../perspective/windowGeometry';
 import type { LayoutSettings } from '../settings/spec';
+import type { FrameBox } from './frame';
 import { NO_INSETS, readSafeAreaInsets, type Insets } from './safeArea';
 
 export type { Insets } from './safeArea';
@@ -94,6 +95,12 @@ export interface HudLayout {
   floorY: number;
   /** True when the solver had to shrink / move something to keep it reachable. */
   adjusted: boolean;
+  /**
+   * Where this layout's viewport (`vw × vh`) sits in the browser window: the simulated 9:16 screen
+   * of a portrait preset, or the whole window. Set by `solveFramed` (src/layout/frame.ts), which the
+   * HUD uses; `solveLayout` itself leaves it out.
+   */
+  frame?: FrameBox;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

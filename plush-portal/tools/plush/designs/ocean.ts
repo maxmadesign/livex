@@ -449,21 +449,33 @@ const JELLY_ARM: [number, number, number][] = [
 const JELLY_TWIST = [0, 4, 8, 12, 15, 17, 18];
 const jellyFront = (x: number, y: number): V3 => [x, y, zOn(JELLY_C, JELLY_R, x, y) + 0.1];
 
+/**
+ * Floor angles (0 = front, 90 = +x) of the tentacle tips and their curl direction, matched to the
+ * generated model (seven tentacles, the shortest at the back), so each arm's collision hull sits
+ * on a visible tentacle.
+ */
+const JELLY_ARMS: { at: number; curl: 1 | -1; lilac: boolean; reach?: number }[] = [
+  { at: 35, curl: 1, lilac: true },
+  { at: 80, curl: 1, lilac: false },
+  { at: 132, curl: 1, lilac: true },
+  { at: 162, curl: 1, lilac: false, reach: 0.78 },
+  { at: 210, curl: -1, lilac: true },
+  { at: 252, curl: -1, lilac: false },
+  { at: 318, curl: -1, lilac: true },
+];
+
 function jellyArms(): PartDef[] {
-  const arms: PartDef[] = [];
-  for (let i = 0; i < 8; i++) {
-    // Mirror-symmetric colours: lilac / pearl alternate from the front pair backwards.
-    const lilac = Math.min(i, 7 - i) % 2 === 0;
-    arms.push(
-      radialArm(`arm${i}`, 22.5 + 45 * i, i < 4 ? 1 : -1, JELLY_ARM, JELLY_TWIST, lilac ? '#cbbcf3' : '#f4f0fb', {
-        soft: 0.9,
-        collide: 'appendage',
-        k: 1.2,
-        group: `arms${'ABCD'[Math.floor(i / 2)]}`,
-      }),
-    );
-  }
-  return arms;
+  return JELLY_ARMS.map(({ at, curl, lilac, reach = 1 }, i) =>
+    // The tip lands about 15° past the root (see JELLY_TWIST).
+    radialArm(`arm${i}`, at - curl * 15, curl, JELLY_ARM.map(([rho, y, r]): [number, number, number] => [3.2 + (rho - 3.2) * reach, y, r]), JELLY_TWIST, lilac ? '#cbbcf3' : '#f4f0fb', {
+      soft: 0.9,
+      collide: 'appendage',
+      k: 1.2,
+      // One hull per arm: a hull around two neighbouring arms would also fill the gap between
+      // them (a collider where nothing is drawn).
+      group: `arm${i}`,
+    }),
+  );
 }
 
 export const jellyfish: PlushDesign = {
@@ -483,7 +495,8 @@ export const jellyfish: PlushDesign = {
       // Junction seams are left off: with the current seam rendering they read as hairline cracks.
       parts: [
         part('bell', cutBelow(ellipsoid(JELLY_C, JELLY_R), 9.6, 1.2), AQUA, { collide: 'core', k: 1.6 }),
-        part('frill', scallopRing([0, 9.5, 0], 7.3, 1.15, 10, 0.5), PEARL, { soft: 0.6, k: 0.8 }),
+        // The frill belongs to the bell's hull: the generated model's frill is a thick rim.
+        part('frill', scallopRing([0, 9.5, 0], 7.3, 1.15, 10, 0.5), PEARL, { soft: 0.6, k: 0.8, collide: 'core', group: 'bell' }),
         ell('stalk', [0, 4.8, 0], [4.2, 5.6, 4.2], PEARL, { collide: 'core', k: 1.8, group: 'body' }),
         ...jellyArms(),
       ],
@@ -516,8 +529,8 @@ export const jellyfish: PlushDesign = {
 /* -------------------------------------------------------------------- seal */
 
 const SEAL_WHITE = '#f6f4f1';
-const SEAL_HEAD_C: V3 = [0, 13.6, 1.0];
-const SEAL_HEAD_R: V3 = [6.2, 5.5, 5.9];
+const SEAL_HEAD_C: V3 = [0, 13.6, 0.6];
+const SEAL_HEAD_R: V3 = [6.3, 5.5, 6.4];
 const sealFront = (x: number, y: number): V3 => [x, y, zOn(SEAL_HEAD_C, SEAL_HEAD_R, x, y) + 0.1];
 const SEAL_NECK: V3 = [0, 10.3, -0.1];
 const SCARF = '#8ed8d4';
@@ -537,7 +550,8 @@ export const seal: PlushDesign = {
       surface: 'fur',
       flatBase: 1.5,
       parts: [
-        ell('body', [0, 5.6, -0.4], [7.3, 7.4, 7.4], SEAL_WHITE, { collide: 'core', k: 3.4, piece: 'skin' }),
+        // Round, deep body and a small tail nub, as on the generated model (its hulls follow them).
+        ell('body', [0, 5.8, -0.6], [7.4, 7.5, 7.7], SEAL_WHITE, { collide: 'core', k: 3.4, piece: 'skin' }),
         ell('head', SEAL_HEAD_C, SEAL_HEAD_R, SEAL_WHITE, { collide: 'core', k: 3.6, piece: 'skin' }),
         ell('muzzle', [0, 12.3, 6.0], [2.7, 1.9, 1.9], SEAL_WHITE, { k: 1.3, piece: 'skin' }),
         ...pair(
@@ -550,18 +564,14 @@ export const seal: PlushDesign = {
             reach: 5.5,
           }),
         ),
-        ...pair(
-          ell('tailFin', [2.2, 1.3, -8.0], [2.3, 1.15, 3.2], SEAL_WHITE, {
-            rot: [0, -18, 0],
-            soft: 0.8,
-            collide: 'appendage',
-            k: 1.4,
-            group: 'tail',
-            piece: 'tail',
-            root: [0, 2.0, -6.0],
-            reach: 5,
-          }),
-        ),
+        ell('tailFin', [0, 3.6, -9.0], [1.3, 1.0, 1.4], SEAL_WHITE, {
+          soft: 0.8,
+          collide: 'none',
+          k: 0.8,
+          piece: 'tail',
+          root: [0, 3.6, -8.2],
+          reach: 2,
+        }),
       ],
     },
     {

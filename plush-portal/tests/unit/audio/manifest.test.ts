@@ -96,7 +96,8 @@ describe('baked audio assets (public/audio)', () => {
       const wav = decodeWav16(new Uint8Array(readFileSync(full)));
       expect(wav.duration).toBeCloseTo(e.duration, 4);
     }
-    expect(bytes).toBeLessThan(2.7e6);
+    // ≈3.6 MB since the dramatic layer added eleven effects (each also has a studio sample).
+    expect(bytes).toBeLessThan(3.7e6);
   });
 
   it('has four music files that are long enough for their loop points', () => {

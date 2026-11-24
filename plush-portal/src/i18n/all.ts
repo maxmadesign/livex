@@ -3,6 +3,7 @@ import { aiStrings } from './strings/ai';
 import { attractStrings } from './strings/attract';
 import { audioStrings } from './strings/audio';
 import { calibrationStrings } from './strings/calibration';
+import { frameStrings } from './strings/frame';
 import { fxStrings } from './strings/fx';
 import { graphicsStrings } from './strings/graphics';
 import { gpuStrings } from './strings/gpu';
@@ -39,9 +40,13 @@ export function registerAllStrings(): void {
   registerStrings(gpuStrings);
   registerStrings(fxStrings);
   registerStrings(graphicsStrings);
+  registerStrings(frameStrings);
 }
 
-/** Every feature namespace registered above, by name (used by the i18n tests). */
+/**
+ * Every feature namespace registered above, by name (used by the i18n tests). Keys start with
+ * `<name>.`; a namespace may also carry the labels of settings it adds, as `set.<name>.…`.
+ */
 export const FEATURE_STRING_TABLES: Record<string, StringTable> = {
   score: scoreStrings,
   attract: attractStrings,
@@ -49,4 +54,6 @@ export const FEATURE_STRING_TABLES: Record<string, StringTable> = {
   calibration: calibrationStrings,
   gpu: gpuStrings,
   fx: fxStrings,
+  graphics: graphicsStrings,
+  frame: frameStrings,
 };

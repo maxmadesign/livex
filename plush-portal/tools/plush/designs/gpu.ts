@@ -249,7 +249,7 @@ const hairCap: DistFn = (() => {
 
 /** Leather jacket body: open at the front, hem above the hips. */
 const jacketBody: DistFn = (() => {
-  const e = ellipsoid([0, 8.65, -0.5], [4.2, 4.4, 3.6]);
+  const e = ellipsoid([0, 8.65, 0.1], [4.3, 4.4, 3.6]);
   return (x: number, y: number, z: number) => smax(e(x, y, z), 5.0 - y, 0.6);
 })();
 
@@ -295,8 +295,8 @@ export const chief: PlushDesign = shifted({
       surface: 'shortfur',
       flatBase: 1.2,
       parts: [
-        ell('seat', [0, 2.8, -0.9], [4.4, 2.8, 3.6], DENIM, { collide: 'core', k: 1.6, group: 'body', piece: A }),
-        ell('torso', [0, 8.5, -0.5], [3.75, 4.25, 3.15], TEE, { collide: 'core', k: 1.6, group: 'body', piece: A }),
+        ell('seat', [0, 2.8, -0.1], [4.6, 2.8, 2.9], DENIM, { collide: 'core', k: 1.6, group: 'body', piece: A }),
+        ell('torso', [0, 8.5, 0.1], [3.75, 4.25, 3.15], TEE, { collide: 'core', k: 1.6, group: 'body', piece: A }),
         cyl('neck', [0, 12.7, -0.4], 1.5, 0.9, 0.4, SKIN, { k: 0.8, piece: B }),
         ell('head', CH_HEAD_C, CH_HEAD_R, SKIN, { collide: 'core', k: 1.2, piece: A }),
         ...pair(ell('ear', [4.7, 16.0, -0.1], [0.75, 1.15, 0.62], SKIN, { k: 0.5, piece: B, soft: 0.3 })),
@@ -741,8 +741,8 @@ export const rack: PlushDesign = {
 const BOT_WHITE = '#f1f1ee';
 const BOT_BLACK = '#1f1f22';
 const VISOR = '#a6df2f';
-const BOT_HEAD_C: V3 = [0, 14.4, 0.2];
-const BOT_HEAD_R: V3 = [5.3, 4.95, 4.85];
+const BOT_HEAD_C: V3 = [0, 14.4, -0.7];
+const BOT_HEAD_R: V3 = [5.6, 5.1, 6.05];
 const botHead = ellipsoid(BOT_HEAD_C, BOT_HEAD_R);
 
 /** Satin visor: a thin lens over the front of the head, shaped as a rounded rectangle. */
@@ -798,8 +798,10 @@ export const bot: PlushDesign = shifted({
         ell('seat', [0, 2.6, -0.2], [4.3, 2.6, 3.9], BOT_WHITE, { collide: 'core', group: 'body', k: 1.6, piece: A }),
         ell('head', BOT_HEAD_C, BOT_HEAD_R, BOT_WHITE, { collide: 'core', k: 1.0, piece: B }),
         ...pair(cyl('earPad', [5.45, 14.3, 0.15], 2.0, 0.75, 0.55, BOT_BLACK, { rot: [0, 0, 90], k: 0.6, piece: A, group: 'head', collide: 'core' })),
-        pipe('antenna', [[0, 18.9, 0.1], [0, 20.1, 0.05], [0.1, 20.9, 0]], [0.55, 0.5, 0.48], BOT_BLACK, { soft: 0.85, k: 0.5, collide: 'appendage', piece: A }),
-        ball('pom', [0.1, 21.85, 0], 1.25, LIME_FELT, { soft: 0.9, k: 0.35, root: [0, 18.9, 0.1], reach: 4.2, collide: 'appendage', group: 'antenna', piece: B }),
+        // The antenna is decoration only: the generated stalk is thin and sits elsewhere than the
+        // design's, so a hull there would be a handle where nothing is drawn.
+        pipe('antenna', [[0, 18.9, 0.1], [0, 20.1, 0.05], [0.1, 20.9, 0]], [0.55, 0.5, 0.48], BOT_BLACK, { soft: 0.85, k: 0.5, collide: 'none', piece: A }),
+        ball('pom', [0.1, 21.85, 0], 1.25, LIME_FELT, { soft: 0.9, k: 0.35, root: [0, 18.9, 0.1], reach: 4.2, collide: 'none', group: 'antenna', piece: B }),
         ...pair(cone('arm', ARM_A, ARM_B, 1.55, 1.75, BOT_WHITE, { soft: 0.5, k: 1.0, collide: 'appendage', piece: B })),
         ...pair(cone('leg', [2.25, 2.45, 0.8], [2.7, 2.4, 6.6], 2.15, 2.1, BOT_WHITE, { soft: 0.3, k: 1.1, collide: 'core', group: 'legs', piece: B })),
         ...pair(cyl('sole', [2.75, 2.45, 7.85], 2.05, 0.5, 0.4, BOT_BLACK, { rot: [90, 0, 0], k: 0.5, collide: 'core', group: 'legs', piece: A })),
@@ -919,7 +921,7 @@ export const pixel: PlushDesign = {
         box('body', PX_C, PX_HALF, 2.0, PX_LIGHT, { collide: 'core', k: 0, piece: A }),
         // Stub feet poking out of the bottom front edge (the cube itself rests on the floor).
         ...pair(box('foot', [3.5, 1.9, 7.1], [2.0, 1.9, 2.4], 0.7, PX_DARK, { collide: 'appendage', k: 0.5, soft: 0.25, piece: B })),
-        ...pair(box('arm', [8.0, 7.9, 1.0], [1.55, 1.9, 1.8], 0.6, PX_MID, { collide: 'appendage', soft: 0.45, k: 0.5, piece: B, rot: [0, -14, 6] })),
+        ...pair(box('arm', [7.7, 7.5, 3.0], [1.45, 1.8, 1.8], 0.6, PX_MID, { collide: 'appendage', soft: 0.45, k: 0.5, piece: B, rot: [0, -14, 6] })),
       ],
     },
   ],

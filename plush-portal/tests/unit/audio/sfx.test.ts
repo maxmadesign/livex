@@ -68,9 +68,11 @@ describe('sfx recipes', () => {
       const b = bandEnergiesDb(buf);
       expect(b.air - Math.max(b.low, b.lowMid, b.mid, b.high), id).toBeLessThan(0);
     }
-    // 16-bit mono budget for all one-shots plus loops (≈2.5 MB).
+    // 16-bit mono budget for all one-shots plus loops (≈2.5 MB before the dramatic layer added
+    // eleven effects; the synthesised versions of effects a studio sample replaces are only
+    // downloaded when that sample fails to load).
     for (const name of LOOP_NAMES) totalSeconds += LOOP_RECIPES[name].seconds;
-    expect(totalSeconds * SR * 2).toBeLessThan(2.7e6);
+    expect(totalSeconds * SR * 2).toBeLessThan(3.6e6);
   });
 
   it('render themed jingles that differ per theme', () => {

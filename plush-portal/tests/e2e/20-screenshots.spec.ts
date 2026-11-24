@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { boot, click, frames, openSettings, plush, start, state, switchTheme, winARound, type Display, type Theme } from './helpers';
+import { THEMES, boot, click, frames, openSettings, plush, start, state, switchTheme, winARound, type Display } from './helpers';
 
 /**
- * Screenshot set for docs/screenshots: 3 layouts × 4 themes in attract mode with
+ * Screenshot set for docs/screenshots: 3 layouts × 5 themes in attract mode with
  * the default "medium" graphics preset, plus one win card and the settings
  * dialog per layout. Rendered by headless Chromium with software WebGL
  * (SwiftShader) — real GPUs differ in anti-aliasing and timing, not in layout.
@@ -14,7 +14,6 @@ import { boot, click, frames, openSettings, plush, start, state, switchTheme, wi
  */
 const MODE = process.env.PLUSH_SHOTS;
 const OUT = path.resolve(process.cwd(), 'docs/screenshots');
-const THEMES: Theme[] = ['sakura', 'storybook', 'ocean', 'cosmic'];
 const LAYOUTS: { display: Display; width: number; height: number }[] = [
   { display: 'desktop', width: 1280, height: 720 },
   { display: 'portrait32', width: 1080, height: 1920 },

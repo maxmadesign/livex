@@ -1,6 +1,6 @@
 import type { StringTable } from '../index';
 
-/** Strings owned by the audio subsystem (status lines, track titles, device notes). */
+/** Strings owned by the audio subsystem (status lines, track titles, device notes, the attract-chime setting). */
 export const audioStrings: StringTable = {
   en: {
     'audio.state.locked': 'Sound is waiting for a tap',
@@ -18,7 +18,9 @@ export const audioStrings: StringTable = {
     'audio.track.gpu': 'Overclock Party',
     'audio.preview': 'Preview',
     'audio.previewStop': 'Stop preview',
-    'audio.credits': 'Original music and sound effects, synthesised from code',
+    'audio.credits': 'Music, character voices and many effects are AI-generated studio recordings (Higgsfield: ElevenLabs Music, Mirelo); the other effects and every fallback are synthesised from code',
+    'set.audio.attractChime': 'Chime in demo mode',
+    'set.audio.attractChime.hint': 'A soft chime every 20–30 seconds while the machine plays by itself.',
     'audio.output.default': 'System default',
     'audio.output.unsupported': 'This browser cannot send game audio to a chosen output device.',
     'audio.output.noLabels': 'The browser hides device names until media permission is granted.',
@@ -41,7 +43,9 @@ export const audioStrings: StringTable = {
     'audio.track.gpu': '超频派对',
     'audio.preview': '试听',
     'audio.previewStop': '停止试听',
-    'audio.credits': '原创音乐与音效，全部由代码合成',
+    'audio.credits': '音乐、角色叫声和多数音效为 AI 生成的录音（Higgsfield：ElevenLabs Music、Mirelo）；其余音效及所有备用声音由代码合成',
+    'set.audio.attractChime': '演示模式提示音',
+    'set.audio.attractChime.hint': '机器自动演示时，每 20–30 秒响起一声轻柔的提示音。',
     'audio.output.default': '系统默认',
     'audio.output.unsupported': '此浏览器不支持为游戏指定音频输出设备。',
     'audio.output.noLabels': '授予媒体权限前，浏览器不会显示设备名称。',
@@ -64,7 +68,9 @@ export const audioStrings: StringTable = {
     'audio.track.gpu': 'オーバークロック・パーティー',
     'audio.preview': '試聴',
     'audio.previewStop': '試聴を止める',
-    'audio.credits': 'オリジナルの音楽と効果音（すべてコードから合成）',
+    'audio.credits': '音楽・キャラクターの声・多くの効果音は AI 生成のスタジオ録音（Higgsfield：ElevenLabs Music、Mirelo）です。その他の効果音とすべての予備音はコードから合成しています',
+    'set.audio.attractChime': 'デモ中のチャイム',
+    'set.audio.attractChime.hint': '機械が自動でデモをしている間、20～30 秒ごとにやさしいチャイムが鳴ります。',
     'audio.output.default': 'システムの既定',
     'audio.output.unsupported': 'このブラウザでは出力デバイスを選択できません。',
     'audio.output.noLabels': 'メディアの許可を与えるまで、デバイス名は表示されません。',

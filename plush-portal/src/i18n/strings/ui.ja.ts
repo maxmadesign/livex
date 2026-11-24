@@ -1,7 +1,5 @@
 /** ja translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiJa: Record<string, string> = {
-  'app.title': 'PLUSH PORTAL',
-  'app.tagline': '画面の向こうはクレーンゲーム',
 
   'boot.physics': 'クレーンを準備中…',
   'boot.assets': 'おもちゃ箱を開けています…',
@@ -23,16 +21,13 @@ export const uiJa: Record<string, string> = {
   'hud.demoHint': 'いまはデモ中。スタートを押すと自分であそべます',
   'hud.collection': 'コレクション',
   'hud.settings': '設定',
-  'hud.menu': 'メニュー',
   'hud.theme': 'テーマ',
   'hud.tip': 'Momo にヒントをもらう',
-  'hud.fullscreen': '全画面',
   'hud.dir.left': '左へ動かす',
   'hud.dir.right': '右へ動かす',
   'hud.dir.back': '奥へ動かす',
   'hud.dir.front': '手前へ動かす',
   'hud.timer': '{seconds}秒',
-  'hud.paused': '一時停止中',
   'hud.pending': '変更はこのラウンドのあとに反映されます',
   'hud.restocking': '新しいぬいぐるみを補充中…',
   'hud.status.ATTRACT': 'いつでもどうぞ',
@@ -105,7 +100,6 @@ export const uiJa: Record<string, string> = {
   'collection.locked': 'まだゲットしていません',
   'collection.total': '{total}種類のうち {owned}種類 · 景品 {prizes}個',
   'collection.count': '×{count}',
-  'collection.close': '閉じる',
 
   'theme.sakura.name': 'さくらカワイイ',
   'theme.sakura.tagline': 'ブティックみたいな桜色のぬいぐるみ',
@@ -123,7 +117,6 @@ export const uiJa: Record<string, string> = {
   'guide.source.gpt': 'GPT',
   'guide.source.local': 'ローカルのセリフ',
   'guide.voice.ai': 'AI音声',
-  'guide.mute': 'Momo をミュート',
 
   'toast.layoutRebuilt': 'ぬいぐるみを並べ直しました',
   'toast.themeFailed': 'そのテーマを読み込めませんでした',
@@ -144,7 +137,6 @@ export const uiJa: Record<string, string> = {
   'toast.modelRejected': 'このファイルは使えませんでした（{reason}）',
   'toast.wrongPin': 'PIN が違います',
 
-  'perf.title': 'パフォーマンス',
   'perf.fps': 'FPS',
   'perf.frame': 'フレーム時間',
   'perf.p95': 'p95',
@@ -158,17 +150,9 @@ export const uiJa: Record<string, string> = {
   'perf.na': '取得できません',
   'perf.auto': '自動',
 
-  'common.on': 'オン',
-  'common.off': 'オフ',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
   'common.apply': '適用',
-  'common.ok': 'OK',
-  'common.reset': 'リセット',
-  'common.copy': 'コピー',
   'common.test': 'テスト',
-  'common.yes': 'はい',
-  'common.no': 'いいえ',
-  'common.default': '既定',
   'common.unsupported': 'このブラウザでは使えません',
 };

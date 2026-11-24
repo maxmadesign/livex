@@ -46,7 +46,9 @@ export async function updateManifest(path: string, update: (latest: PlushManifes
 
 /**
  * Fields an import adds to an entry that a re-bake of the procedural design must keep: the
- * textured model and the provenance of the generated model.
+ * textured model and the provenance of the generated model. The note stays the import's (it
+ * describes the model that is drawn and records the importer version, which the import's
+ * up-to-date check reads); only the status follows the design.
  */
 export function carryGenerated(previous: PlushAsset | undefined, next: PlushAsset): PlushAsset {
   if (!previous?.model.textured) return next;
@@ -56,7 +58,6 @@ export function carryGenerated(previous: PlushAsset | undefined, next: PlushAsse
     source: {
       ...previous.source,
       status: next.source.status,
-      note: next.source.note,
       design: next.source.generator,
     },
   };

@@ -92,7 +92,8 @@ describe('manifest versions', () => {
     const baked: PlushAsset = { ...fakeAsset('bear'), source: { status: 'original-replaceable', method: 'procedural-sdf', generator: 'tools/plush/designs/sakura.ts#bear', license: 'Original', note: 'new note' } };
     const merged = carryGenerated(before, baked);
     expect(merged.model.textured).toEqual(TEXTURED);
-    expect(merged.source).toMatchObject({ method: 'ai-generated', jobs: { model: 'm1' }, rawSha256: 'abc', status: 'original-replaceable', note: 'new note', design: 'tools/plush/designs/sakura.ts#bear' });
+    // The note stays the import's: it describes the drawn model and carries the importer version.
+    expect(merged.source).toMatchObject({ method: 'ai-generated', jobs: { model: 'm1' }, rawSha256: 'abc', status: 'original-replaceable', note: 'old', design: 'tools/plush/designs/sakura.ts#bear' });
     // Nothing to carry: the baked entry is used as is.
     expect(carryGenerated(fakeAsset('bear'), baked)).toBe(baked);
   });

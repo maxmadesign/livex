@@ -1,9 +1,11 @@
+import { useId } from 'react';
 import { DISPLAY_PROFILE_IDS, type DisplayProfileId } from '../../core/types';
+import { frameSupported, type FramedLayout } from '../../layout/frame';
 import { DESIGN, type HudLayout } from '../../layout/solve';
 import { estimateHandheldScreen, isNominalPhoneScreen, orientScreen } from '../../perspective/windowGeometry';
 import { useApp, useSettings, useT, useUi } from '../context';
 import { useHudLayout } from '../useHudLayout';
-import { Field, Section } from './Field';
+import { Field, Section, useSetter } from './Field';
 
 /* ---------------------------------------------------------------- Layout */
 
@@ -29,6 +31,54 @@ function PhoneNotes({ layout }: { layout: HudLayout }) {
   );
 }
 
+/**
+ * Portrait presets: "Simulate 9:16 screen" (stored as `profiles.<id>.layout.frame`), shown as a switch,
+ * and what the game currently uses as the screen. Changing it re-lays-out at once (it is a live value).
+ */
+function FrameToggle({ profile, layout }: { profile: DisplayProfileId; layout: FramedLayout }) {
+  const t = useT();
+  const id = useId();
+  const set = useSetter();
+  const path = `profiles.${profile}.layout.frame`;
+  const on = useSettings((s) => s.profiles[profile].layout.frame) !== 'fill';
+  const view = useSettings((s) => s.profiles[profile].view);
+  const frame = layout.frame;
+  // The simulated box is the preset's whole physical screen: width as entered, height from the 9:16 shape.
+  const pw = Math.min(view.screenW, view.screenH);
+  const ph = pw * (frame.h / Math.max(1, frame.w));
+  const m = (v: number) => v.toFixed(3);
+  let note: string | null = null;
+  if (frame.simulated && frame.letterboxed) {
+    note = t('frame.readout', { w: Math.round(frame.w), h: Math.round(frame.h), ww: Math.round(frame.windowW), wh: Math.round(frame.windowH), pw: m(pw), ph: m(ph) });
+  } else if (frame.simulated) {
+    note = t('frame.fills', { pw: m(pw), ph: m(ph) });
+  }
+  return (
+    <>
+      <div className="pp-field" data-path={path}>
+        <label htmlFor={id}>{t('frame.toggle')}</label>
+        <div className="pp-control" style={{ justifyContent: 'flex-end' }}>
+          <button
+            id={id}
+            type="button"
+            role="switch"
+            className="pp-toggle"
+            aria-checked={on}
+            onClick={() => set(path, on ? 'fill' : 'simulate916')}
+            data-testid={`field-${path}`}
+          />
+        </div>
+        <div className="hint">{t('frame.hint')}</div>
+      </div>
+      {note ? (
+        <p className="pp-note" data-testid="frame-readout">
+          {note}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export function LayoutTab() {
   const app = useApp();
   const t = useT();
@@ -50,6 +100,7 @@ export function LayoutTab() {
         ))}
       </div>
       <p className="pp-note">{t('layout.independent')}</p>
+      {frameSupported(profile) ? <FrameToggle profile={profile} layout={layout} /> : null}
       {profile === 'mobile' ? <PhoneNotes layout={layout} /> : null}
       <div style={{ display: 'flex', gap: 16 * layout.unit, alignItems: 'flex-start', margin: `${12 * layout.unit}px 0` }}>
         <div className="pp-layout-map" style={{ height: Math.min(mapH, 320 * layout.unit) }} aria-hidden="true">

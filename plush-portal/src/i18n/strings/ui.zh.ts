@@ -1,7 +1,5 @@
 /** zh translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiZh: Record<string, string> = {
-  'app.title': 'PLUSH PORTAL',
-  'app.tagline': '屏幕后面藏着一台抓娃娃机',
 
   'boot.physics': '机械爪热身中…',
   'boot.assets': '正在打开玩具箱…',
@@ -23,16 +21,13 @@ export const uiZh: Record<string, string> = {
   'hud.demoHint': '现在是演示画面，点“开始”自己来玩吧',
   'hud.collection': '收藏',
   'hud.settings': '设置',
-  'hud.menu': '菜单',
   'hud.theme': '主题',
   'hud.tip': '向 Momo 要个提示',
-  'hud.fullscreen': '全屏',
   'hud.dir.left': '向左移动',
   'hud.dir.right': '向右移动',
   'hud.dir.back': '向后移动',
   'hud.dir.front': '向前移动',
   'hud.timer': '{seconds} 秒',
-  'hud.paused': '已暂停',
   'hud.pending': '改动将在本轮结束后生效',
   'hud.restocking': '新娃娃正在补货…',
   'hud.status.ATTRACT': '随时可以开始',
@@ -105,7 +100,6 @@ export const uiZh: Record<string, string> = {
   'collection.locked': '还没抓到',
   'collection.total': '已集齐 {owned} / {total} 种角色 · 共 {prizes} 个娃娃',
   'collection.count': '×{count}',
-  'collection.close': '关闭',
 
   'theme.sakura.name': '樱花萌宠',
   'theme.sakura.tagline': '精品店里的樱花粉毛绒玩偶',
@@ -123,7 +117,6 @@ export const uiZh: Record<string, string> = {
   'guide.source.gpt': 'GPT',
   'guide.source.local': '本地台词',
   'guide.voice.ai': 'AI 语音',
-  'guide.mute': '让 Momo 静音',
 
   'toast.layoutRebuilt': '娃娃已重新摆放',
   'toast.themeFailed': '这个主题加载失败',
@@ -144,7 +137,6 @@ export const uiZh: Record<string, string> = {
   'toast.modelRejected': '该文件无法使用（{reason}）',
   'toast.wrongPin': 'PIN 不正确',
 
-  'perf.title': '性能',
   'perf.fps': 'FPS',
   'perf.frame': '帧时间',
   'perf.p95': 'p95',
@@ -158,17 +150,9 @@ export const uiZh: Record<string, string> = {
   'perf.na': '不可用',
   'perf.auto': '自动',
 
-  'common.on': '开',
-  'common.off': '关',
   'common.close': '关闭',
   'common.cancel': '取消',
   'common.apply': '应用',
-  'common.ok': '确定',
-  'common.reset': '重置',
-  'common.copy': '复制',
   'common.test': '测试',
-  'common.yes': '是',
-  'common.no': '否',
-  'common.default': '默认',
   'common.unsupported': '此浏览器不支持',
 };

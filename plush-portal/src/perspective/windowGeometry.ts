@@ -44,6 +44,20 @@ export interface WindowEnvironment {
   dpr?: number;
   /** Screen rotation in degrees (0, 90, 180, 270) as reported by the browser, if known. */
   orientationAngle?: number;
+  /**
+   * The canvas is a simulated screen (portrait presets, Settings → Layout → "Simulate 9:16 screen";
+   * src/layout/frame.ts): it stands for the preset's whole physical screen (`screenW × screenH`),
+   * whatever the browser window and the monitor are, so the "Game window" option does not apply.
+   */
+  simulated?: boolean;
+}
+
+/** A rectangle in the browser viewport (CSS px) to use instead of the canvas' own position. */
+export interface ViewportBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface WindowLayout {
@@ -153,8 +167,9 @@ export function computeWindowLayout(env: WindowEnvironment, view: ViewSettings, 
   let offX = 0;
   let offY = 0;
   let estimated = false;
-  if (view.windowMode === 'fullscreen' || env.screenW <= 0) {
-    // The canvas is the whole physical screen (kiosk). Height follows the real canvas aspect.
+  if (view.windowMode === 'fullscreen' || env.screenW <= 0 || env.simulated) {
+    // The canvas is the whole physical screen (kiosk, or the simulated 9:16 screen of a portrait
+    // preset shown on another monitor). Height follows the real canvas aspect.
     physWidth = aspect >= 1 ? Math.max(view.screenW, view.screenH) : Math.min(view.screenW, view.screenH);
     physHeight = physWidth / aspect;
   } else {
@@ -223,9 +238,15 @@ function readOrientationAngle(): number | undefined {
   }
 }
 
-/** Best-effort measurement of where the canvas sits on the physical screen. */
-export function readWindowEnvironment(canvas: HTMLElement): WindowEnvironment {
-  const rect = canvas.getBoundingClientRect();
+/**
+ * Best-effort measurement of where the canvas sits on the physical screen. `simulatedBox` (the
+ * simulated 9:16 screen of a portrait preset, src/layout/frame.ts) replaces the canvas' measured
+ * rectangle — the element may not have been resized yet — and marks the environment `simulated`.
+ */
+export function readWindowEnvironment(canvas: HTMLElement, simulatedBox?: ViewportBox | null): WindowEnvironment {
+  const rect = simulatedBox
+    ? { left: simulatedBox.x, top: simulatedBox.y, width: simulatedBox.w, height: simulatedBox.h }
+    : canvas.getBoundingClientRect();
   const chromeX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
   const chromeTop = Math.max(0, window.outerHeight - window.innerHeight - chromeX);
   const angle = readOrientationAngle();
@@ -239,5 +260,6 @@ export function readWindowEnvironment(canvas: HTMLElement): WindowEnvironment {
     canvasCenterY: (window.screenY || 0) + chromeTop + rect.top + rect.height / 2,
     dpr: window.devicePixelRatio || 1,
     orientationAngle: angle,
+    ...(simulatedBox ? { simulated: true } : {}),
   };
 }

@@ -1,8 +1,8 @@
 # PLUSH PORTAL
 
-> **中文简介** — PLUSH PORTAL 是一个在浏览器中运行的卡通 3D 抓娃娃机。爪子、绳索、娃娃全部由 Rapier 物理引擎以 120 Hz 固定步长真实模拟，抓取结果只取决于真实接触，没有隐藏的中奖概率。内置四个主题（樱花萌宠 / 动画伙伴 / 梦幻海洋 / 宇宙街机）共 24 个原创毛绒角色，支持桌面横屏、32 寸竖屏和 86 寸竖屏三种显示预设（86 寸预设把操作面板和所有对话框放在屏幕中部 25%–75% 的安全区内），默认开启基于摄像头头部追踪的“窗口透视”（离轴投影），并带有 AI 向导 Momo（通过服务端代理调用 OpenAI；没有密钥时自动使用本地台词）。摄像头画面与人脸关键点只在本机处理，不上传、不保存。
+> **中文简介** — PLUSH PORTAL 是一个在浏览器中运行的卡通 3D 抓娃娃机。爪子、绳索、娃娃全部由 Rapier 物理引擎以 120 Hz 固定步长真实模拟，抓取结果只取决于真实接触，没有隐藏的中奖概率。内置五个主题（樱花萌宠 / 动画伙伴 / 梦幻海洋 / 宇宙街机 / 显卡派对）共 31 个原创毛绒角色，每个角色都有用 Higgsfield 生成的高细节贴图模型；带稀有度、连击和积分系统；无人操作时自动回到演示模式并显示“点击开始”。音乐、音效和每个角色自己的声音来自 Higgsfield 生成的录音（加载失败时使用项目内合成的备用音频）。支持桌面横屏、32 寸竖屏、86 寸竖屏和手机四种显示预设（86 寸预设把操作面板和所有对话框放在屏幕中部 25%–75% 的安全区内；在非 9:16 的窗口里，竖屏预设会在居中的 9:16 区域内模拟真实屏幕），默认开启基于摄像头头部追踪的“窗口透视”（离轴投影，带倒计时校准），并带有 AI 向导 Momo（通过服务端代理调用 OpenAI，密钥来自 `.env`，也可在设置中替换；没有密钥时自动使用本地台词）。摄像头画面与人脸关键点只在本机处理，不上传、不保存。
 >
-> 本仓库没有在真实的 7840HS / 780M 主机、32 寸或 86 寸实体屏、真实摄像头前的真人、或真实 OpenAI 密钥下做过验收，详见下文“Verified here / needs real hardware”。
+> 本仓库没有在真实的 7840HS / 780M 主机、32 寸或 86 寸实体屏、真实手机、真实摄像头前的真人上做过验收，也没有人实际听过音频，详见下文“Verified here / needs real hardware”。
 
 PLUSH PORTAL is a browser claw machine: a cartoon 3D cabinet full of soft plush
 toys, a three-finger claw on a cable, and nothing scripted about the outcome.
@@ -11,17 +11,52 @@ The claw, the cable and every toy are simulated in a
 deformation driven by the real contacts); a round is won only when the toy's
 centre of mass physically passes the prize chute sensor.
 
-- Four complete themes — Sakura Kawaii, Storybook Friends, Ocean Dream, Cosmic Arcade — and 24
-  original plush characters (six per theme), each with three LODs, collision proxies and soft-body deformation data.
-- Three display presets: **desktop** (landscape), **portrait32** (32" portrait
-  touch screen) and **portrait86** (86" portrait kiosk whose control panel and dialogs sit in
-  the central 25 %–75 % band of the screen).
+- **Five complete themes** — Sakura Kawaii, Storybook Friends, Ocean Dream, Cosmic Arcade and **GPU Party**
+  (black-and-lime tech party: a twin-fan card, a chip, a fan, a server rack, a robot, a pixel cube and the
+  Keynote Chief) — with **31 original plush characters** (six per theme, seven for GPU Party).
+  *GPU Party is an original theme: no real company, brand, logo, product name or person is used; its emblem
+  (`public/assets/themes/gpu/logo.svg`) is an original drawing that only an owner with permission may replace with
+  an official logo, and the guide is told never to name real companies, products or people. The generated model of
+  the Keynote Chief reads closer to a recognisable public figure than its design — whoever ships the assets decides
+  whether that likeness is acceptable ([ASSETS.md](docs/ASSETS.md#textured-ai-generated-models)).*
+- **AI-generated, high-detail plush models.** Every character is drawn with a textured model generated with
+  Higgsfield (concept image, then image-to-3D) from its original procedural design: about 41k / 12k / 4k triangle
+  LODs and PBR textures (512 / 1K / 2K, following *Graphics → Textures*). Collision shapes, mass and the fallback
+  model still come from the procedural design. Provenance (job ids, raw-file hash) and the licence note are in the
+  manifest and in *Settings → Themes & Toys*: **check Higgsfield's current terms** (ownership and commercial use depend
+  on the account plan) before distributing them.
+- **Studio music, effects and character voices.** Each theme plays two ~2-minute studio music takes cross-faded on
+  the beat, tier-aware win stingers and a jackpot fanfare, a dramatic effect layer (coin, claw, chute, fireworks,
+  confetti, combo, score count-up, restock rain, attract chime, …) and **the characters' own voices** when they are
+  lifted, win or slip (all 31 have a recorded voice; a character whose recording is missing or fails to load
+  squeaks at its own pitch instead). These are AI-generated through Higgsfield (music: ElevenLabs Music v2.5; effects and voices:
+  Mirelo text-to-audio) — **check the Higgsfield / ElevenLabs (and Mirelo) terms before commercial use**
+  ([AUDIO.md](docs/AUDIO.md)). An original synthesised set made by tools in this repo (five music tracks, 70 one-shots,
+  two motor loops) is the complete fallback for anything that does not load.
+- **Points, rarity and combos.** Every character has a rarity (common 100 · rare 250 · epic 500 · legendary 1000
+  points); first catches, clean grabs and win streaks (×1.5 / ×2 / ×3) add more; the effects, light show and win
+  sound escalate with the tier. Best session and lifetime points are kept on the device. Presentation only — the
+  physics decides every round.
+- **Idle reset and a self-playing attract mode.** After `system.idleSeconds` (default 60 s) without input the
+  machine resets (dialogs closed, session cleared) and plays clearly labelled demo rounds with a large
+  **TAP TO PLAY** call to action; a tap takes over at once.
+- Four display presets: **desktop** (landscape), **portrait32** (32" portrait touch screen), **portrait86** (86"
+  portrait kiosk whose control panel and dialogs sit in the central 25 %–75 % band of the screen) and **mobile**
+  (phones, held sideways or upright, thumb-sized controls, full screen on the first tap). In a browser window of
+  another shape the two portrait presets **simulate their 9:16 screen** in a centred box, laid out and projected
+  exactly as on the real panel.
 - **Window Perspective**: an off-axis projection driven by local head tracking
   (MediaPipe Face Landmarker), so the screen behaves like a pane of glass in
-  front of the cabinet. On by default; the game is fully playable without a camera.
-- Four original music tracks, 54 sound-effect clips and two motor loops, all synthesised by tools in this repo.
+  front of the cabinet, with a **3-2-1 countdown calibration** that takes the player's current position and head
+  direction as the centre (automatic when the camera starts). On by default; the game is fully playable without a camera.
+- Particle effects, a rarity aura and a light show (at most two extra draw calls), per-theme studio lighting,
+  contact shadows and detailed cabinet materials, scaled by four graphics tiers.
 - **Momo**, an AI guide that comments on the game through a server-side OpenAI
-  proxy, with a complete local fallback (lines + "babble" voice) when no key is configured.
+  proxy, with a complete local fallback (lines + "babble" voice) when no key is configured. The key comes from
+  `.env` and can be replaced in *Settings → AI Guide* (stored on the server, never in the browser). Momo speaks
+  English by default; *Guide speaks → Interface language* follows the UI.
+- **HTTPS for phones on the LAN** (`npm run start:https` / `npm run dev:https`, self-signed certificate) so a phone's
+  browser allows the camera.
 - An eight-tab settings dialog (draft → preview → apply / cancel), import/export, public-display lock.
 - English, 简体中文 and 日本語 UI.
 
@@ -36,6 +71,9 @@ cp .env.example .env      # optional: add OPENAI_API_KEY for the cloud guide
 npm run dev               # http://127.0.0.1:5173
 ```
 
+No `.env`? You can also paste a key in *Settings → AI Guide → OpenAI API key* (stored server-side in
+`.data/secrets.json`; *Restore default* goes back to `.env`).
+
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server on `127.0.0.1:5173` **and** the API server (`tsx watch server/index.ts`) on `127.0.0.1:8787`; Vite proxies `/api` to it. |
@@ -43,8 +81,10 @@ npm run dev               # http://127.0.0.1:5173
 | `npm start` | Serves `dist/` and the API from one process on `http://127.0.0.1:8787` (`tsx server/index.ts --serve-dist`). Run `npm run build` first. |
 | `npm run preview` | Vite's static preview of `dist/` on `127.0.0.1:4173` (start `npm run dev:api` next to it for `/api`). |
 | `npm run dev:web` / `npm run dev:api` | The two halves of `npm run dev` on their own. |
+| `npm run dev:https` | Vite over HTTPS on `0.0.0.0:5173` (self-signed certificate in `.data/tls`) plus the API, for phones on the LAN. |
+| `npm run start:https` | `npm start` plus HTTPS on `:8443` (`PLUSH_HTTPS_PORT`). Phone steps: [docs/AI.md](docs/AI.md#https-for-phones-on-the-lan). |
 
-`predev`, `prebuild` and `prestart` run `tools/fetch-tracking-assets.mjs`: it
+`predev`, `prebuild`, `prestart` (and their `:https` variants) run `tools/fetch-tracking-assets.mjs`: it
 copies the MediaPipe WASM runtime from `node_modules` into the git-ignored
 `public/mediapipe/wasm/` and verifies the committed face model
 (`public/mediapipe/models/face_landmarker.task`, SHA-256 pinned, downloaded
@@ -53,19 +93,22 @@ again only if it is missing or corrupt). Nothing is loaded from a CDN at run tim
 Ports: the API port is `PLUSH_API_PORT` (default 8787), set in `.env` or the
 shell; the server and the Vite proxy both read it.
 To serve other devices on the LAN set `PLUSH_API_HOST=0.0.0.0`. Camera access
-needs a secure context: `localhost` / `127.0.0.1` or HTTPS.
+needs a secure context: `localhost` / `127.0.0.1` or HTTPS (`npm run start:https`).
+Outbound calls honour `HTTPS_PROXY` / `NO_PROXY` and `NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE` without flags.
 
 ### Launch parameters
 
 | Parameter | Values | Effect |
 | --- | --- | --- |
-| `?display=` (alias `?profile=`) | `desktop` \| `portrait32` \| `portrait86` | Selects the display preset and remembers it (skips the first-run chooser). |
-| `?theme=` | `sakura` \| `storybook` \| `ocean` \| `cosmic` | Starting theme. |
+| `?display=` (alias `?profile=`) | `desktop` \| `portrait32` \| `portrait86` \| `mobile` | Selects the display preset and remembers it (skips the first-run chooser). |
+| `?theme=` | `sakura` \| `storybook` \| `ocean` \| `cosmic` \| `gpu` | Starting theme. |
 | `?lang=` | `en` \| `zh` \| `ja` | UI language. |
 | `?quality=` | `safe` \| `medium` \| `high` \| `ultra` | Applies a graphics preset. |
 | `?camera=off` | | Never asks for the camera in this session. |
 | `?seed=` | integer | Fixed toy layout (repeatable tests). |
-| `?debug=1` | | Exposes `window.__plush` (state, fast-forward, log) for tests and tools. |
+| `?debug=1` | | Exposes `window.__plush` (state, fast-forward, log, score, attract) for tests and tools. Every call except `attract()` counts as player input for the idle reset. |
+| `?debug=1&insets=` | `top,right,bottom,left` (CSS px) | Pretends the screen has cut-outs (notch, home indicator) — Playwright cannot emulate them. |
+| `?models=procedural` | | Draws the procedural models instead of the textured AI-generated ones (comparison, troubleshooting). |
 
 Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
 
@@ -76,39 +119,51 @@ Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
 | On-screen direction pad (touch / mouse, hold) | Move the claw |
 | Arrow keys or `W` `A` `S` `D` | Move the claw |
 | Big button, `Space` or `Enter` | **START** → **GRAB** → **PLAY AGAIN** |
+| **TAP TO PLAY** (attract mode) | Same as START: stops the demo and starts a round |
 | `F` | Toggle full screen |
 | `Esc` | Close the open dialog (settings: same as Cancel) |
 
 A round: *start → aim → grab*. The claw descends until it lands, closes, lifts,
 carries whatever it holds to the chute at the front-left, opens and returns.
 After a miss the next round is ready about a second later. The first time START
-is pressed on a device a short how-to-play card is shown. With nobody playing,
-the machine runs a demo round by itself. Both can be switched off.
+is pressed on a device a short how-to-play card is shown (*Show how-to-play on first start*).
+A won prize scores points by its rarity; the session score, combo and best session are shown next to the top bar
+(beside the control panel on 86").
+
+With nobody playing, the machine is in **attract mode**: it plays clearly labelled demo rounds by itself (DEMO badge
+and a separate DEMO score that is never stored; *Demo when idle* switches them off), with a light show, a soft
+chime every 20–30 s and a large **TAP TO PLAY** call to action in the middle of the reachable area. When a player
+walks away, *Reset after no input* (`system.idleSeconds`, default 60 s, 0 = never) brings the machine back there:
+open dialogs close, the session score is cleared and the field is restocked.
 
 ## Feature overview
 
 | Area | Summary | Details |
 | --- | --- | --- |
 | Physics & rules | 120 Hz fixed step, cable as a one-sided spring, motorised fingers, real contacts, slip reasons, idempotent prize award. | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PHYSICS.md](docs/PHYSICS.md) |
-| Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json`; any character slot also accepts an ordinary `.glb`, through the manifest or by in-app import. | [docs/ASSETS.md](docs/ASSETS.md) |
-| Display presets | Normalised layout solver, safe zone, panel anchor, per-preset settings. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
-| Window Perspective | Off-axis frustum from the tracked eye position; quick calibration. | [docs/CALIBRATION.md](docs/CALIBRATION.md), [docs/DISPLAYS.md](docs/DISPLAYS.md) |
+| Points & attract mode | Rarity tiers, scoring, combos, idle reset, demo rounds, call to action. | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/SETTINGS.md](docs/SETTINGS.md#1-game) |
+| Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json` (collision proxies, mass, fallback); textured AI-generated models imported with `npm run assets:import`; any character slot also accepts an ordinary `.glb`, through the manifest or by in-app import. | [docs/ASSETS.md](docs/ASSETS.md) |
+| Display presets | Normalised layout solver, safe zone, panel anchor, per-preset settings, phone layout, simulated 9:16 screen. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
+| Window Perspective | Off-axis frustum from the tracked eye position; countdown calibration, head-turn effect, distance calibration. | [docs/CALIBRATION.md](docs/CALIBRATION.md), [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Settings | Eight tabs, 100+ settings, presets, import/export, lock. | [docs/SETTINGS.md](docs/SETTINGS.md) |
-| Graphics tiers | Safe / Medium / High / Ultra + automatic optimiser. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
-| Audio | Four original tracks, SFX, motor loops, ducking, fallback synthesiser. | [docs/AUDIO.md](docs/AUDIO.md) |
-| AI guide | Server proxy, structured lines, speech, local fallback, rate limits. | [docs/AI.md](docs/AI.md) |
+| Graphics tiers | Safe / Medium / High / Ultra + automatic optimiser; environment lighting, effects and light show. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
+| Audio | Studio music play-lists, win stingers, character voices and effects; the synthesised fallback set; ducking. | [docs/AUDIO.md](docs/AUDIO.md) |
+| AI guide | Server proxy, replaceable key, structured lines, speech, local fallback, rate limits, HTTPS for phones. | [docs/AI.md](docs/AI.md) |
 | Test results | What the automated suites cover and their last recorded run. | [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md) |
 
 ## AI guide configuration
 
-The OpenAI key is read **only** by the API server from the environment / `.env`:
+The OpenAI key is read by the API server from the environment / `.env`:
 
 ```bash
 # .env  (never committed)
 OPENAI_API_KEY=sk-...
 ```
 
-It is never sent to the browser, never stored in `localStorage`, never placed in
+The browser only ever sends a replacement key once (*Settings → AI Guide → OpenAI API key*); the server
+stores it in the git-ignored `.data/` folder and never sends a key back — the page only sees where the key in use
+comes from and its last four characters. By default only a browser on the server machine (or one with
+`PLUSH_ADMIN_TOKEN`) may replace it (`PLUSH_KEY_MANAGEMENT`). A key is never stored in `localStorage`, never placed in
 a URL, never logged and never exported with the settings. Without a key the
 server still runs: `/api/ai/status` reports `configured: false`, the AI routes answer
 `no_key`, and Momo uses her built-in lines and local voice; the settings dialog then shows "Local lines".
@@ -117,15 +172,18 @@ options are documented in [docs/AI.md](docs/AI.md) and `.env.example`.
 
 ## Regenerating assets
 
-All shipped assets are produced by scripts in this repository; the outputs are
+All shipped assets are produced by scripts in this repository, or — for the AI-generated models and studio
+recordings — processed by them from generator output that is not part of the repository; the outputs are
 committed, so none of these steps is needed to run the game.
 
 | Command | Output |
 | --- | --- |
-| `npm run assets:plush` | `public/assets/plush/<theme>/<slug>.glb` + `public/assets/plush/manifest.json` from `tools/plush/designs/*.ts` |
-| `npm run assets:audio` | Music, SFX and `public/audio/manifest.json` from `tools/audio/bake.ts`. MP3 music needs `ffmpeg` with libmp3lame on the PATH; `npm run assets:audio -- --music-format wav` works without it. |
+| `npm run assets:plush` | `public/assets/plush/<theme>/<slug>.glb` + `public/assets/plush/manifest.json` from `tools/plush/designs/*.ts` (procedural models, collision proxies, mass) |
+| `npm run assets:import -- --raw <dir>` | Imports Higgsfield-generated GLBs (`<dir>/<theme>.<slug>.glb`, not part of the repo) as textured models: `<slug>.gen.glb` + WebP textures and `model.textured` / `source` in the manifest ([ASSETS.md](docs/ASSETS.md#textured-ai-generated-models)) |
+| `npm run assets:audio` | The synthesised music, SFX and `public/audio/manifest.json` from `tools/audio/bake.ts` (keeps the manifest's `studio` section). MP3 music needs `ffmpeg` with libmp3lame on the PATH; `npm run assets:audio -- --music-format wav` works without it. |
+| `npx tsx tools/audio/importStudio.ts --src <dir>` | Processes downloaded studio recordings into `public/audio/studio/` and the manifest's `studio` section (needs ffmpeg) ([AUDIO.md](docs/AUDIO.md)) |
 | `npm run assets:tracking` | MediaPipe WASM copy + face model check (same script as `predev`) |
-| `npm run assets` | All three of the above |
+| `npm run assets` | `assets:plush`, `assets:audio` and `assets:tracking` (not the two imports, which need the generated source files) |
 
 How to add or replace a character: [docs/ASSETS.md](docs/ASSETS.md).
 
@@ -142,7 +200,10 @@ npm run e2e       # Playwright (tests/e2e): builds, serves dist + API on :8799,
 The end-to-end suite runs in headless Chromium with software WebGL
 (SwiftShader), where a frame can take seconds; it therefore advances game time
 through the `?debug=1` API instead of waiting on the clock, and it never talks
-to OpenAI (`OPENAI_API_KEY` is forced empty). Coverage and the last recorded
+to OpenAI: the server it starts has `OPENAI_API_KEY` empty, `PLUSH_KEY_MANAGEMENT=off` (a key saved in
+Settings on this machine is ignored) and a fresh temporary `PLUSH_DATA_DIR`. `PLUSH_E2E_PORT` and
+`PLUSH_E2E_DIST` move it to another port / build folder; a server already answering on that port is reused.
+Run one spec with `npx playwright test tests/e2e/<file>`. Coverage and the last recorded
 results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 
 ## Project layout
@@ -152,25 +213,25 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 | `index.html`, `src/main.tsx` | Entry point |
 | `src/app/` | Composition root (`Game.ts`), bootstrap, UI store, launch parameters, presets, automatic optimiser, demo pilot |
 | `src/core/` | Shared types, event emitter, maths, the audio / guide / tracker port contracts |
-| `src/game/` | `GameCore`, round state machine, round controller, toy field — no DOM, no rendering |
+| `src/game/` | `GameCore`, round state machine, round controller, toy field, rarity, scoring, idle timer and attract director — no DOM, no rendering |
 | `src/physics/` | Rapier world, claw rig, grip monitor, field dimensions |
-| `src/plush/` | Manifest types, GLB loading, plush material and deformation, custom model import |
-| `src/scene/` | Renderer and post-processing (`Stage`), cabinet, claw and toy visuals, effects, procedural textures |
-| `src/themes/` | The four theme definitions |
-| `src/perspective/` | Off-axis projection, virtual window geometry |
-| `src/tracking/` | Camera, MediaPipe inference (worker or main thread), eye estimation, filtering, calibration |
-| `src/layout/` | HUD layout solver |
-| `src/settings/` | Settings specification and store |
-| `src/ui/` | React HUD, dialogs and the settings dialog |
-| `src/audio/` | Web Audio engine, fallback synthesiser |
-| `src/ai/` | Guide director, prompt, local lines, speech, cache |
+| `src/plush/` | Manifest types, GLB loading (textured and procedural models), plush material and deformation, custom model import |
+| `src/scene/` | Renderer and post-processing (`Stage`), environment lighting, contact shadows, cabinet, claw and toy visuals, procedural textures; `fx/` particles, aura and light show |
+| `src/themes/` | The five theme definitions |
+| `src/perspective/` | Off-axis projection, virtual window geometry (incl. the simulated 9:16 screen and phones) |
+| `src/tracking/` | Camera, MediaPipe inference (worker or main thread), eye and head-direction estimation, filtering, countdown and distance calibration, phone capture policy |
+| `src/layout/` | HUD layout solver (incl. phones), 9:16 frame, safe-area insets, phone behaviour |
+| `src/settings/` | Settings specification, store and migrations |
+| `src/ui/` | React HUD, score HUD, attract call to action, calibration overlay, dialogs and the settings dialog |
+| `src/audio/` | Web Audio engine, studio play-lists and moments, fallback synthesiser |
+| `src/ai/` | Guide director, prompt, local lines, speech, cache, key client |
 | `src/i18n/` | Strings (en / zh / ja) |
-| `src/persistence/`, `src/diagnostics/` | Local storage helpers, collection, redacted in-memory log |
-| `server/` | Hono API server: OpenAI proxy, validation, rate limiting, static hosting of `dist/` |
-| `tools/plush/` | SDF modelling DSL, mesher, GLB writer, character designs |
-| `tools/audio/` | Music and SFX synthesis |
+| `src/persistence/`, `src/diagnostics/` | Local storage helpers, collection, scores, redacted in-memory log |
+| `server/` | Hono API server: OpenAI proxy, key store, proxy / CA handling, HTTPS listener, validation, rate limiting, static hosting of `dist/` |
+| `tools/plush/` | SDF modelling DSL, mesher, GLB writer, character designs, generated-model importer |
+| `tools/audio/` | Music and SFX synthesis, studio-recording import |
 | `tools/dev/` | Headless probes and screenshot helpers used during development |
-| `public/assets/plush/`, `public/audio/`, `public/mediapipe/` | Baked characters, audio, face model |
+| `public/assets/plush/`, `public/assets/themes/`, `public/audio/`, `public/mediapipe/` | Characters (procedural + textured), the GPU Party emblem, audio (synthesised + studio), face model |
 | `tests/unit/`, `tests/e2e/` | Vitest and Playwright suites |
 | `docs/` | Documentation listed above |
 
@@ -182,27 +243,31 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 - **Camera**: video only (`audio: false`; the microphone is never requested).
   Frames and face landmarks are processed on the device by a local WASM model;
   they are never uploaded, recorded or stored, and never sent to the AI guide.
-  The only tracking data that is persisted is the calibration (a depth constant
-  and a neutral position per display preset). MediaPipe's usage logging is switched off and the
+  The only tracking data that is persisted is the calibration (a depth constant,
+  a neutral position and a head-direction baseline per display preset). MediaPipe's usage logging is switched off and the
   inference worker refuses every request to another origin.
 - **AI guide**: only game facts leave the device (event type, theme, toy name,
   result, language) and only to your own API server, which forwards them to OpenAI when a key is configured.
-- **Storage**: settings and the prize collection live in `localStorage`;
-  imported custom models live in IndexedDB. Nothing is sent to a server.
+- **Storage**: settings, the prize collection and the best / lifetime points live in `localStorage`;
+  imported custom models live in IndexedDB. Nothing of this is sent to a server. A replacement OpenAI key typed in
+  the settings is the one exception that goes to *your* API server (once), which keeps it in `.data/secrets.json`.
 - **Exports**: the configuration export contains settings only — no keys, no
-  PIN, no camera or audio device ids, no camera images, no face data, no collection.
+  PIN, no camera or audio device ids, no camera images, no face data, no collection, no scores.
 - **Logs**: the diagnostic log is kept in memory and redacted; the server log never contains keys or full prompts.
 
 ## Verified here / needs real hardware
 
 Everything in this repository was developed and tested in a cloud container:
 headless Chromium with **software** WebGL (SwiftShader), four shared CPU cores,
-no GPU, no camera, no display, no OpenAI key.
+no GPU, no camera, no display, no speakers, no phone.
 
 What that environment can show (see [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md)
-and the unit tests): the game logic and physics, the layout rules at the three
-preset viewport sizes, the settings flow, the fallbacks, the server proxy
-against a mocked OpenAI client, and the tracking mathematics on synthetic input.
+and the unit tests): the game logic and physics, the points and the idle reset, the layout rules at the
+preset viewport sizes (including Playwright's emulated phones and the simulated 9:16 box in a 1280 × 720 window),
+the settings flow, the fallbacks, the server proxy against a mocked OpenAI client, the tracking mathematics on
+synthetic input, audio files by measurement (loudness, loop seams, cross-fades rendered offline) and render
+statistics (draw calls, triangles, shader programs) — not frame rates.
+The live OpenAI path was exercised once with a real key (below).
 
 What it **cannot** show, and what is therefore **not verified**:
 
@@ -210,9 +275,12 @@ What it **cannot** show, and what is therefore **not verified**:
 | --- | --- | --- |
 | Frame rate on a Ryzen 7 7840HS / Radeon 780M (or any real GPU) | No such machine was available. The quality tiers are engineering starting budgets, not measurements. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — measurement checklist |
 | Look, reach and readability on a physical 32" or 86" portrait screen | Only browser viewports of the same pixel shape were used. A viewport proves layout, not ergonomics or viewing comfort. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
-| Head tracking and Window Perspective with a real camera and a real person | Only synthetic input was used: generated landmarks in the unit tests and, at most, Chromium's fake camera test pattern in the end-to-end suite. Mouse or slider input is not camera validation. | [docs/CALIBRATION.md](docs/CALIBRATION.md) |
-| Live OpenAI text and speech | No API key was available. The default model names were checked against the installed OpenAI SDK's type definitions only, never against the live API. | [docs/AI.md](docs/AI.md) |
-| Touch input on real touch hardware, audio output devices, Safari and Firefox | Only Chromium with synthetic pointer events was used. | Manual pass |
+| Head tracking, the countdown calibration and Window Perspective with a real camera and a real person | Only synthetic input was used: generated landmarks in the unit tests and, at most, Chromium's fake camera test pattern (no face) in the end-to-end suite. Mouse or slider input is not camera validation. The stability thresholds and the head-turn default are untested with people. | [docs/CALIBRATION.md](docs/CALIBRATION.md) |
+| Live OpenAI text and speech beyond a smoke test | A smoke test passed on 2026-11-24 through the container's HTTPS proxy with a real key: one text line and one Realtime voice line (byte count only — nobody listened), including a run where the proxy's CA came only from `SSL_CERT_FILE` loaded by the server. Longer sessions, rate limits in practice and use from a phone were not tried. | [docs/AI.md](docs/AI.md) |
+| How the music, effects and character voices sound | Nobody has listened to any of it. Loudness, loop seams and cross-fades were measured; taste, drama and musical fit are unjudged, and the two music takes of a theme are in different keys. | [docs/AUDIO.md](docs/AUDIO.md) |
+| Phones | Only Chromium's phone emulation (size, pixel ratio, touch, coarse pointer): no real iOS / Android device, cut-outs, landscape lock, HTTPS certificate acceptance, front camera, battery or heat. | [docs/DISPLAYS.md](docs/DISPLAYS.md#phones) |
+| Look of the textured models, effects and lighting on a real GPU | Screenshots from software rendering only; whole-frame triangle counts at Medium are about twice the procedural models'. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md), [docs/ASSETS.md](docs/ASSETS.md) |
+| Touch input on real touch hardware, audio output devices, Safari and Firefox | Only Chromium with synthetic pointer and touch events was used. | Manual pass |
 
 Other known limitations:
 
@@ -229,14 +297,17 @@ Other known limitations:
 
 | Item | Origin | Licence |
 | --- | --- | --- |
-| Game code, tools, 24 plush characters, cabinet art, textures | Original work in this repository; characters are generated by `tools/plush`, textures procedurally at run time | — (project is `private`; no licence file is included) |
-| Music (4 tracks), 54 sound-effect clips, 2 motor loops | Original, synthesised by `tools/audio/bake.ts` | as above |
+| Game code, tools, 31 plush character designs (procedural models, collision proxies), cabinet art, textures, GPU Party emblem | Original work in this repository; designs are built by `tools/plush`, textures procedurally at run time | — (project is `private`; no licence file is included) |
+| Textured plush models (`*.gen.glb`, `*.gen-*.webp`) | AI-generated with Higgsfield (gpt_image_2_6 concept, meshy_v7 image-to-3D) from the original designs; provenance per character in `public/assets/plush/manifest.json` | Check Higgsfield's current terms of service (ownership and commercial use depend on the account plan) before distributing |
+| Studio music, stingers, effects and character voices (`public/audio/studio/`) | AI-generated through Higgsfield (ElevenLabs Music v2.5; Mirelo text-to-audio), processed by `tools/audio/importStudio.ts`; provenance per file in `public/audio/manifest.json` | Check the Higgsfield / ElevenLabs (and Mirelo) terms before commercial use |
+| Synthesised music (5 tracks), 70 sound-effect clips, 2 motor loops | Original, synthesised by `tools/audio/bake.ts` | as for the game code |
 | Fonts: Fredoka, M PLUS Rounded 1c, Noto Sans SC, ZCOOL KuaiLe | `@fontsource-variable/fredoka`, `@fontsource/m-plus-rounded-1c`, `@fontsource/noto-sans-sc`, `@fontsource/zcool-kuaile` (bundled, no web requests) | SIL Open Font License 1.1 |
 | Face Landmarker model + WASM runtime | `@mediapipe/tasks-vision` 1.2.3 and Google's `face_landmarker.task` | Apache-2.0 |
 | Physics | `@dimforge/rapier3d-compat` 0.21 | Apache-2.0 |
 | Rendering | `three` 0.187 | MIT |
 | UI / state / validation / server | `react` 19, `zustand`, `zod`, `hono` | MIT |
 | OpenAI client (server only) | `openai` | Apache-2.0 |
+| Proxy-aware fetch, WebSocket (server only) | `undici`, `ws` | MIT |
 | Asset pipeline (build time only) | `meshoptimizer`, `@gltf-transform/*` | MIT |
 
-No third-party characters, music or sound recordings are included.
+No third-party characters are included, and no music or sound recordings other than the AI-generated studio set above.

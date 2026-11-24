@@ -1,7 +1,8 @@
 import type { AudioPort } from '../core/contracts';
 import type { DisplayProfileId } from '../core/types';
 import { log, logError } from '../diagnostics/log';
-import { guessProfile } from '../layout/solve';
+import { applyPhoneGraphics, markPhoneSetupDone, phoneFirstRunAction, phoneSetupDone } from '../layout/phone';
+import { guessProfile, hasCoarsePointer } from '../layout/solve';
 import { createCollectionStore, type CollectionStore } from '../persistence/collection';
 import { createSettingsStore, type SettingsStore } from '../settings/store';
 import { Game, type ConfigurableGuide, type ConfigurableTracker, type LaunchParams } from './Game';
@@ -42,6 +43,11 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
   const chosen = s.display.profile as DisplayProfileId | '';
   const profile = chosen || guessProfile(window.innerWidth, window.innerHeight);
   const ui = createGameStore(profile, !!chosen, s.themes.current);
+  // A phone's first run gets the Safe graphics preset before the game is created, so it does not
+  // boot at Medium and rebuild at Safe a moment later (usePhoneSetup covers a later switch to Phone).
+  const phoneAction = phoneFirstRunAction({ profile, coarse: hasCoarsePointer(), done: phoneSetupDone(), launchQuality: launch.quality, editing: false });
+  if (phoneAction === 'mark') markPhoneSetupDone(null);
+  else if (phoneAction === 'apply') markPhoneSetupDone(applyPhoneGraphics((path, value) => settings.getState().set(path, value)));
   if (settings.getState().repaired) log('warn', 'settings', 'Stored settings were incomplete or invalid and were repaired with defaults.');
 
   let audio: AudioPort;

@@ -284,6 +284,14 @@ const DEFORM_MAIN = /* glsl */ `
   #endif
 `;
 
+/**
+ * The soft-body deformation as vertex-shader chunks, for other passes that must follow the
+ * deformed shape (the contact-shadow height pass). `pars` goes after `#include <common>`; `main`
+ * expects `vec3 objectNormal` to be declared and leaves the deformed rest-space position in
+ * `vec3 plushPos`. Needs the `PLUSH_DENTS` define (and `PLUSH_TEXTURED` for textured models).
+ */
+export const PLUSH_DEFORM_GLSL = { pars: DEFORM_PARS, main: DEFORM_MAIN } as const;
+
 const FRAGMENT_PARS = /* glsl */ `
 uniform vec3 uPaintColor[ 4 ];
 uniform vec4 uPaintOn;

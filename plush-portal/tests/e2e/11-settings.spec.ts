@@ -153,6 +153,7 @@ test.describe('11. settings', () => {
           audio: { master: 7, muted: 'yes' },
           profiles: { portrait86: { layout: { safeTop: -1, safeBottom: 9, anchorY: 4, uiScale: 100 } } },
           themes: { current: 'lava', toyScale: 12, disabledToys: 'all' },
+          // attractIdleSec is the retired name of idleSeconds: an imported old file is migrated.
           system: { lockPin: '9999', lockSettings: true, attractIdleSec: 0 },
           unknownSection: { evil: '<script>alert(1)</script>' },
         },
@@ -175,21 +176,26 @@ test.describe('11. settings', () => {
     expect(['off', 'low', 'medium', 'high']).toContain(v.graphics.shadows);
     expect(v.audio.master).toBe(1);
     expect(typeof v.audio.muted).toBe('boolean');
-    expect(['sakura', 'storybook', 'ocean', 'cosmic']).toContain(v.themes.current);
+    expect(['sakura', 'storybook', 'ocean', 'cosmic', 'gpu']).toContain(v.themes.current);
     expect(v.themes.toyScale).toBe(1.25);
     expect(Array.isArray(v.themes.disabledToys)).toBe(true);
     expect(v.profiles.portrait86.layout.safeTop).toBeGreaterThanOrEqual(0);
     expect(v.profiles.portrait86.layout.safeBottom).toBeLessThanOrEqual(1);
     expect(v.profiles.portrait86.layout.anchorY).toBeLessThanOrEqual(0.95);
     expect(v.system.lockPin, 'an imported file cannot set or change the PIN').toBe('4321');
-    expect(v.system.attractIdleSec).toBe(10);
+    // attractIdleSec 0 is read like the old setting read it (10 … 600 s) and carried over.
+    expect(v.system.idleSeconds).toBe(10);
+    expect((v.system as Record<string, unknown>).attractIdleSec).toBeUndefined();
     expect((v as Record<string, unknown>).unknownSection).toBeUndefined();
     expect(await page.evaluate(() => ({} as Record<string, unknown>).polluted)).toBeUndefined();
     // Nothing of this is stored unless the player presses Apply.
     expect(await appliedValue(page, 'gameplay.moveSpeed')).toBeCloseTo(0.55, 5);
     await closeSettings(page, 'cancel');
     expect(await appliedValue(page, 'gameplay.moveSpeed')).toBeCloseTo(0.55, 5);
-    expect((await state(page)).phase).toBe('ATTRACT');
+    // Still in attract mode: the ATTRACT phase or one of its self-playing demo rounds (they start
+    // whenever the game runs a few seconds in attract mode between the dialogs).
+    const end = await state(page);
+    expect(end.phase === 'ATTRACT' || end.demo, `${end.phase}${end.demo ? ' (demo)' : ''}`).toBe(true);
   });
 
   test('corrupt or hostile stored settings are repaired on load; every tab renders real labels', async ({ page }) => {

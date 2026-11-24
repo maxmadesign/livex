@@ -1,12 +1,16 @@
 /**
  * Runtime audio engine (Web Audio). Implements the AudioPort contract:
- * buses (master / music / sfx / voice), gapless looping music with theme
- * cross-fades, variant-rotating one-shots, smooth motor loops, a voice bus
- * that ducks the music, tab suspend / resume and output-device selection.
+ * buses (master / music / sfx / voice), studio music play-lists (two takes per
+ * theme, equal-power cross-fades on the beat) or gapless looping synthesised
+ * music, theme cross-fades, variant-rotating one-shots with an optional studio
+ * layer, tier-aware win stingers, character voices, smooth motor loops, a voice
+ * bus that ducks the music, tab suspend / resume and output-device selection.
  *
- * Assets come from public/audio (see manifest.json). If the manifest or a file
- * cannot be loaded, the same sounds are synthesised in a Worker from the code
- * that produced the files, and `status().usingFallbackSynth` is set.
+ * Assets come from public/audio (see manifest.json). Studio recordings (the
+ * manifest's `studio` section) load per theme; whatever of them cannot be loaded
+ * falls back to the synthesised set. If the manifest or a synthesised file cannot
+ * be loaded, the same sounds are synthesised in a Worker from the code that
+ * produced the files, and `status().usingFallbackSynth` is set.
  */
 import {
   LOOP_NAMES,
@@ -15,12 +19,17 @@ import {
   type AudioState,
   type AudioStatus,
   type AudioVolumes,
+  type CharacterMoment,
   type LoopName,
   type SfxName,
   type SfxOptions,
   type VoiceHandle,
+  type WinTier,
 } from '../core/contracts';
 import { THEME_IDS, type ThemeId, type Unsubscribe } from '../core/types';
+import { parseStudioManifest, studioSharedFiles, studioThemeFiles, themeOfCharacter, type StudioManifest } from './studio/manifest';
+import { CHARACTER_DUCK, CooldownGate, WIN_DUCK, attractChimeDelayMs, characterVoicing, squeakPitch, winPlan } from './studio/moments';
+import { StudioPlayer } from './studio/playlist';
 import { parseAudioManifest, type AudioManifest } from './synth/manifest';
 import type { SynthRequest, SynthResponse } from './synthWorker';
 
@@ -87,6 +96,10 @@ const DUCK_ATTACK = 0.07;
 const DUCK_RELEASE = 0.3;
 const DUCK_HOLD = 0.12;
 const DEFAULT_VOLUMES: AudioVolumes = { master: 0.8, music: 0.55, sfx: 0.8, voice: 0.9, muted: false, ducking: 0.6 };
+/** Attract chime level (relative to a full-level effect). */
+const ATTRACT_CHIME_VOLUME = 0.45;
+/** Themes whose studio one-shots (stingers, voices) stay decoded: the current and the previous one. */
+const MAX_STUDIO_THEMES = 2;
 
 interface MusicBuffer {
   buffer: AudioBuffer;
@@ -96,8 +109,12 @@ interface MusicBuffer {
 
 interface PlayingTrack {
   theme: ThemeId;
-  source: AudioBufferSourceNode;
+  /** Theme-level gain (theme cross-fades). */
   gain: GainNode;
+  /** Synthesised looping track. */
+  source: AudioBufferSourceNode | null;
+  /** Studio play-list. */
+  player: StudioPlayer | null;
 }
 
 interface LoopVoice {
@@ -108,8 +125,16 @@ interface LoopVoice {
   silentSince: number | null;
 }
 
+/** A started one-shot: its source and its own gain (for an interrupting fade). */
+interface OneShot {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+}
+
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 const errorText = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+/** Studio recordings live under studio/; everything else is the synthesised set. */
+const isStudioFile = (file: string) => file.startsWith('studio/');
 
 class AudioEngine implements AudioPort {
   private readonly env: AudioEnv;
@@ -126,6 +151,8 @@ class AudioEngine implements AudioPort {
   private previewBus: GainNode | null = null;
   private sfxBus: GainNode | null = null;
   private voiceBus_: GainNode | null = null;
+  /** Turns the music down under win stingers (separate from the voice duck). */
+  private stingerDuck: GainNode | null = null;
 
   private volumes: AudioVolumes = { ...DEFAULT_VOLUMES };
   private wantSuspended = false;
@@ -163,10 +190,32 @@ class AudioEngine implements AudioPort {
   private preview: { source: AudioBufferSourceNode; gain: GainNode; timer: ReturnType<typeof setTimeout> } | null = null;
   private previewToken = 0;
 
+  // Studio recordings.
+  private studio: StudioManifest | null = null;
+  /** Encoded music takes (fetched once, decoded on demand). */
+  private readonly studioBytes = new Map<string, Promise<ArrayBuffer | null>>();
+  private readonly studioDecoded = new Map<string, AudioBuffer>();
+  private readonly studioDecoding = new Map<string, Promise<AudioBuffer | null>>();
+  /** Studio files that could not be fetched or decoded (their synthesised counterpart plays instead). */
+  private readonly studioFailed = new Set<string>();
+  /** Themes whose studio one-shots are loaded / loading, most recent last. */
+  private readonly studioThemes = new Map<ThemeId, Promise<void>>();
+  private readonly studioMusicFailed = new Set<ThemeId>();
+  /** Synthesised effects that were skipped because a studio sample replaces them. */
+  private readonly replacedSynth = new Set<SfxName>();
+  private previewHeld: string | null = null;
+  private winUntil = 0;
+  private readonly characterGate = new CooldownGate();
+  /** What each character is saying right now (cut short when it escalates to a more important moment). */
+  private readonly characterVoices = new Map<string, OneShot[]>();
+  private attractActive = false;
+  private attractChimeEnabled = true;
+  private attractTimer: ReturnType<typeof setTimeout> | null = null;
+
   // One-shots and loops.
   private readonly lastVariant = new Map<string, number>();
-  private readonly lastTrigger = new Map<SfxName, number>();
-  private readonly activeByName = new Map<SfxName, number>();
+  private readonly lastTrigger = new Map<string, number>();
+  private readonly activeByName = new Map<string, number>();
   private activeSfx = 0;
   private readonly activeSources = new Set<AudioBufferSourceNode>();
   private readonly loops = new Map<LoopName, LoopVoice>();
@@ -311,12 +360,16 @@ class AudioEngine implements AudioPort {
     const previewBus = ctx.createGain();
     musicMain.connect(musicDuck);
     previewBus.connect(musicDuck);
-    musicDuck.connect(musicBus);
-    musicBus.connect(master);
     const sfxBus = ctx.createGain();
     sfxBus.connect(master);
     const voiceBus = ctx.createGain();
     voiceBus.connect(master);
+    // Created last so the bus order above stays stable: music → duck → stinger duck → music bus.
+    const stingerDuck = ctx.createGain();
+    musicDuck.connect(stingerDuck);
+    stingerDuck.connect(musicBus);
+    musicBus.connect(master);
+    this.stingerDuck = stingerDuck;
     this.master = master;
     this.musicBus = musicBus;
     this.musicDuck = musicDuck;
@@ -366,6 +419,11 @@ class AudioEngine implements AudioPort {
     }
     if (missing.length) detail += `; unavailable: ${missing.slice(0, 6).join(', ')}${missing.length > 6 ? '…' : ''}`;
     if (this.musicUnavailable.size) detail += `; music unavailable: ${[...this.musicUnavailable].join(', ')}`;
+    if (this.studio) {
+      detail += this.playing?.player ? '; studio music' : this.playing ? '; synthesised music' : '';
+      if (this.studioMusicFailed.size) detail += `; studio music unavailable for ${[...this.studioMusicFailed].join(', ')} (synthesised track instead)`;
+      if (this.studioFailed.size) detail += `; ${this.studioFailed.size} studio file(s) not loaded`;
+    }
     this.setState('running', detail);
   }
 
@@ -373,8 +431,12 @@ class AudioEngine implements AudioPort {
     const m = this.manifest;
     if (!m) return [...SFX_NAMES, ...LOOP_NAMES];
     const out: string[] = [];
-    for (const name of SFX_NAMES) if (!m.sfx[name].files.some((f) => this.buffers.has(f))) out.push(name);
-    for (const name of LOOP_NAMES) if (!this.buffers.has(m.loops[name].file)) out.push(name);
+    const has = (files: string[] | undefined) => !!files && files.some((f) => this.buffers.has(f));
+    for (const name of SFX_NAMES) if (!has(m.sfx[name].files) && !has(this.studio?.sfx[name]?.files)) out.push(name);
+    for (const name of LOOP_NAMES) {
+      const studioLoop = this.studio?.loops[name];
+      if (!this.buffers.has(m.loops[name].file) && !(studioLoop && this.buffers.has(studioLoop.file))) out.push(name);
+    }
     return out;
   }
 
@@ -407,9 +469,15 @@ class AudioEngine implements AudioPort {
       try {
         const res = await this.env.fetch(this.url('manifest.json'));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const parsed = parseAudioManifest(await res.json());
+        const json = (await res.json()) as unknown;
+        const parsed = parseAudioManifest(json);
         manifest = parsed.manifest;
         if (!manifest) reason = parsed.problems.slice(0, 3).join('; ');
+        else {
+          const studio = parseStudioManifest((json as { studio?: unknown }).studio);
+          if (studio.problems.length) console.warn(`[audio] studio section: ${studio.problems.slice(0, 4).join('; ')}`);
+          this.studio = studio.studio;
+        }
       } catch (error) {
         reason = errorText(error);
       }
@@ -431,7 +499,23 @@ class AudioEngine implements AudioPort {
       return;
     }
     this.manifest = manifest;
-    const files = this.effectFiles(manifest);
+    // Synthesised effects a studio sample replaces are only loaded if that sample fails.
+    if (this.studio) {
+      for (const name of SFX_NAMES) if (this.studio.sfx[name]?.mode === 'replace') this.replacedSynth.add(name);
+    }
+    const files = [...this.effectFiles(manifest), ...(this.studio ? studioSharedFiles(this.studio) : [])];
+    await this.loadFiles(files, true);
+    await this.backfillStudioFailures();
+    if (this.failedFiles.size > 0 && !this.disposed) {
+      const failed = [...this.failedFiles];
+      const ok = await this.synthesise(failed);
+      if (ok > 0) this.setStatus({ usingFallbackSynth: true });
+    }
+    if (this.theme) void this.ensureStudioTheme(this.theme);
+  }
+
+  /** Fetches and decodes files into `buffers` (six at a time); failures are recorded, never thrown. */
+  private async loadFiles(files: string[], progress: boolean): Promise<void> {
     let done = 0;
     const queue = [...files];
     const worker = async () => {
@@ -446,32 +530,158 @@ class AudioEngine implements AudioPort {
           if (buffer) this.buffers.set(file, buffer);
           else this.pendingBytes.set(file, bytes);
         } catch (error) {
-          this.failedFiles.add(file);
+          if (isStudioFile(file)) this.studioFailed.add(file);
+          else this.failedFiles.add(file);
           console.warn(`[audio] could not load ${file}: ${errorText(error)}`);
         }
         done++;
+        if (!progress) continue;
         this.loadDetail = `loading sounds ${done}/${files.length}`;
         // Progress for a loading screen, without one notification per file.
         if (this.st.state === 'loading' && (done % 8 === 0 || done === files.length)) this.setStatus({ detail: this.loadDetail });
       }
     };
     await Promise.all(Array.from({ length: 6 }, worker));
-    if (this.failedFiles.size > 0 && !this.disposed) {
-      const failed = [...this.failedFiles];
-      const ok = await this.synthesise(failed);
-      if (ok > 0) this.setStatus({ usingFallbackSynth: true });
+  }
+
+  /** A studio sample that replaces a synthesised effect failed: load (or synthesise) that effect after all. */
+  private async backfillStudioFailures(): Promise<void> {
+    const m = this.manifest;
+    if (!m || !this.studio || this.studioFailed.size === 0) return;
+    const files: string[] = [];
+    for (const name of [...this.replacedSynth]) {
+      const e = this.studio.sfx[name];
+      if (!e || e.files.some((f) => !this.studioFailed.has(f))) continue;
+      this.replacedSynth.delete(name);
+      for (const f of this.synthFilesOf(m, name)) if (!this.buffers.has(f)) files.push(f);
     }
+    for (const name of LOOP_NAMES) {
+      const l = this.studio.loops[name];
+      if (l && this.studioFailed.has(l.file) && !this.buffers.has(m.loops[name].file)) files.push(m.loops[name].file);
+    }
+    if (files.length === 0) return;
+    await this.loadFiles(files, false);
+  }
+
+  private synthFilesOf(manifest: AudioManifest, name: SfxName): string[] {
+    const e = manifest.sfx[name];
+    const files = new Set<string>(e.files);
+    if (e.themes) for (const theme of THEME_IDS) for (const f of e.themes[theme] ?? []) files.add(f);
+    return [...files];
   }
 
   private effectFiles(manifest: AudioManifest): string[] {
     const files = new Set<string>();
     for (const name of SFX_NAMES) {
-      const e = manifest.sfx[name];
-      for (const f of e.files) files.add(f);
-      if (e.themes) for (const theme of THEME_IDS) for (const f of e.themes[theme] ?? []) files.add(f);
+      if (this.replacedSynth.has(name)) continue;
+      for (const f of this.synthFilesOf(manifest, name)) files.add(f);
     }
-    for (const name of LOOP_NAMES) files.add(manifest.loops[name].file);
+    for (const name of LOOP_NAMES) {
+      // The synthesised motor stays loaded only where no studio loop replaces it.
+      if (this.studio?.loops[name]) continue;
+      files.add(manifest.loops[name].file);
+    }
     return [...files];
+  }
+
+  /* ------------------------------------------------------- studio assets */
+
+  /**
+   * Loads a theme's studio one-shots (win / jackpot stingers, character voices) and starts
+   * fetching its music takes. Only the current and the previous theme stay in memory.
+   */
+  private ensureStudioTheme(theme: ThemeId): Promise<void> {
+    const existing = this.studioThemes.get(theme);
+    if (existing) {
+      // Most recent last.
+      this.studioThemes.delete(theme);
+      this.studioThemes.set(theme, existing);
+      return existing;
+    }
+    const loading = (async () => {
+      await this.prepare();
+      const studio = this.studio;
+      if (!studio || this.disposed) return;
+      const { music, oneShots } = studioThemeFiles(studio, theme);
+      // The first take first: it is what plays when the theme starts.
+      for (const file of music) void this.fetchStudioBytes(file);
+      await this.loadFiles(oneShots.filter((f) => !this.buffers.has(f)), false);
+    })();
+    this.studioThemes.set(theme, loading);
+    // Forget themes beyond the newest two (their stingers and voices); never the selected or playing one.
+    for (const old of [...this.studioThemes.keys()]) {
+      if (this.studioThemes.size <= MAX_STUDIO_THEMES) break;
+      if (old === theme || old === this.theme || old === this.playing?.theme) continue;
+      this.studioThemes.delete(old);
+      if (this.studio) {
+        const files = studioThemeFiles(this.studio, old);
+        for (const f of files.oneShots) this.buffers.delete(f);
+        for (const f of files.music) {
+          this.studioBytes.delete(f);
+          if (!this.studioFileInUse(f)) this.studioDecoded.delete(f);
+        }
+      }
+    }
+    return loading;
+  }
+
+  private fetchStudioBytes(file: string): Promise<ArrayBuffer | null> {
+    let p = this.studioBytes.get(file);
+    if (!p) {
+      p = (async () => {
+        if (!this.env.fetch) return null;
+        try {
+          const res = await this.env.fetch(this.url(file));
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.arrayBuffer();
+        } catch (error) {
+          this.studioFailed.add(file);
+          console.warn(`[audio] could not load ${file}: ${errorText(error)}`);
+          return null;
+        }
+      })();
+      this.studioBytes.set(file, p);
+    }
+    return p;
+  }
+
+  /** Decodes a studio music take with the live context (null when it cannot be had). */
+  private decodeStudioTake(file: string): Promise<AudioBuffer | null> {
+    const done = this.studioDecoded.get(file);
+    if (done) return Promise.resolve(done);
+    if (this.studioFailed.has(file)) return Promise.resolve(null);
+    let p = this.studioDecoding.get(file);
+    if (!p) {
+      p = (async () => {
+        const bytes = await this.fetchStudioBytes(file);
+        const ctx = this.ctx;
+        if (!bytes || !ctx || this.disposed) return null;
+        try {
+          const buffer = await ctx.decodeAudioData(bytes.slice(0));
+          this.studioDecoded.set(file, buffer);
+          return buffer;
+        } catch (error) {
+          this.studioFailed.add(file);
+          console.warn(`[audio] could not decode ${file}: ${errorText(error)}`);
+          return null;
+        }
+      })().finally(() => this.studioDecoding.delete(file));
+      this.studioDecoding.set(file, p);
+    }
+    return p;
+  }
+
+  private studioFileInUse(file: string): boolean {
+    if (file === this.previewHeld) return true;
+    const p = this.playing?.player;
+    if (!p || !this.studio || !this.playing) return false;
+    const takes = this.studio.music[this.playing.theme]?.takes ?? [];
+    return takes.some((t, i) => t.file === file && (p.currentTake === i || this.studioDecoding.has(file)));
+  }
+
+  /** Decoded takes are large (≈45 MB for two minutes); drop the ones nothing plays. */
+  private releaseStudioTake(file: string): void {
+    if (!this.studioFileInUse(file)) this.studioDecoded.delete(file);
   }
 
   /** Decodes with the live context, or with an offline context before the first gesture. */
@@ -507,10 +717,14 @@ class AudioEngine implements AudioPort {
         try {
           this.buffers.set(file, await this.ctx!.decodeAudioData(bytes));
         } catch {
-          failed.push(file);
+          if (isStudioFile(file)) this.studioFailed.add(file);
+          else failed.push(file);
         }
       }),
     );
+    // A studio sample that failed to decode brings its synthesised effect back (loaded now, with the context).
+    await this.backfillStudioFailures();
+    for (const f of this.failedFiles) if (!this.buffers.has(f) && !failed.includes(f)) failed.push(f);
     if (failed.length) {
       const ok = await this.synthesise(failed);
       if (ok > 0) this.setStatus({ usingFallbackSynth: true });
@@ -680,6 +894,8 @@ class AudioEngine implements AudioPort {
   setTheme(themeId: ThemeId, options?: { immediate?: boolean }): void {
     if (!(THEME_IDS as readonly string[]).includes(themeId)) return;
     this.theme = themeId;
+    // Studio stingers, voices and the play-list are fetched for the selected theme only.
+    if (this.env.fetch && (this.studio || !this.prepared)) void this.ensureStudioTheme(themeId);
     void this.applyMusic(!!options?.immediate);
   }
 
@@ -713,6 +929,17 @@ class AudioEngine implements AudioPort {
       this.setStatus({ musicTheme: target });
       return;
     }
+    const fade = () => (immediate ? MUSIC_FADE_FAST : this.playing ? MUSIC_FADE : 0.6);
+    // The studio play-list when it exists and its first take decodes; otherwise the synthesised track.
+    if (await this.studioMusicReady(target)) {
+      if (this.disposed || token !== this.musicToken) return;
+      if (this.startStudio(target, fade())) {
+        this.musicUnavailable.delete(target);
+        if (this.st.state === 'running') this.refreshRunState();
+        return;
+      }
+    }
+    if (this.disposed || token !== this.musicToken) return;
     const music = await this.loadMusic(target);
     if (this.disposed || token !== this.musicToken) return;
     if (!music) {
@@ -723,9 +950,23 @@ class AudioEngine implements AudioPort {
       return;
     }
     this.musicUnavailable.delete(target);
-    this.startTrack(target, music, immediate ? MUSIC_FADE_FAST : this.playing ? MUSIC_FADE : 0.6);
+    this.startTrack(target, music, fade());
     this.trimMusicCache();
     if (this.st.state === 'running') this.refreshRunState();
+  }
+
+  /** Decodes the first take of a theme's studio play-list; false when there is none or it failed. */
+  private async studioMusicReady(theme: ThemeId): Promise<boolean> {
+    const takes = this.studio?.music[theme]?.takes;
+    if (!takes || takes.length === 0) return false;
+    const first = await this.decodeStudioTake(takes[0]!.file);
+    if (!first) {
+      if (!this.studioMusicFailed.has(theme)) console.warn(`[audio] studio music for "${theme}" is unavailable; playing the synthesised track`);
+      this.studioMusicFailed.add(theme);
+      return false;
+    }
+    this.studioMusicFailed.delete(theme);
+    return true;
   }
 
   private fadeOutPlaying(seconds: number): void {
@@ -734,23 +975,43 @@ class AudioEngine implements AudioPort {
     if (!ctx || !old) return;
     this.playing = null;
     const t = ctx.currentTime;
+    const stopAt = t + seconds * 1.6 + 0.05;
     try {
       // setTargetAtTime continues from whatever the gain is right now, so a fade
       // that interrupts another fade never jumps.
       old.gain.gain.cancelScheduledValues(t);
       old.gain.gain.setTargetAtTime(0, t, Math.max(0.01, seconds / 3.5));
-      old.source.stop(t + seconds * 1.6 + 0.05);
+      old.source?.stop(stopAt);
     } catch {
       try {
-        old.source.stop();
+        old.source?.stop();
       } catch {
         /* already stopped */
       }
     }
-    old.source.onended = () => {
-      old.source.disconnect();
-      old.gain.disconnect();
-    };
+    if (old.source) {
+      const source = old.source;
+      source.onended = () => {
+        source.disconnect();
+        old.gain.disconnect();
+      };
+    }
+    if (old.player) {
+      old.player.stop(stopAt);
+      // Free the decoded takes once the fade is over in context time (a hidden page pauses it).
+      const cleanup = () => {
+        if (this.disposed) return;
+        if (this.ctx && this.ctx.currentTime < stopAt) {
+          setTimeout(cleanup, 500);
+          return;
+        }
+        old.gain.disconnect();
+        if (this.studio && this.playing?.theme !== old.theme) {
+          for (const take of this.studio.music[old.theme]?.takes ?? []) this.releaseStudioTake(take.file);
+        }
+      };
+      setTimeout(cleanup, (seconds * 1.6 + 0.3) * 1000);
+    }
   }
 
   private startTrack(theme: ThemeId, music: MusicBuffer, fade: number): void {
@@ -769,8 +1030,37 @@ class AudioEngine implements AudioPort {
     source.connect(gain);
     gain.connect(this.musicMain);
     source.start(t, music.loopStart);
-    this.playing = { theme, source, gain };
+    this.playing = { theme, source, gain, player: null };
     this.setStatus({ musicTheme: theme });
+  }
+
+  /** Starts a theme's studio play-list from the beginning of its first take (its intro). */
+  private startStudio(theme: ThemeId, fade: number): boolean {
+    const ctx = this.ctx;
+    const playlist = this.studio?.music[theme];
+    if (!ctx || !this.musicMain || !playlist) return false;
+    const takes = playlist.takes;
+    const gain = ctx.createGain();
+    const t = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.setTargetAtTime(1, t, Math.max(0.01, fade / 3.5));
+    gain.connect(this.musicMain);
+    const player = new StudioPlayer({
+      ctx,
+      output: gain,
+      takes,
+      buffer: (i) => this.studioDecoded.get(takes[i]!.file) ?? null,
+      request: (i) => void this.decodeStudioTake(takes[i]!.file),
+      release: (i) => this.releaseStudioTake(takes[i]!.file),
+    });
+    this.fadeOutPlaying(fade);
+    if (!player.start(0, 0)) {
+      gain.disconnect();
+      return false;
+    }
+    this.playing = { theme, source: null, gain, player };
+    this.setStatus({ musicTheme: theme });
+    return true;
   }
 
   private loadMusic(theme: ThemeId): Promise<MusicBuffer | null> {
@@ -840,10 +1130,22 @@ class AudioEngine implements AudioPort {
       // The preview button is a user gesture, so it may also unlock audio.
       if (this.st.state === 'locked') await this.unlock();
       if (token !== this.previewToken || !this.canPlay() || this.st.state !== 'running') return;
-      const music = await this.loadMusic(themeId);
+      // The studio recording when there is one (from its in point, past any intro), else the synthesised loop.
+      const take = this.studio?.music[themeId]?.takes[0];
+      let studioFile: string | null = null;
+      let music: MusicBuffer | null = null;
+      if (take) {
+        const buffer = await this.decodeStudioTake(take.file);
+        if (buffer) {
+          studioFile = take.file;
+          music = { buffer, loopStart: take.inPoint, loopEnd: take.outPoint };
+        }
+      }
+      if (!music) music = await this.loadMusic(themeId);
       const ctx = this.ctx;
       if (!music || !ctx || !this.previewBus || !this.musicMain || token !== this.previewToken) return;
       this.stopPreview(true);
+      this.previewHeld = studioFile;
       const source = ctx.createBufferSource();
       source.buffer = music.buffer;
       source.loop = true;
@@ -870,6 +1172,14 @@ class AudioEngine implements AudioPort {
     const ctx = this.ctx;
     const p = this.preview;
     this.preview = null;
+    const held = this.previewHeld;
+    this.previewHeld = null;
+    if (held) {
+      this.releaseStudioTake(held);
+      // A previewed take of a theme that is not in use: drop its encoded bytes too.
+      const owner = this.studio ? THEME_IDS.find((t) => this.studio!.music[t]?.takes.some((k) => k.file === held)) : undefined;
+      if (owner && owner !== this.theme && owner !== this.playing?.theme && owner !== this.desiredTrack()) this.studioBytes.delete(held);
+    }
     if (p) {
       clearTimeout(p.timer);
       if (ctx) {
@@ -896,53 +1206,215 @@ class AudioEngine implements AudioPort {
   /* ----------------------------------------------------------------- sfx */
 
   playSfx(name: SfxName, options: SfxOptions = {}): void {
+    if (!this.sfxReady()) return;
+    if (name === 'win') {
+      // The theme's studio win stinger (common tier) when it is loaded; never two wins on top of each other.
+      if (this.theme && this.stingerBuffer(this.theme, 'win')) {
+        this.playWin(this.theme, 'common', { delay: options.delay, volume: options.volume });
+        return;
+      }
+      if (this.env.now() < this.winUntil) return;
+    }
+    this.playEffect(name, options);
+  }
+
+  private sfxReady(): boolean {
     const ctx = this.ctx;
-    const manifest = this.manifest;
-    if (!ctx || !manifest || !this.sfxBus || this.st.state !== 'running' || ctx.state !== 'running') return;
-    const entry = manifest.sfx[name];
-    if (!entry) return;
+    return !!ctx && !!this.manifest && !!this.sfxBus && this.st.state === 'running' && ctx.state === 'running';
+  }
+
+  /** Plays an effect: its studio sample ('replace'), the synthesised one, or both ('layer'). */
+  private playEffect(name: SfxName, options: SfxOptions, started?: OneShot[]): boolean {
+    const manifest = this.manifest!;
     const now = this.env.now();
     const last = this.lastTrigger.get(name);
-    if (last !== undefined && now - last < MIN_RETRIGGER_MS && !options.delay) return;
-    if (this.activeSfx >= MAX_ACTIVE_SFX || (this.activeByName.get(name) ?? 0) >= MAX_ACTIVE_PER_NAME) return;
-    const themed = this.theme && entry.themes ? entry.themes[this.theme] : undefined;
-    const files = (themed && themed.length ? themed : entry.files).filter((f) => this.buffers.has(f));
-    if (files.length === 0) return;
-    // Rotate variants: never the same one twice in a row.
-    const key = `${name}|${themed ? this.theme : ''}`;
+    if (last !== undefined && now - last < MIN_RETRIGGER_MS && !options.delay) return false;
+    if (this.activeSfx >= MAX_ACTIVE_SFX || (this.activeByName.get(name) ?? 0) >= MAX_ACTIVE_PER_NAME) return false;
+    let played = false;
+    const studio = this.studio?.sfx[name];
+    const studioFiles = studio ? studio.files.filter((f) => this.buffers.has(f)) : [];
+    if (studio && studioFiles.length > 0) played = this.playVariant(name, `${name}|studio`, studioFiles, studio, options, started);
+    if (!studio || studioFiles.length === 0 || studio.mode === 'layer') {
+      const entry = manifest.sfx[name];
+      if (entry) {
+        const themed = this.theme && entry.themes ? entry.themes[this.theme] : undefined;
+        const files = (themed && themed.length ? themed : entry.files).filter((f) => this.buffers.has(f));
+        if (files.length > 0) played = this.playVariant(name, `${name}|${themed ? this.theme : ''}`, files, entry, options, started) || played;
+      }
+    }
+    if (played) this.lastTrigger.set(name, now);
+    return played;
+  }
+
+  /** Picks a variant (never the same one twice in a row) and plays it with the entry's random variation. */
+  private playVariant(name: SfxName, key: string, files: string[], entry: { gain: number; pitchVar: number; gainVar: number }, options: SfxOptions, started?: OneShot[]): boolean {
     const prev = this.lastVariant.get(key) ?? -1;
     let index = Math.floor(this.env.random() * files.length);
     if (files.length > 1 && index === prev) index = (index + 1 + Math.floor(this.env.random() * (files.length - 1))) % files.length;
     this.lastVariant.set(key, index);
-    this.lastTrigger.set(name, now);
-
-    const source = ctx.createBufferSource();
-    source.buffer = this.buffers.get(files[index]!)!;
     const rate = (options.pitch ?? 1) * (1 + (this.env.random() * 2 - 1) * entry.pitchVar);
-    source.playbackRate.value = clamp(rate, 0.25, 4);
+    const gain = (options.volume ?? 1) * entry.gain * (1 + (this.env.random() * 2 - 1) * entry.gainVar);
+    const shot = this.startOneShot(this.buffers.get(files[index]!)!, { gain, rate, pan: options.pan, delay: options.delay, key: name });
+    if (shot && started) started.push(shot);
+    return shot !== null;
+  }
+
+  /** Starts one buffer on the SFX bus with voice accounting (suspend stops it; per-key cap). */
+  private startOneShot(buffer: AudioBuffer, o: { gain: number; rate?: number; pan?: number; delay?: number; key: string }): OneShot | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfxBus) return null;
+    if (this.activeSfx >= MAX_ACTIVE_SFX || (this.activeByName.get(o.key) ?? 0) >= MAX_ACTIVE_PER_NAME) return null;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = clamp(o.rate ?? 1, 0.25, 4);
     const gain = ctx.createGain();
-    gain.gain.value = clamp((options.volume ?? 1) * entry.gain * (1 + (this.env.random() * 2 - 1) * entry.gainVar), 0, 2);
+    gain.gain.value = clamp(o.gain, 0, 2);
     source.connect(gain);
     let tail: AudioNode = gain;
-    if (options.pan && typeof ctx.createStereoPanner === 'function') {
+    if (o.pan && typeof ctx.createStereoPanner === 'function') {
       const panner = ctx.createStereoPanner();
-      panner.pan.value = clamp(options.pan, -1, 1);
+      panner.pan.value = clamp(o.pan, -1, 1);
       gain.connect(panner);
       tail = panner;
     }
     tail.connect(this.sfxBus);
+    const key = o.key;
     this.activeSfx++;
-    this.activeByName.set(name, (this.activeByName.get(name) ?? 0) + 1);
+    this.activeByName.set(key, (this.activeByName.get(key) ?? 0) + 1);
     this.activeSources.add(source);
     source.onended = () => {
       this.activeSources.delete(source);
       this.activeSfx = Math.max(0, this.activeSfx - 1);
-      this.activeByName.set(name, Math.max(0, (this.activeByName.get(name) ?? 1) - 1));
+      this.activeByName.set(key, Math.max(0, (this.activeByName.get(key) ?? 1) - 1));
       source.disconnect();
       gain.disconnect();
       if (tail !== gain) tail.disconnect();
     };
-    source.start(ctx.currentTime + Math.max(0, options.delay ?? 0));
+    source.start(ctx.currentTime + Math.max(0, o.delay ?? 0));
+    return { source, gain };
+  }
+
+  /* ------------------------------------------------------ dramatic layer */
+
+  private stingerBuffer(theme: ThemeId, which: 'win' | 'jackpot'): AudioBuffer | null {
+    const entry = this.studio?.stingers[theme]?.[which];
+    if (!entry) return null;
+    for (const f of entry.files) {
+      const b = this.buffers.get(f);
+      if (b) return b;
+    }
+    return null;
+  }
+
+  playWin(themeId: ThemeId, tier: WinTier, options: { delay?: number; volume?: number } = {}): void {
+    if (!this.sfxReady()) return;
+    const now = this.env.now();
+    if (now < this.winUntil) return; // the previous win is still ringing
+    // The requested theme's stingers, else the current theme's (e.g. right after a theme change).
+    let theme: ThemeId = (THEME_IDS as readonly string[]).includes(themeId) ? themeId : (this.theme ?? THEME_IDS[0]);
+    if (!this.stingerBuffer(theme, 'win') && !this.stingerBuffer(theme, 'jackpot') && this.theme) theme = this.theme;
+    const parts = winPlan(tier, { win: !!this.stingerBuffer(theme, 'win'), jackpot: !!this.stingerBuffer(theme, 'jackpot') });
+    const base = Math.max(0, options.delay ?? 0);
+    const volume = options.volume ?? 1;
+    let longest = 0;
+    for (const part of parts) {
+      if (part.kind === 'stinger') {
+        const buffer = this.stingerBuffer(theme, part.which)!;
+        const entry = this.studio!.stingers[theme]![part.which]!;
+        if (this.startOneShot(buffer, { gain: entry.gain * part.volume * volume, delay: base + part.delay, key: 'stinger' })) {
+          longest = Math.max(longest, part.delay + buffer.duration);
+        }
+      } else if (this.playEffect(part.name, { delay: base + part.delay + 0.001, volume: part.volume * volume })) {
+        if (part.name === 'win') longest = Math.max(longest, part.delay + (this.manifest?.sfx.win.duration ?? 1.5));
+      }
+    }
+    if (longest > 0) {
+      this.duckUnderStinger(WIN_DUCK[tier], base, longest);
+      this.winUntil = now + (base + longest * 0.8) * 1000;
+    }
+  }
+
+  /** Turns the music down while a stinger plays and brings it back as the stinger rings out. */
+  private duckUnderStinger(depth: number, delay: number, seconds: number): void {
+    const ctx = this.ctx;
+    const g = this.stingerDuck?.gain;
+    if (!ctx || !g) return;
+    const t = ctx.currentTime + delay;
+    g.cancelScheduledValues(ctx.currentTime);
+    g.setTargetAtTime(depth, t, 0.06);
+    g.setTargetAtTime(1, t + Math.max(0.5, seconds - 0.8), 0.45);
+  }
+
+  playCharacter(assetId: string, moment: CharacterMoment, options: { delay?: number; pan?: number; volume?: number } = {}): void {
+    if (!this.sfxReady() || typeof assetId !== 'string') return;
+    if (!this.characterGate.allow(assetId, this.env.now(), moment)) return;
+    // A more important moment inside the cooldown (the lifted toy slips): cut the previous cry short.
+    this.interruptCharacter(assetId);
+    const v = characterVoicing(moment, this.env.random);
+    const base = Math.max(0, options.delay ?? 0);
+    const volume = (options.volume ?? 1) * v.volume;
+    const voice = this.studio?.voices[assetId];
+    const buffer = voice ? this.buffers.get(voice.file) : undefined;
+    const started: OneShot[] = [];
+    if (voice && buffer && themeOfCharacter(assetId)) {
+      const shot = this.startOneShot(buffer, { gain: voice.gain * volume, rate: v.rate, pan: options.pan, delay: base + v.delay, key: 'character' });
+      if (shot) started.push(shot);
+    } else {
+      // Characters without their own voice still sound different: a squeak at their own pitch.
+      this.playEffect('plush_squeak', { pitch: squeakPitch(assetId) * v.rate, volume, pan: options.pan, delay: base + v.delay + 0.001 }, started);
+    }
+    if (started.length) {
+      this.characterVoices.set(assetId, started);
+      // Lift / slip cries get a light music duck for their length; a ringing win ducks deeper already.
+      const buffer = started[0]!.source.buffer;
+      if (moment !== 'win' && buffer && this.env.now() >= this.winUntil) {
+        this.duckUnderStinger(CHARACTER_DUCK, base + v.delay, buffer.duration / Math.max(0.25, v.rate) + 0.5);
+      }
+    }
+    if (v.layer) this.playEffect(v.layer.name, { delay: base + v.layer.delay, volume: v.layer.volume * (options.volume ?? 1) });
+  }
+
+  /** Fades out (≈60 ms, no click) whatever the character is still saying, or cancels it if it has not started. */
+  private interruptCharacter(assetId: string): void {
+    const ctx = this.ctx;
+    const shots = this.characterVoices.get(assetId);
+    this.characterVoices.delete(assetId);
+    if (!ctx || !shots) return;
+    const t = ctx.currentTime;
+    for (const { source, gain } of shots) {
+      if (!this.activeSources.has(source)) continue; // already ended
+      try {
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setTargetAtTime(0, t, 0.015);
+        source.stop(t + 0.1);
+      } catch {
+        /* already stopped */
+      }
+    }
+  }
+
+  setAttract(active: boolean): void {
+    if (this.attractActive === !!active) return;
+    this.attractActive = !!active;
+    this.scheduleAttractChime();
+  }
+
+  setAttractChime(enabled: boolean): void {
+    if (this.attractChimeEnabled === !!enabled) return;
+    this.attractChimeEnabled = !!enabled;
+    this.scheduleAttractChime();
+  }
+
+  private scheduleAttractChime(): void {
+    if (this.attractTimer !== null) clearTimeout(this.attractTimer);
+    this.attractTimer = null;
+    if (!this.attractActive || !this.attractChimeEnabled || this.disposed) return;
+    this.attractTimer = setTimeout(() => {
+      this.attractTimer = null;
+      // Dropped (not queued) while locked or suspended, like every other effect.
+      if (this.attractActive && this.attractChimeEnabled) this.playSfx('attract_chime', { volume: ATTRACT_CHIME_VOLUME });
+      this.scheduleAttractChime();
+    }, attractChimeDelayMs(this.env.random));
   }
 
   /* ----------------------------------------------------------------- loops */
@@ -962,8 +1434,12 @@ class AudioEngine implements AudioPort {
       voice.level = 0;
       return;
     }
-    const entry = manifest.loops[name];
-    const buffer = entry ? this.buffers.get(entry.file) : undefined;
+    // The studio loop when it is loaded, else the synthesised one.
+    const studioLoop = this.studio?.loops[name];
+    const studioBuffer = studioLoop ? this.buffers.get(studioLoop.file) : undefined;
+    const synth = manifest.loops[name];
+    const buffer = studioBuffer ?? (synth ? this.buffers.get(synth.file) : undefined);
+    const entry = studioBuffer ? studioLoop : synth;
     if (!entry || !buffer) return;
     const t = ctx.currentTime;
     if (lv > 0.002) {
@@ -1249,11 +1725,14 @@ class AudioEngine implements AudioPort {
     this.stopAllLoops();
     if (this.preview) clearTimeout(this.preview.timer);
     this.preview = null;
+    if (this.attractTimer !== null) clearTimeout(this.attractTimer);
+    this.attractTimer = null;
     try {
-      this.playing?.source.stop();
+      this.playing?.source?.stop();
     } catch {
       /* already stopped */
     }
+    if (this.playing?.player && this.ctx) this.playing.player.stop(this.ctx.currentTime);
     this.playing = null;
     this.worker?.terminate();
     this.worker = null;
@@ -1261,6 +1740,10 @@ class AudioEngine implements AudioPort {
     this.buffers.clear();
     this.pendingBytes.clear();
     this.musicCache.clear();
+    this.studioBytes.clear();
+    this.studioDecoded.clear();
+    this.studioThemes.clear();
+    this.characterVoices.clear();
     this.listeners.clear();
     const ctx = this.ctx;
     this.ctx = null;

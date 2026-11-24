@@ -1,7 +1,8 @@
-import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createApp, type App as AppInstance } from '../app/bootstrap';
 import { logError } from '../diagnostics/log';
 import { registerAllStrings } from '../i18n/all';
+import type { FrameBox } from '../layout/frame';
 import { THEMES } from '../themes/themes';
 import { AttractOverlay } from './AttractOverlay';
 import { CalibrationOverlay } from './CalibrationOverlay';
@@ -73,7 +74,13 @@ function useKeyboard(): void {
   }, [app]);
 }
 
-function Shell() {
+/** What the shell reports to the page: the box the game is laid out in and the theme glow for the surround. */
+interface FrameReport {
+  box: FrameBox;
+  glow: string;
+}
+
+function Shell({ onFrame }: { onFrame: (report: FrameReport) => void }) {
   const app = useApp();
   const layout = useHudLayout();
   const reduced = useReducedMotion();
@@ -116,6 +123,12 @@ function Shell() {
   }, [app, phase, demo]);
 
   const ui = THEMES[themeId].ui;
+  // The page positions the canvas and this HUD in the box (before paint, so nothing flashes).
+  const frame = layout.frame;
+  useLayoutEffect(() => {
+    onFrame({ box: frame, glow: ui.glow });
+  }, [onFrame, frame, ui.glow]);
+
   const style = {
     '--u': `${layout.unit}px`,
     '--fs': layout.fontScale,
@@ -166,9 +179,32 @@ class HudBoundary extends Component<{ children: ReactNode }, { failed: number }>
   }
 }
 
+const sameBox = (a: FrameBox, b: FrameBox) =>
+  a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.simulated === b.simulated && a.letterboxed === b.letterboxed;
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [app, setApp] = useState<AppInstance | null>(null);
+  // The box the game is laid out in (src/layout/frame.ts), reported by the shell once it is mounted.
+  const [frame, setFrame] = useState<FrameReport | null>(null);
+  const onFrame = useCallback((next: FrameReport) => {
+    setFrame((prev) => (prev && sameBox(prev.box, next.box) && prev.glow === next.glow ? prev : next));
+  }, []);
+  const box = frame?.box ?? null;
+  const simulated = box?.simulated ?? false;
+  const letterboxed = simulated && (box?.letterboxed ?? false);
+
+  // The game computes a simulated box itself, but measures the canvas element otherwise. When the
+  // box changes to or from a simulated screen (the toggle, another preset), let it measure the
+  // committed size once more through its ordinary resize path.
+  const previous = useRef<FrameBox | null>(null);
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = box;
+    if (!box || !before || sameBox(before, box)) return;
+    if (before.simulated || box.simulated) window.dispatchEvent(new Event('resize'));
+  }, [box]);
+
   useEffect(() => {
     let disposed = false;
     let instance: AppInstance | null = null;
@@ -188,16 +224,23 @@ export function App() {
       instance?.dispose();
     };
   }, []);
+  const glow = { '--c-glow': frame?.glow ?? '#ffc6d9' } as CSSProperties;
+  // A letterboxed simulated screen: the canvas, HUD, overlays and dialogs all live in the box
+  // (frame.css makes it the containing block of the HUD's fixed layers).
+  const rootStyle = letterboxed && box ? ({ ...glow, left: box.x, top: box.y, width: box.w, height: box.h, right: 'auto', bottom: 'auto' } as CSSProperties) : undefined;
   return (
-    <div className="pp-root" data-testid="root">
-      <canvas ref={canvasRef} className="pp-canvas" data-testid="game-canvas" tabIndex={-1} />
-      {app ? (
-        <AppContext.Provider value={app}>
-          <HudBoundary>
-            <Shell />
-          </HudBoundary>
-        </AppContext.Provider>
-      ) : null}
-    </div>
+    <>
+      <div className="pp-surround" data-frame={letterboxed ? 'simulate916' : 'fill'} style={glow} aria-hidden="true" data-testid="frame-surround" />
+      <div className="pp-root" data-testid="root" data-frame={simulated ? 'simulate916' : 'fill'} data-letterbox={letterboxed} style={rootStyle}>
+        <canvas ref={canvasRef} className="pp-canvas" data-testid="game-canvas" tabIndex={-1} />
+        {app ? (
+          <AppContext.Provider value={app}>
+            <HudBoundary>
+              <Shell onFrame={onFrame} />
+            </HudBoundary>
+          </AppContext.Provider>
+        ) : null}
+      </div>
+    </>
   );
 }

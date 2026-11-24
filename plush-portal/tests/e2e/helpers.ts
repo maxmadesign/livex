@@ -9,8 +9,10 @@ import { expect, type Page } from '@playwright/test';
  * game time with the debug API instead of waiting on the wall clock.
  */
 
-export type Display = 'desktop' | 'portrait32' | 'portrait86';
-export type Theme = 'sakura' | 'storybook' | 'ocean' | 'cosmic';
+export type Display = 'desktop' | 'portrait32' | 'portrait86' | 'mobile';
+export type Theme = 'sakura' | 'storybook' | 'ocean' | 'cosmic' | 'gpu';
+/** Every theme, in the order of the theme picker. */
+export const THEMES: readonly Theme[] = ['sakura', 'storybook', 'ocean', 'cosmic', 'gpu'];
 
 /** Cheapest valid graphics settings (all are ordinary user settings). */
 export const LOW_GRAPHICS = {

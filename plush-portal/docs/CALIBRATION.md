@@ -107,10 +107,17 @@ becomes the centre of the view.
    any face samples) or `unstable` (too much movement), shown with **Retry** and **Skip**.
    A failure left on screen is dismissed after 30 s in view (time under a dialog does not
    count), and an automatic one also as soon as a
-   round starts (it is not retried automatically). The game's idle reset
-   (`system.idleSeconds`) also cancels a countdown / clears a result.
+   round starts (it is not retried automatically). A running countdown or capture counts as
+   activity for the game's idle reset (`system.idleSeconds`), so the reset never interrupts
+   it; an idle reset that runs at any other time cancels a failed / finished calibration and
+   clears its card.
 
-"Calibrate now" in Settings → Camera & Parallax does the same by hand (it starts the camera
+"Calibrate now" in Settings → Camera & Parallax does the same by hand, and so does
+**Recalibrate view** in the HUD while the camera is searching / tracking / lost: next to the
+camera chip in the top bar, or — on 86" portrait, where the top bar is above the reachable band —
+as the camera button in the control-panel menu (`menu-recalibrate`). Both use
+`camera.calibrationSeconds`. Each second of the countdown ticks and a chime plays when the
+baseline is taken (`countdown_tick`, `calibration_ok`). "Calibrate now" starts the camera
 first if it is enabled but not running, or while the inference backend is being replaced; the
 countdown waits for it). It is disabled on a page that is not HTTPS / localhost. A baseline
 taken while the dialog is open goes into the dialog's draft like every other setting: **Apply**
@@ -132,7 +139,7 @@ automatic one runs again later); a camera that disappears ends it with `camera_l
 
 | setting | meaning |
 | --- | --- |
-| `profiles.<id>.view.calNeutral` | eye position at the baseline (window space, m) — the same field the quick calibration uses |
+| `profiles.<id>.view.calNeutral` | eye position at the baseline (window space, m) — the same field the distance calibration ([3b](#3b-quick-distance-calibration)) uses |
 | `profiles.<id>.view.calibrated` | `true` |
 | `camera.headBaseline.<id>.yaw / .pitch` | head direction at the baseline, degrees, relative to facing the centre of the game window (0.1° grid) |
 
@@ -241,7 +248,7 @@ Per display profile (`profiles.<id>.view`):
 | `gainX/Y/Z` | – | sensitivity per axis, 1 = physically correct |
 | `maxOffset` | m | soft limit of the offset from `eye` (linear up to 75 %, then a smooth shoulder) |
 | `minDistance` | m | the viewpoint never gets closer to the screen |
-| `refDistance` | m | distance from the screen during quick calibration |
+| `refDistance` | m | distance from the screen during the distance calibration (3b) |
 
 Global (`camera`):
 
@@ -342,7 +349,8 @@ camera.setEyeWorld(world[0], world[1], world[2]);
   the writes; the head-direction baseline is only replaced when the configured value changes).
 - `startCalibration(seconds)` / `cancelCalibration()` run the countdown calibration;
   `setActiveProfile(id)` (or `TrackerConfig.profile`) selects the preset whose
-  `camera.headBaseline` is used. The automatic start is not inside the tracker: it is the pure
+  `camera.headBaseline` is used. The game passes `profile` with every `configure()` call
+  (`Game.configureTracker`), so the active preset reaches the tracker even when no overlay is mounted. The automatic start is not inside the tracker: it is the pure
   `AutoCalibrationPolicy` (`src/tracking/autoCalibration.ts`), driven from the overlay.
 - `diagnostics()` also reports the head direction (`measurement.head`), the capture parameters
   really in use (`capture`), the head baseline and the last captured baseline.
@@ -400,7 +408,7 @@ missing or corrupt). Nothing is loaded from a CDN at run time.
 | "Tracking could not start" | WebGL2 disabled or WASM blocked; see the probe log in diagnostics |
 | view moves the wrong way sideways | `mirror` is set wrongly (or a mirroring virtual camera is in use) |
 | view tilts / moves diagonally | `camRotation` wrong (faces must be upright in the preview) or `camRoll` |
-| depth effect too strong / weak, distance wrong | run the quick calibration at a measured `refDistance` |
+| depth effect too strong / weak, distance wrong | run the distance calibration (3b, *Distance scale (advanced)*) at a measured `refDistance` |
 | view is offset although standing centrally | re-centre, or check `camPos` / `camPitch` in absolute mode |
 | jitter while standing still | raise `deadzoneMm` or `smoothMs`, lower `filterMinCutoff` |
 | view lags behind | lower `smoothMs`, raise `filterBeta`, raise `inferenceHz` if the device can do it |

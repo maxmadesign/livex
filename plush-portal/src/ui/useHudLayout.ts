@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { solveFramed, type FramedLayout } from '../layout/frame';
 import { applyPhoneGraphics, installPhoneGuards, markPhoneSetupDone, phoneFirstRunAction, phoneSetupDone } from '../layout/phone';
 import { readSafeAreaInsets } from '../layout/safeArea';
-import { hasCoarsePointer, solveLayout, type HudLayout } from '../layout/solve';
+import { hasCoarsePointer } from '../layout/solve';
 import { useApp, useSettings, useSettingsState, useUi } from './context';
 
 /** Viewport size in CSS pixels, updated on resize / orientation change. */
@@ -18,23 +19,30 @@ export function useViewport(): { vw: number; vh: number } {
     };
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', rotated);
+    // Entering / leaving full screen also resizes the window; measure again in case no resize follows.
+    document.addEventListener('fullscreenchange', rotated);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', rotated);
+      document.removeEventListener('fullscreenchange', rotated);
     };
   }, []);
   return size;
 }
 
-/** The HUD geometry for the active display preset (same solver the 3D scene uses). */
-export function useHudLayout(): HudLayout {
+/**
+ * The HUD geometry for the active display preset (same solver the 3D scene uses). It is solved for
+ * the preset's box (`frame`): the simulated 9:16 screen of a portrait preset, otherwise the whole
+ * window (src/layout/frame.ts). All coordinates are relative to that box.
+ */
+export function useHudLayout(): FramedLayout {
   const profile = useUi((s) => s.profile);
   const layout = useSettings((s) => s.profiles[profile].layout);
   const { vw, vh } = useViewport();
   // Safe-area insets change with the orientation, i.e. with the viewport size.
   const insets = useMemo(() => readSafeAreaInsets(), [vw, vh]);
-  return useMemo(() => solveLayout(profile, layout, vw, vh, insets), [profile, layout, vw, vh, insets]);
+  return useMemo(() => solveFramed(profile, layout, vw, vh, insets), [profile, layout, vw, vh, insets]);
 }
 
 export function useReducedMotion(): boolean {

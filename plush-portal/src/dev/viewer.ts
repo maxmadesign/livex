@@ -3,11 +3,14 @@
  *   /viewer.html?theme=sakura            all characters of a theme
  *   /viewer.html?ids=sakura.bunny&lod=1  specific characters / LOD
  *   &yaw=30&pitch=12&dist=1.0&shell=8&cols=3&bg=f3e9e4&dent=1&sag=0.4
+ *   &tex=512|1k|2k                       texture variant of textured (generated) models (default 2k)
+ *   &models=procedural                   draw the procedural models even where a textured one exists
+ * Textured slots get the same textured plush material, shadow depth material and shell fur as in
+ * the game; an imported / standard glTF slot is shown with its own materials.
  */
 import {
   ACESFilmicToneMapping,
   AgXToneMapping,
-  BufferAttribute,
   CircleGeometry,
   Color,
   DirectionalLight,
@@ -26,7 +29,8 @@ import {
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { PlushLibrary } from '../plush/PlushLibrary';
-import { PlushDepthMaterial, PlushMaterial, applyPaint, createPlushUniforms } from '../plush/PlushMaterial';
+import { PlushDepthMaterial, PlushMaterial, applyPaint, applyPlushDeformation, createPlushUniforms } from '../plush/PlushMaterial';
+import type { TextureSetting } from '../plush/manifest';
 import type { ThemeId } from '../core/types';
 
 declare global {
@@ -82,6 +86,8 @@ async function main() {
   scene.add(ground);
 
   const library = new PlushLibrary();
+  const tex = q.get('tex');
+  library.textureTier = (tex === '512' || tex === '1k' || tex === '2k' || tex === '4k' ? tex : '2k') as TextureSetting;
   const manifest = await library.loadManifest();
   const theme = q.get('theme') as ThemeId | null;
   const ids = q.get('ids')?.split(',');
@@ -110,9 +116,12 @@ async function main() {
     uniforms.uSquash.value = num('squash', 0);
     uniforms.uDroop.value = num('droop', 0);
     uniforms.uSway.value.set(num('sway', 0), 0, 0);
-    const material = new PlushMaterial(uniforms);
+    // Textured (generated) models: base colour / normal / roughness maps and the textured variant
+    // of the depth material; procedural models: vertex colours and paint masks.
+    const textures = loaded.textured?.textures ?? null;
+    const material = new PlushMaterial(uniforms, { textures });
     const mesh = new Mesh(geometry, material);
-    mesh.customDepthMaterial = new PlushDepthMaterial(uniforms);
+    mesh.customDepthMaterial = new PlushDepthMaterial(uniforms, { textured: !!textures });
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     const col = i % cols;
@@ -121,8 +130,24 @@ async function main() {
     mesh.position.set((col - (cols - 1) / 2) * spacing, 0, (row - (rows - 1) / 2) * spacing);
     mesh.rotation.y = yaw;
     scene.add(mesh);
-    if (shells > 0) {
-      const shellMaterial = new PlushMaterial(uniforms, { shell: true });
+    if (loaded.custom) {
+      // Standard glTF / imported model: its own materials plus the shared deformation.
+      const copy = loaded.custom.clone(true);
+      copy.traverse((object) => {
+        const part = object as Mesh;
+        if (!part.isMesh) return;
+        part.material = Array.isArray(part.material) ? part.material.map((m) => applyPlushDeformation(m.clone(), uniforms)) : applyPlushDeformation(part.material.clone(), uniforms);
+        part.castShadow = true;
+        part.receiveShadow = true;
+      });
+      copy.position.copy(mesh.position);
+      copy.rotation.copy(mesh.rotation);
+      scene.add(copy);
+      mesh.visible = false;
+    }
+    console.log(`viewer: ${asset.id} ${textures ? `textured (${loaded.textured!.tier})` : loaded.custom ? 'standard glTF' : loaded.fallback ? 'stand-in' : 'procedural'}, LOD${Math.min(lod, loaded.lods.length - 1)} ${(geometry.getIndex()?.count ?? 0) / 3} triangles`);
+    if (shells > 0 && !loaded.custom) {
+      const shellMaterial = new PlushMaterial(uniforms, { shell: true, textures });
       const shellGeometry = geometry.clone();
       const layers = new Float32Array(shells);
       for (let s = 0; s < shells; s++) layers[s] = (s + 1) / shells;
@@ -137,7 +162,6 @@ async function main() {
     }
     maxHeight = Math.max(maxHeight, asset.size[1]);
     i++;
-    void BufferAttribute;
   }
 
   const rows = Math.ceil(assets.length / cols);
@@ -152,6 +176,7 @@ async function main() {
 
   renderer.render(scene, camera);
   renderer.render(scene, camera);
+  for (const warning of library.warnings) console.warn(`viewer: ${warning}`);
   window.__viewerReady = true;
   console.log('viewer: rendered', assets.map((a) => a.id).join(', '), JSON.stringify(renderer.info.render));
 }

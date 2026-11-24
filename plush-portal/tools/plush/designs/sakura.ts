@@ -566,7 +566,7 @@ const TAN_MASK = '#80604a';
 const TAN_PALE = '#fbead0';
 const TAN_TIP = '#735240';
 const TANUKI_HEAD_C: V3 = [0, 13.7, 0.4];
-const TANUKI_HEAD_R: V3 = [7.1, 5.9, 6.3];
+const TANUKI_HEAD_R: V3 = [7.3, 6.0, 6.8];
 const tanukiFace = (x: number, y: number, push = 0.05) => onFront(TANUKI_HEAD_C, TANUKI_HEAD_R, x, y, push);
 const tanukiLeafSpot = onEllipsoid(TANUKI_HEAD_C, TANUKI_HEAD_R, [1.3, 5.6, 1.5]);
 const tanukiLeaf = frame(lift(tanukiLeafSpot.p, tanukiLeafSpot.n, 0.32), tanukiLeafSpot.n, 24);
@@ -586,15 +586,17 @@ export const tanuki: PlushDesign = {
       surface: 'fur',
       flatBase: 1.4,
       parts: [
-        ell('body', [0, 5.9, 0], [6.7, 6.2, 6.1], TAN, { collide: 'core', k: 2.3 }),
+        // Body, feet and tail follow the generated model (deeper tummy, feet reaching forward, a big
+        // tail lying on the floor behind), so the collision hulls match what is drawn.
+        ell('body', [0, 5.9, 0.3], [6.7, 6.2, 7.0], TAN, { collide: 'core', k: 2.3 }),
         ell('head', TANUKI_HEAD_C, TANUKI_HEAD_R, TAN, { collide: 'core', k: 2.5 }),
         // Fluffy cheek tufts give the wide tanuki face.
         ...pair(cone('tuft', [5.5, 12.0, 0.9], [7.3, 11.0, 0.7], 1.9, 1.05, TAN, { k: 1.4, soft: 0.45, piece: 'head', group: 'head', collide: 'none' })),
         ...pair(ell('ear', [4.5, 18.5, 0.1], [2.0, 2.1, 1.0], TAN, { k: 0.9, soft: 0.5, collide: 'none', group: 'head' })),
         // Paws resting on the tummy, ready to drum.
         ...pair(cone('arm', [5.7, 9.0, 2.0], [4.9, 6.3, 5.3], 1.6, 1.75, TAN, { soft: 0.4, k: 1.3, collide: 'none', group: 'body' })),
-        ...pair(ell('foot', [3.7, 1.6, 4.9], [2.4, 1.8, 3.1], TAN, { soft: 0.3, k: 1.2, collide: 'none', group: 'body' })),
-        ell('tail', [5.2, 5.5, -6.0], [3.0, 4.7, 3.0], TAN, { rot: [-28, 0, -30], k: 1.6, soft: 0.7, collide: 'appendage', root: [2.6, 3.2, -4.6], reach: 9 }),
+        ...pair(ell('foot', [3.7, 1.7, 6.0], [2.4, 1.8, 3.4], TAN, { soft: 0.3, k: 1.2, collide: 'none', group: 'body' })),
+        ell('tail', [4.4, 4.7, -9.2], [3.4, 5.8, 3.6], TAN, { rot: [-58, 0, -24], k: 1.6, soft: 0.7, collide: 'appendage', root: [2.2, 3.0, -5.2], reach: 11 }),
       ],
     },
     {
@@ -615,7 +617,7 @@ export const tanuki: PlushDesign = {
     {
       name: 'tips',
       channel: 3,
-      fn: anyOf(bothSides(sphere([4.9, 20.0, 0.1], 1.55)), sphere([7.2, 9.1, -8.0], 2.8), bothSides(sphere([3.7, 1.4, 7.7], 1.5)), bothSides(sphere([4.75, 6.0, 5.9], 1.45))),
+      fn: anyOf(bothSides(sphere([4.9, 20.0, 0.1], 1.55)), sphere([4.6, 7.4, -13.4], 3.2), bothSides(sphere([3.7, 1.4, 8.8], 1.5)), bothSides(sphere([4.75, 6.0, 5.9], 1.45))),
       color: TAN_TIP,
     },
   ],

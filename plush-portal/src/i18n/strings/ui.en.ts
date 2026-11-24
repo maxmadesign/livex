@@ -1,7 +1,5 @@
 /** English UI strings (HUD, dialogs, toasts). The zh / ja files must provide the same keys. */
 export const uiEn: Record<string, string> = {
-  'app.title': 'PLUSH PORTAL',
-  'app.tagline': 'A claw machine behind your screen',
 
   'boot.physics': 'Warming up the claw…',
   'boot.assets': 'Opening the toy box…',
@@ -23,16 +21,13 @@ export const uiEn: Record<string, string> = {
   'hud.demoHint': 'This is a demo — tap START to play yourself',
   'hud.collection': 'Collection',
   'hud.settings': 'Settings',
-  'hud.menu': 'Menu',
   'hud.theme': 'Theme',
   'hud.tip': 'Ask Momo for a tip',
-  'hud.fullscreen': 'Full screen',
   'hud.dir.left': 'Move left',
   'hud.dir.right': 'Move right',
   'hud.dir.back': 'Move to the back',
   'hud.dir.front': 'Move to the front',
   'hud.timer': '{seconds}s',
-  'hud.paused': 'Paused',
   'hud.pending': 'Changes apply after this round',
   'hud.restocking': 'New toys dropping in…',
   'hud.status.ATTRACT': 'Ready when you are',
@@ -105,7 +100,6 @@ export const uiEn: Record<string, string> = {
   'collection.locked': 'Not caught yet',
   'collection.total': '{owned} of {total} characters · {prizes} prizes',
   'collection.count': '×{count}',
-  'collection.close': 'Close',
 
   'theme.sakura.name': 'Sakura Kawaii',
   'theme.sakura.tagline': 'Boutique blossom-pink plushies',
@@ -123,7 +117,6 @@ export const uiEn: Record<string, string> = {
   'guide.source.gpt': 'GPT',
   'guide.source.local': 'Local lines',
   'guide.voice.ai': 'AI voice',
-  'guide.mute': 'Mute Momo',
 
   'toast.layoutRebuilt': 'Toys rearranged',
   'toast.themeFailed': 'That theme could not be loaded',
@@ -144,7 +137,6 @@ export const uiEn: Record<string, string> = {
   'toast.modelRejected': 'That file could not be used ({reason})',
   'toast.wrongPin': 'Wrong PIN',
 
-  'perf.title': 'Performance',
   'perf.fps': 'FPS',
   'perf.frame': 'Frame',
   'perf.p95': 'p95',
@@ -158,17 +150,9 @@ export const uiEn: Record<string, string> = {
   'perf.na': 'not available',
   'perf.auto': 'Auto',
 
-  'common.on': 'On',
-  'common.off': 'Off',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.apply': 'Apply',
-  'common.ok': 'OK',
-  'common.reset': 'Reset',
-  'common.copy': 'Copy',
   'common.test': 'Test',
-  'common.yes': 'Yes',
-  'common.no': 'No',
-  'common.default': 'Default',
   'common.unsupported': 'Not supported by this browser',
 };

@@ -90,7 +90,8 @@ test.describe('12. AI guide without GPT', () => {
     await page.route('**/api/**', (route) => route.abort('connectionrefused'));
     await boot(page, { display: 'desktop' });
     expect((await state(page)).phase).toBe('ATTRACT');
-    await expect.poll(async () => (await guide(page)).connection, { timeout: 30_000 }).toMatch(/local|error/);
+    // The failed status probe is retried after 1, 2 and 4 s before the guide settles on local lines.
+    await expect.poll(async () => (await guide(page)).connection, { timeout: 60_000 }).toMatch(/local|error/);
     await playAndCheckLocal(page, 'API aborted');
     await openSettings(page, 'menu-settings', 'ai');
     const connection = await page.getByTestId('ai-status').getAttribute('data-connection');
@@ -117,8 +118,9 @@ test.describe('12. AI guide without GPT', () => {
     });
     await page.route('**/api/ai/speech', (route) => route.abort());
     await boot(page, { display: 'desktop' });
-    // Software rendering can block the page for longer than the guide's 4 s status timeout while it
-    // boots; the game then asks again a minute later. Ask again right away instead of waiting.
+    // Software rendering can block the page for longer than the guide's status timeout (12 s for the
+    // first probe, 6 s later, with retries after 1, 2 and 4 s) while it boots; the game would then
+    // ask again later. Ask again right away instead of waiting.
     if ((await guide(page)).detail.includes('not reachable')) await plush(page, (p) => p.game.deps.guide.probe(true));
     await expect.poll(async () => (await guide(page)).connection, { timeout: 30_000 }).toBe('checking');
     await recordLines(page);
