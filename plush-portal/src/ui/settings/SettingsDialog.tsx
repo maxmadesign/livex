@@ -11,10 +11,11 @@ import { CameraTab } from './tabCamera';
 import { GameplayTab } from './tabGameplay';
 import { GraphicsTab } from './tabGraphics';
 import { LayoutTab } from './tabLayout';
+import { IconGift, RewardsTab } from './tabRewards';
 import { SystemTab } from './tabSystem';
 import { ThemesTab } from './tabThemes';
 
-type TabId = 'gameplay' | 'themes' | 'layout' | 'graphics' | 'audio' | 'ai' | 'camera' | 'system';
+type TabId = 'gameplay' | 'themes' | 'layout' | 'graphics' | 'audio' | 'ai' | 'camera' | 'rewards' | 'system';
 
 const TABS: { id: TabId; icon: () => ReactElement; panel: () => ReactElement; section: keyof Settings | null }[] = [
   { id: 'gameplay', icon: () => <IconGame />, panel: () => <GameplayTab />, section: 'gameplay' },
@@ -24,6 +25,7 @@ const TABS: { id: TabId; icon: () => ReactElement; panel: () => ReactElement; se
   { id: 'audio', icon: () => <IconSpeaker />, panel: () => <AudioTab />, section: 'audio' },
   { id: 'ai', icon: () => <IconBrain />, panel: () => <AiTab />, section: 'ai' },
   { id: 'camera', icon: () => <IconCamera />, panel: () => <CameraTab />, section: 'camera' },
+  { id: 'rewards', icon: () => <IconGift />, panel: () => <RewardsTab />, section: 'rewards' },
   { id: 'system', icon: () => <IconGear />, panel: () => <SystemTab />, section: 'system' },
 ];
 

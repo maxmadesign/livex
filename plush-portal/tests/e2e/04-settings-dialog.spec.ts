@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { boot, box, click, closeSettings, openSettings } from './helpers';
 
-const TABS = ['gameplay', 'themes', 'layout', 'graphics', 'audio', 'ai', 'camera', 'system'];
+const TABS = ['gameplay', 'themes', 'layout', 'graphics', 'audio', 'ai', 'camera', 'rewards', 'system'];
 
 const tabIds = (page: Page): Promise<string[]> =>
   page.getByTestId('settings-tabs').evaluate((nav) => [...nav.querySelectorAll('[role="tab"]')].map((b) => (b.getAttribute('data-testid') ?? '').replace('tab-', '')));

@@ -28,6 +28,7 @@ import { ToyVisuals } from '../scene/ToyVisuals';
 import { diffSettings, profileDefaults, type AiSettings, type CameraSettings, type GraphicsSettings, type Settings, type ViewSettings } from '../settings/spec';
 import type { SettingsStore } from '../settings/store';
 import { themeOf } from '../themes/themes';
+import { RewardFlow } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
 import type { GameStore, PerfSnapshot } from './gameStore';
@@ -178,6 +179,8 @@ export class Game {
   private thumbnailJob: Promise<void> | null = null;
   /** Latched keyboard / button directions. */
   private readonly dir = { left: false, right: false, back: false, front: false };
+  /** Prize-claim codes for real wins (src/rewards/flow.ts): the store's `reward` slice. */
+  private readonly rewards: RewardFlow;
 
   constructor(private readonly deps: GameDeps) {
     const view = deps.settings.getState().view();
@@ -187,6 +190,7 @@ export class Game {
     this.themeId = this.committed.themes.current;
     this.roundDifficulty = this.committed.gameplay.difficulty;
     this.scores.enabled = this.applied.gameplay.scoring;
+    this.rewards = new RewardFlow({ ui: deps.ui, settings: () => this.committed.rewards });
   }
 
   /** The effects contract (src/scene/fx/api.ts); src/scene/Effects.ts implements it. */
@@ -488,6 +492,7 @@ export class Game {
     // New player, new session: the demo's show score and any old combo are gone.
     this.scores.resetSession();
     this.deps.ui.setState({ result: null, prize: null, scorePopups: [] });
+    this.rewards.reset();
     this.attract.leave();
     this.restockQueue = 0;
     this.toyVisuals.sync(this.core.phys.toys.values());
@@ -518,6 +523,8 @@ export class Game {
     const m = this.core.machine;
     if (m.phase !== 'RESULT') return;
     this.deps.ui.setState({ result: null, prize: null });
+    // PLAY AGAIN dismisses the claim QR with the card (scan first, then play).
+    this.rewards.reset();
     m.next(false);
   }
 
@@ -525,6 +532,7 @@ export class Game {
   restartRound(): void {
     this.core.controller.resetRound('manual_restart', this.core.machine.phase === 'ATTRACT' ? 'ATTRACT' : 'READY');
     this.deps.ui.setState({ result: null, prize: null });
+    this.rewards.reset();
     this.afterRoundBoundary();
   }
 
@@ -612,6 +620,7 @@ export class Game {
     this.clearDirections();
     this.scores.resetSession();
     ui.setState({ result: null, prize: null, scorePopups: [], toast: null });
+    this.rewards.reset();
     if (!this.attract.active) this.attract.enter('idle_reset');
     this.lightCancel = true;
     this.lossStreak = 0;
@@ -773,6 +782,8 @@ export class Game {
     audio.playSfx('chute_drop');
     this.celebrate = Math.max(this.celebrate, TIER_LED[tier]);
     const award = this.settleRound(roundId, 'won', toy.asset.id, demo);
+    // Ask for the claim code now, so it is usually ready when the win card appears.
+    this.requestReward(roundId, toy.asset.id, demo);
     const streak = award ? award.streak : 0;
     // The light show escalates with the tier: celebrate() starts the 'win' show for epic and the
     // 'jackpot' show for legendary by itself; common and rare get particles and a flash only.
@@ -809,6 +820,18 @@ export class Game {
       grip: facts ? { centering: facts.centering, fingers: facts.fingers } : null,
       demo,
     });
+  }
+
+  /** Hands a win to the prize-claim flow (it ignores demo rounds and themes without rewards). */
+  private requestReward(roundId: number, typeId: string | null, demo: boolean): void {
+    if (demo || !typeId) return;
+    const lang = this.language();
+    const asset = this.library.assets().find((a) => a.id === typeId);
+    try {
+      this.rewards.onWin({ roundId, demo, themeId: this.themeId, prizeId: typeId, prizeName: asset ? asset.name[lang] : typeId, tier: rarityOf(typeId), lang });
+    } catch (error) {
+      logError('rewards', error);
+    }
   }
 
   private addPopup(at: { x: number; y: number }, award: ScoreAward): void {
@@ -887,6 +910,9 @@ export class Game {
     }
     if (result.demo) return;
     if (result.outcome === 'won') {
+      // A win the exit event missed still gets its code (one per round); the QR's time starts now.
+      this.requestReward(result.roundId, result.targetTypeId, false);
+      this.rewards.onCardShown(result.roundId);
       this.lossStreak = 0;
       const prize = ui.getState().prize;
       if (prize?.isNew) audio.playSfx('collect_unlock', { delay: 0.9 });
@@ -936,6 +962,7 @@ export class Game {
         this.toyVisuals.clear();
         this.themeId = next;
         this.themeVersion++;
+        this.rewards.reset();
         this.core.themeId = next;
         this.library.releaseExcept(next);
         this.rebuildScene(false);
@@ -1258,6 +1285,7 @@ export class Game {
     try {
       this.core.controller.resetRound('error_recovery', this.core.machine.phase === 'ATTRACT' ? 'ATTRACT' : 'READY');
       this.deps.ui.setState({ result: null, prize: null });
+      this.rewards.reset();
       this.toast('toast.recovered');
     } catch (inner) {
       logError('loop', inner);
@@ -1290,7 +1318,12 @@ export class Game {
     // The limit is the applied value: a time only previewed in the open settings dialog (typed or
     // imported into the draft) must not close the very dialog it is being edited in.
     const m = core.machine;
-    if (this.idle.due(this.committed.system.idleSeconds, (m.busy && !m.demo && !paused) || this.calibrating()) && this.needsIdleReset()) this.idleReset();
+    // A claim QR on screen holds the reset back until rewards.qrSeconds have passed (the visitor
+    // is scanning, not touching); the idle clock itself keeps running, so an overdue reset follows
+    // as soon as the QR has hidden itself.
+    const wall = Date.now();
+    this.rewards.tick(wall);
+    if (!this.rewards.holdsIdle(wall) && this.idle.due(this.committed.system.idleSeconds, (m.busy && !m.demo && !paused) || this.calibrating()) && this.needsIdleReset()) this.idleReset();
 
     const alpha = paused ? 1 : this.stepper.alpha;
     const grip = core.grip;
