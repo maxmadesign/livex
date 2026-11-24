@@ -379,4 +379,6 @@ export const settingsZh: Record<string, string> = {
   'system.copyLog': '复制诊断信息',
   'system.clearLog': '清空日志',
   'system.confirm': '再点一次确认',
+  'camera.eyeHelper': '按安装高度设置眼高',
+  'camera.eyeHelper.hint': '屏幕中心离地 {centre} 米。选择典型玩家的眼睛高度，自动设置参考视点的纵向位置。',
 };

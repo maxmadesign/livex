@@ -13,7 +13,10 @@
 import { DemoPilot } from '../../src/app/DemoPilot';
 import { makeRng } from '../../src/core/math';
 import { THEME_IDS, type ThemeId } from '../../src/core/types';
+import { ROUND_TUNING } from '../../src/game/RoundController';
+import { CLAW_TUNING } from '../../src/physics/ClawRig';
 import { CHUTE_CENTER, CLAW, FIXED_DT } from '../../src/physics/fieldSpec';
+import { GRIP_TUNING } from '../../src/physics/GripMonitor';
 import { comOf, inspectWorld, insideChuteFootprint, makeCore, playRound, reachableToys, themeAssets, toysOnChuteWall, type Difficulty, type RoundTrace } from '../../tests/unit/game/harness';
 
 const args = process.argv.slice(2);
@@ -28,6 +31,21 @@ const difficulties = (value('difficulty', 'arcade') === 'all' ? ['easy', 'arcade
 const seeds = Array.from({ length: Number(value('seeds', '2')) }, (_, i) => 11 + i * 17);
 const verbose = flag('verbose');
 const OFFSETS_CM = value('offsets', '0,1.5,3,4.5,6,8,10').split(',').map(Number);
+/** Optional overrides for experiments: --assist 0 --force 0.8 --swing 1 */
+const overrides: Record<string, number> = {};
+if (args.includes('--assist')) overrides.gripAssist = Number(value('assist', '1'));
+if (args.includes('--force')) overrides.clawForce = Number(value('force', '1'));
+if (args.includes('--swing')) overrides.ropeSwing = Number(value('swing', '0.55'));
+if (args.includes('--close')) overrides.closeSpeed = Number(value('close', '1'));
+// Tuning experiments: --tune fingerTorque=0.3,centerNone=0.7 (keys of CLAW_TUNING / GRIP_TUNING).
+for (const pair of value('tune', '').split(',').filter(Boolean)) {
+  const [key, raw] = pair.split('=');
+  const v = Number(raw);
+  if (key! in CLAW_TUNING) (CLAW_TUNING as Record<string, number>)[key!] = v;
+  else if (key! in GRIP_TUNING) (GRIP_TUNING as Record<string, number>)[key!] = v;
+  else if (key! in ROUND_TUNING) (ROUND_TUNING as Record<string, number>)[key!] = v;
+  else throw new Error(`unknown tuning key ${key}`);
+}
 
 interface Tally {
   n: number;
@@ -72,7 +90,7 @@ async function sweep(difficulty: Difficulty): Promise<void> {
   for (const theme of themes) {
     const themeOffset = new Map<number, Tally>();
     for (const seed of seeds) {
-      const probe = await makeCore({ theme, seed, difficulty });
+      const probe = await makeCore({ theme, seed, difficulty, params: overrides });
       const targets = reachableToys(probe, 0.0).map((t) => ({ id: t.id, type: t.asset.id, ...comOf(t) }));
       probe.dispose();
       for (let ti = 0; ti < targets.length; ti++) {
@@ -84,7 +102,7 @@ async function sweep(difficulty: Difficulty): Promise<void> {
             const x = target.x + (Math.cos(a) * off) / 100;
             const z = target.z + (Math.sin(a) * off) / 100;
             if (x < CLAW.minX || x > CLAW.maxX || z < CLAW.minZ || z > CLAW.maxZ) continue;
-            const core = await makeCore({ theme, seed, difficulty });
+            const core = await makeCore({ theme, seed, difficulty, params: overrides });
             const label = `${difficulty}/${theme}/seed${seed}/${target.type}@${off}cm`;
             let trace: RoundTrace;
             try {
@@ -121,7 +139,7 @@ async function sweep(difficulty: Difficulty): Promise<void> {
         [0.1, -0.4, true],
         [-0.05, -0.55, true],
       ] as const) {
-        const core = await makeCore({ theme, seed, difficulty });
+        const core = await makeCore({ theme, seed, difficulty, params: overrides });
         if (clear) for (const t of core.field.onField()) if (Math.hypot(comOf(t).x - ex, comOf(t).z - ez) < 0.24) core.phys.removeToy(t);
         const x = Math.min(CLAW.maxX, Math.max(CLAW.minX, ex));
         const z = Math.min(CLAW.maxZ, Math.max(CLAW.minZ, ez));

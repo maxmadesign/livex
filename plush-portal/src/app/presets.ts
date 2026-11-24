@@ -85,9 +85,9 @@ type DifficultyValues = Pick<GameplaySettings, 'moveSpeed' | 'moveAccel' | 'desc
  * closing speed, cable swing, travel speeds). There is no hidden win counter.
  */
 export const DIFFICULTY_PRESETS: Record<Exclude<GameplaySettings['difficulty'], 'custom'>, DifficultyValues> = {
-  easy: { moveSpeed: 0.4, moveAccel: 2.6, descendSpeed: 0.5, liftSpeed: 0.38, clawForce: 1.3, closeSpeed: 1, gripAssist: 1.35, ropeSwing: 0.35 },
+  easy: { moveSpeed: 0.4, moveAccel: 2.6, descendSpeed: 0.5, liftSpeed: 0.38, clawForce: 1.3, closeSpeed: 1, gripAssist: 1.4, ropeSwing: 0.3 },
   arcade: { moveSpeed: 0.42, moveAccel: 2.4, descendSpeed: 0.55, liftSpeed: 0.42, clawForce: 1, closeSpeed: 1, gripAssist: 1, ropeSwing: 0.55 },
-  skill: { moveSpeed: 0.46, moveAccel: 2.2, descendSpeed: 0.6, liftSpeed: 0.46, clawForce: 0.85, closeSpeed: 0.9, gripAssist: 0.35, ropeSwing: 0.9 },
+  skill: { moveSpeed: 0.46, moveAccel: 2.2, descendSpeed: 0.6, liftSpeed: 0.46, clawForce: 0.85, closeSpeed: 0.9, gripAssist: 0.25, ropeSwing: 0.95 },
 };
 
 export const DIFFICULTY_KEYS = Object.keys(DIFFICULTY_PRESETS.arcade) as (keyof DifficultyValues)[];

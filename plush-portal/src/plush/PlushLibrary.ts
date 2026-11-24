@@ -28,6 +28,8 @@ export class PlushLibrary {
   private readonly loaded = new Map<string, LoadedPlush>();
   /** Problems found while loading (shown in diagnostics, never fatal). */
   readonly warnings: string[] = [];
+  /** Informational notes (not problems). */
+  readonly notes: string[] = [];
   private custom = new Map<string, CustomModelEntry>();
 
   constructor(private readonly baseUrl = import.meta.env?.BASE_URL ?? '/') {
@@ -119,17 +121,28 @@ export class PlushLibrary {
         byName.set(name, mesh.geometry);
       });
       const lods: BufferGeometry[] = [];
+      let plushReady = true;
       for (const lod of asset.model.lods) {
         const geometry = byName.get(lod.mesh);
         if (!geometry) continue;
-        for (const name of REQUIRED_ATTRIBUTES) {
-          if (!geometry.getAttribute(name)) throw new Error(`"${lod.mesh}" is missing the ${name} attribute`);
+        if (REQUIRED_ATTRIBUTES.some((name) => !geometry.getAttribute(name))) {
+          plushReady = false;
+          break;
         }
         geometry.computeBoundingSphere();
         geometry.computeBoundingBox();
         lods.push(geometry);
       }
-      if (lods.length === 0) throw new Error('no LOD meshes found');
+      if (!plushReady || lods.length === 0) {
+        // An ordinary glTF model referenced from the manifest (for example a licensed character
+        // dropped into a slot): it keeps its own materials and textures and still gets the
+        // soft-body deformation; the slot's collision proxy, mass and names come from the manifest.
+        if (byName.size === 0) throw new Error('the file contains no meshes');
+        const { templateFromScene } = await import('./customModels');
+        const { createFallbackGeometry } = await import('./fallbackGeometry');
+        this.notes.push(`${asset.id} uses a standard glTF model without plush attributes: rendered with its own materials.`);
+        return { asset, lods: [createFallbackGeometry(asset)], fallback: false, custom: templateFromScene(gltf.scene, asset, { scale: 1, yawDeg: 0 }) };
+      }
       const entry = this.custom.get(asset.id);
       if (entry) {
         // A broken import never removes the character: the built-in model stays in use.

@@ -1,12 +1,15 @@
+import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
-const API_PORT = Number(process.env.PLUSH_API_PORT ?? 8787);
-
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // The API port may come from the shell or from .env (the server reads the same variable).
+  const env = loadEnv(mode, process.cwd(), 'PLUSH_');
+  const API_PORT = Number(process.env.PLUSH_API_PORT ?? env.PLUSH_API_PORT ?? 8787);
+  return {
   plugins: [react()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -43,4 +46,5 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.ts'],
     testTimeout: 60_000,
   },
+};
 });

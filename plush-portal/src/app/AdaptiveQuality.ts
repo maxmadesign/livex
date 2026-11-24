@@ -36,6 +36,7 @@ export class AdaptiveQuality {
     this.sinceEval = 0;
     this.slowEvals = 0;
     this.fastEvals = 0;
+    this.lastWasSlow = false;
   }
 
   /** Forget reductions (called when the user changes graphics settings). */
@@ -44,16 +45,30 @@ export class AdaptiveQuality {
     this.reset();
   }
 
-  /** Feed one frame time in ms. Returns true when the reduction level changed. */
-  sample(frameMs: number, targetFps: number): boolean {
+  private lastWasSlow = false;
+
+  /**
+   * Feed one frame time in ms. Returns true when the reduction level changed.
+   * `user` (optional) lets the optimiser skip steps that would change nothing
+   * for the current settings.
+   */
+  sample(frameMs: number, targetFps: number, user?: GraphicsSettings): boolean {
     if (!this.enabled) return false;
-    // Ignore hitches that have nothing to do with steady-state cost (tab switch, shader compile).
-    if (frameMs > 250) return false;
+    // An isolated hitch (tab switch, shader compile) says nothing about steady-state cost and is
+    // ignored; several very slow frames in a row are a slow machine and do count (clamped).
+    if (frameMs > 250) {
+      const isolated = !this.lastWasSlow;
+      this.lastWasSlow = true;
+      if (isolated) return false;
+      frameMs = 250;
+    } else this.lastWasSlow = false;
     this.samples[this.cursor] = frameMs;
     this.cursor = (this.cursor + 1) % WINDOW;
     this.count = Math.min(WINDOW, this.count + 1);
     this.sinceEval += frameMs;
-    if (this.sinceEval < 900 || this.count < 30) return false;
+    // Normally ~1 s and 30 frames of evidence; at very low frame rates a handful of frames must do.
+    const enough = this.count >= 30 || (this.count >= 6 && this.sinceEval >= 2500);
+    if (this.sinceEval < 900 || !enough) return false;
     this.sinceEval = 0;
     const sorted = Array.from(this.samples.subarray(0, this.count)).sort((a, b) => a - b);
     const p80 = sorted[Math.floor(sorted.length * 0.8)]!;
@@ -62,7 +77,10 @@ export class AdaptiveQuality {
     if (p80 > target * 1.22) {
       this.fastEvals = 0;
       if (++this.slowEvals >= 2 && this.level < STEPS.length) {
-        this.level++;
+        // Advance to the next step that really changes something for these settings.
+        const before = user ? this.apply(user).reductions.length : -1;
+        do this.level++;
+        while (user && this.level < STEPS.length && this.apply(user).reductions.length === before);
         this.slowEvals = 0;
         this.count = 0; // measure the new configuration from scratch
       }

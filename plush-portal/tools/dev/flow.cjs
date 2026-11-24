@@ -10,6 +10,7 @@ const path = require('path');
   page.on('console', (m) => { const t = m.text(); if (!/GPU stall|\[vite\]|React DevTools|KHR_parallel/.test(t)) logs.push(`[${m.type()}] ${t}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
   page.on('response', (r) => { if (r.status() >= 400) logs.push(`[http ${r.status()}] ${r.url()}`); });
+  page.setDefaultTimeout(180000);
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__bootDone === true, null, { timeout: 180000 }).catch(() => logs.push('boot timeout'));
   await page.waitForTimeout(700);

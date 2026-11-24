@@ -83,12 +83,26 @@ const _c = new Vector3();
 const _tip = new Vector3();
 
 const MIN_FINGER_TIME = 0.06;
-/** Aim error (as a fraction of the toy's solid half-width) up to which a grab counts as fully centred… */
-const CENTER_FULL = 0.3;
-/** …and beyond which it counts as not centred at all. */
-const CENTER_NONE = 0.95;
 const LIFT_HEIGHT = 0.03;
 const SLIP_DISTANCE = 0.055;
+
+/**
+ * Tuning of the grip facts and of the limited assist (see docs/PHYSICS.md).
+ * The game never changes these at run time.
+ */
+export const GRIP_TUNING = {
+  /** Aim error (fraction of the toy's solid half-width) up to which a grab counts as fully centred… */
+  centerFull: 0.2,
+  /** …and beyond which it counts as not centred at all. */
+  centerNone: 0.7,
+  /** Assist force limit as a multiple of the toy's weight: base + gain × quality (× assist setting). */
+  assistBase: 0.1,
+  assistGain: 1.9,
+  /** Share of the quality that does not depend on centring. */
+  centerFloor: 0.35,
+  /** Quality factor for a two-finger hold (three fingers = 1). */
+  twoFingers: 0.62,
+};
 
 /**
  * Watches the real contacts between the claw and the toys and turns them into
@@ -286,16 +300,16 @@ export class GripMonitor {
     }
     // "Centred" is judged against the solid width of the toy (not just the part that touches the floor).
     const reach = Math.max(0.06, Math.max(toy.asset.footprint, 0.4 * Math.min(toy.asset.size[0], toy.asset.size[2])) * toy.scale);
-    const centering = 1 - smoothstep(CENTER_FULL * reach, CENTER_NONE * reach, offset);
+    const centering = 1 - smoothstep(GRIP_TUNING.centerFull * reach, GRIP_TUNING.centerNone * reach, offset);
     const opening = this.claw.fingerOpening();
     const core = clamp01(s.coreShare);
     const palm = s.palmTime > 0.04 && s.palmGap <= 2;
 
-    const fingerTerm = fingers >= 3 ? 1 : fingers === 2 ? 0.62 : fingers === 1 ? 0.22 : 0;
+    const fingerTerm = fingers >= 3 ? 1 : fingers === 2 ? GRIP_TUNING.twoFingers : fingers === 1 ? 0.22 : 0;
     // Fingers that closed almost completely are pinching something thin, not holding a body.
     const thin = opening < 0.07 ? 0.5 : 1;
     const quality = clamp01(
-      fingerTerm * (0.35 + 0.65 * centering) * (0.5 + 0.5 * support) * (0.45 + 0.55 * core) * thin + (palm && fingers >= 2 ? 0.05 : 0),
+      fingerTerm * (GRIP_TUNING.centerFloor + (1 - GRIP_TUNING.centerFloor) * centering) * (0.5 + 0.5 * support) * (0.45 + 0.55 * core) * thin + (palm && fingers >= 2 ? 0.05 : 0),
     );
     return { fingers, palm, centering, support, core, opening, quality };
   }
@@ -370,7 +384,7 @@ export class GripMonitor {
     _hubQ.set(hr.x, hr.y, hr.z, hr.w);
 
     const weight = toy.mass * 9.81;
-    const maxForce = weight * this.settings.assist * Math.sqrt(Math.max(0.1, this.settings.clawForce)) * (0.25 + 1.75 * facts.quality);
+    const maxForce = weight * this.settings.assist * Math.sqrt(Math.max(0.1, this.settings.clawForce)) * (GRIP_TUNING.assistBase + GRIP_TUNING.assistGain * facts.quality);
     const stiffness = Math.max(60, maxForce / 0.012);
     this.assist = {
       toy,

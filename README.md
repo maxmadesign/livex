@@ -14,6 +14,8 @@ film/     the motion film: a deterministic HTML/Canvas engine rendered frame by 
   assets/   product renders cut out of the spec sheets, Lyra, traced LiveX mark, fonts
   render.mjs  Chromium -> ffmpeg capture (1920x1080, 30 fps, H.264)
 out/      renders
+plush-portal/  PLUSH PORTAL — a separate project: browser 3D claw-machine game
+          (Vite + React + Three.js + Rapier). See plush-portal/README.md
 ```
 
 ## Render

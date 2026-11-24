@@ -52,9 +52,20 @@ const ROPE_STIFFNESS = 2600; // N/m
 const ROPE_DAMPING = 46; // N·s/m
 const FINGER_STIFFNESS = 4.2; // N·m/rad
 const FINGER_DAMPING = 0.09; // N·m·s/rad
-const FINGER_TORQUE = 0.42; // N·m at clawForce = 1
-const FINGER_BASE_SPEED = 1.9; // rad/s at closeSpeed = 1
 const ROPE_ACCEL = 3.2; // m/s²
+
+/**
+ * Mechanical tuning of the claw (see docs/PHYSICS.md). The game never changes
+ * these at run time; difficulty only scales them through `ClawParams`.
+ */
+export const CLAW_TUNING = {
+  /** Finger motor torque limit in N·m at clawForce = 1. */
+  fingerTorque: 0.42,
+  /** Finger closing speed in rad/s at closeSpeed = 1. */
+  fingerSpeed: 1.9,
+  /** Friction coefficient of the rubber finger pads against plush (combined with "max"). */
+  fingerFriction: 1.25,
+};
 
 const _v = new Vector3();
 const _v2 = new Vector3();
@@ -107,7 +118,7 @@ export class ClawRig {
   /** Commanded hinge angle (moves towards `fingerGoal` at the closing speed). */
   private fingerCommand: number = CLAW.openAngle;
   private fingerGoal: number = CLAW.openAngle;
-  private fingerRate = FINGER_BASE_SPEED;
+  private fingerRate = CLAW_TUNING.fingerSpeed;
   /** Seconds the fingers have been (nearly) motionless. */
   fingerStillTime = 0;
 
@@ -157,7 +168,7 @@ export class ClawRig {
           RAPIER.ColliderDesc.ball(CLAW.tipRadius)
             .setTranslation(tip.x, tip.y, tip.z)
             .setMass(CLAW.fingerMass * 0.15)
-            .setFriction(1.25)
+            .setFriction(CLAW_TUNING.fingerFriction)
             .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
             .setRestitution(0)
             .setCollisionGroups(CLAW_GROUPS),
@@ -192,7 +203,7 @@ export class ClawRig {
         .setTranslation(mid.x, mid.y, mid.z)
         .setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w })
         .setMass(mass)
-        .setFriction(1.25)
+        .setFriction(CLAW_TUNING.fingerFriction)
         .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
         .setRestitution(0)
         .setCollisionGroups(CLAW_GROUPS),
@@ -206,7 +217,7 @@ export class ClawRig {
   }
 
   private applyMotorSettings(): void {
-    const torque = FINGER_TORQUE * this.params.clawForce;
+    const torque = CLAW_TUNING.fingerTorque * this.params.clawForce;
     for (const f of this.fingers) {
       f.joint.setMotorMaxForce(torque);
       f.joint.configureMotorPosition(this.fingerCommand, FINGER_STIFFNESS, FINGER_DAMPING);
@@ -260,7 +271,7 @@ export class ClawRig {
   /** open01: 1 = fully open, 0 = fully closed. `speedScale` multiplies the configured closing speed. */
   setFingers(open01: number, speedScale = 1): void {
     this.fingerGoal = clamp(open01, 0, 1) * CLAW.openAngle;
-    this.fingerRate = FINGER_BASE_SPEED * this.params.closeSpeed * speedScale;
+    this.fingerRate = CLAW_TUNING.fingerSpeed * this.params.closeSpeed * speedScale;
     this.fingerStillTime = 0;
   }
 

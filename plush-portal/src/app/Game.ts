@@ -31,7 +31,7 @@ export interface PhysicalWindow {
 }
 
 export type ConfigurableGuide = GuidePort & {
-  configure(cfg: { settings: AiSettings; uiLang: Lang; themeId: ThemeId; themeVersion: number }): void;
+  configure(cfg: { settings: AiSettings; uiLang: Lang; themeId: ThemeId; themeVersion: number; voiceVolume?: number }): void;
 };
 export type ConfigurableTracker = TrackerPort & {
   configure(cfg: { camera: CameraSettings; view: ViewSettings; window: PhysicalWindow }): void;
@@ -470,6 +470,7 @@ export class Game {
     const { ui, audio } = this.deps;
     machine.events.on('phase', (e) => {
       ui.setState({ phase: e.phase, roundId: e.roundId, demo: e.demo, aimSecondsLeft: -1 });
+      if (this.applied.system.verboseLog) log('info', 'round', `${e.prev} → ${e.phase} (round ${e.roundId}${e.demo ? ', demo' : ''})`);
       if (e.phase === 'READY') this.afterRoundBoundary();
       if (e.phase === 'ATTRACT') {
         this.attractTime = 0;
@@ -485,7 +486,12 @@ export class Game {
       if (e.phase === 'RESULT') this.resultTimer = 0;
       this.toyVisuals.focus = null;
     });
-    machine.events.on('result', (result) => this.onResult(result));
+    machine.events.on('result', (result) => {
+      if (this.applied.system.verboseLog) {
+        log('info', 'round', `round ${result.roundId}: ${result.outcome} (contact ${result.contact}, grip ${result.gripQuality}${result.slipReason ? `, ${result.slipReason}` : ''})`);
+      }
+      this.onResult(result);
+    });
     machine.events.on('award', (award) => {
       if (award.demo) return;
       const added = this.deps.collection.getState().addPrize(award.typeId, award.prizeId);
@@ -719,8 +725,14 @@ export class Game {
         if (a.outputDevice || prev) void audio.setOutputDevice(a.outputDevice);
       }
     }
-    if (touched('ai.') || touched('system.language') || !prev) {
-      guide.configure({ settings: next.ai, uiLang: next.system.language, themeId: this.themeId, themeVersion: this.themeVersion });
+    if (touched('ai.') || touched('system.language') || touched('audio.') || !prev) {
+      guide.configure({
+        settings: next.ai,
+        uiLang: next.system.language,
+        themeId: this.themeId,
+        themeVersion: this.themeVersion,
+        voiceVolume: next.audio.muted ? 0 : next.audio.master * next.audio.voice,
+      });
       if (prev && prev.ai.enabled && !next.ai.enabled) guide.silence();
     }
     if (touched('camera.') || touched('profiles.') || touched('display.') || !prev) {
@@ -1025,7 +1037,7 @@ export class Game {
     this.frameCursor = (this.frameCursor + 1) % FRAME_SAMPLES;
     this.frameCount = Math.min(FRAME_SAMPLES, this.frameCount + 1);
     this.framesAcc++;
-    if (!this.paused && this.adaptive.sample(frameMs, targetFps)) {
+    if (!this.paused && this.adaptive.sample(frameMs, targetFps, this.applied.graphics)) {
       this.applyGraphicsNow();
       log('info', 'perf', `auto optimiser level ${this.adaptive.level}`);
     }
@@ -1137,6 +1149,22 @@ export class Game {
       },
       projection: () => Array.from(this.stage.camera.projectionMatrix.elements),
       log: () => getLog().map((e) => `[${e.level}] ${e.scope}: ${e.message}`),
+      /** GPU resource counts (leak checks). */
+      memory: () => ({ geometries: this.stage.renderer.info.memory.geometries, textures: this.stage.renderer.info.memory.textures, programs: this.stage.renderer.info.programs?.length ?? 0 }),
+      /** Rapier object counts (leak checks). */
+      bodies: () => ({ bodies: this.core.phys.world.bodies.len(), colliders: this.core.phys.world.colliders.len(), joints: this.core.phys.world.impulseJoints.len(), toys: this.core.phys.toys.size }),
+      audio: () => this.deps.audio.status(),
+      guide: () => ({ status: this.deps.guide.status(), line: this.deps.guide.currentLine() }),
+      tracker: () => ({
+        status: this.deps.tracker.status(),
+        diagnostics: (this.deps.tracker as unknown as { diagnostics?: () => unknown }).diagnostics?.() ?? null,
+      }),
+      ui: () => this.deps.ui.getState(),
+      settings: () => this.deps.settings.getState().settings,
+      collection: () => {
+        const c = this.deps.collection.getState();
+        return { counts: c.counts, attempts: c.attempts, wins: c.wins, prizeIds: c.prizeIds };
+      },
       claw: CLAW,
     };
     (window as unknown as { __plush: typeof api }).__plush = api;

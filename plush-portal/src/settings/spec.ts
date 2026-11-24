@@ -246,7 +246,7 @@ function profileSpec(d: ProfileDefaults) {
       calibrated: bool(false),
       /** focal length (px, at the reference frame width) × inter-pupillary distance (m); 0 = derive from hfov. */
       calDepthK: num(0, 0, 500, 0.01),
-      /** Measured eye position (screen coordinates, metres) that corresponds to the neutral pose. */
+      /** Measured eye position (window coordinates, metres) that corresponds to the neutral pose. */
       calNeutral: vec3(d.eye, -5, 5, 0.001, 'live', 'm'),
     },
   } as const satisfies SpecGroup;
@@ -256,7 +256,7 @@ const PROFILE_DEFAULTS: Record<DisplayProfileId, ProfileDefaults> = {
   desktop: {
     safeTop: 0,
     safeBottom: 1,
-    anchorY: 0.855,
+    anchorY: 0.84,
     panelWidth: 0.94,
     uiScale: 1,
     touchSize: 84,
@@ -396,7 +396,7 @@ export const settingsSpec = {
     ao: en('off', ['off', 'low', 'high'] as const),
     glass: en('medium', ['low', 'medium', 'high'] as const),
     reflections: en('static', ['static', 'refresh', 'live'] as const),
-    fur: en('sheen', ['flat', 'sheen', 'shell', 'shellHigh'] as const),
+    fur: en('shell', ['flat', 'sheen', 'shell', 'shellHigh'] as const),
     deform: en('basic', ['basic', 'fine', 'ultra'] as const),
     aa: en('fxaa', ['off', 'fxaa', 'smaa', 'msaa2', 'msaa4'] as const),
     bloom: num(0.25, 0, 1, 0.05),
@@ -415,7 +415,7 @@ export const settingsSpec = {
     muted: bool(false),
     track: en('theme', ['theme', ...THEME_IDS] as const),
     ducking: num(0.6, 0, 1, 0.05),
-    outputDevice: str('', 256),
+    outputDevice: str('', 256, 'live', true),
   },
   ai: {
     enabled: bool(true),
@@ -444,7 +444,7 @@ export const settingsSpec = {
   camera: {
     /** Head Tracking / Window Perspective. */
     enabled: bool(true),
-    deviceId: str('', 256),
+    deviceId: str('', 256, 'live', true),
     resolution: en('480p', ['360p', '480p', '720p'] as const),
     inferenceHz: num(18, 5, 30, 1, 'live', 'Hz'),
     numFaces: num(2, 1, 4, 1),

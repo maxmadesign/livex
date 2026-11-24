@@ -18,10 +18,6 @@ export function DeviceChooser({ layout }: { layout: HudLayout }) {
     app.game.chooseProfile(id);
     app.ui.setState({ profile: id, profileChosen: true });
     close();
-    if (app.settings.getState().settings.gameplay.tips && !app.ui.getState().firstPlayDone) {
-      app.ui.setState({ modal: 'tutorial' });
-      app.game.setModalOpen(true);
-    }
   };
   return (
     <Modal layout={layout} title={t('device.title')} onClose={() => pick(chosen ? current : suggested)} closeLabel={t('common.close')} compact size={0.92} testId="device-chooser">

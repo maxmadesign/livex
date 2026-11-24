@@ -41,6 +41,11 @@ function useKeyboard(): void {
         if (!e.repeat) app.game.setDirection(dir, true);
         return;
       }
+      if (e.code === 'KeyF' && !e.repeat) {
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+        return;
+      }
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') {
         // Let Enter / Space activate a focused button instead of also grabbing.
         if ((e.target as HTMLElement | null)?.tagName === 'BUTTON') return;
@@ -88,6 +93,24 @@ function Shell() {
       app.game.setModalOpen(true);
     }
   }, [app, bootStage, profileChosen]);
+
+  // The how-to-play card is shown once, the first time a player leaves attract mode.
+  const phase = useUi((s) => s.phase);
+  const demo = useUi((s) => s.demo);
+  useEffect(() => {
+    if (phase !== 'READY' || demo || app.ui.getState().modal !== null) return;
+    if (!app.settings.getState().settings.gameplay.tips) return;
+    let seen = true;
+    try {
+      seen = localStorage.getItem('plush-portal/tutorial-seen') === '1';
+      localStorage.setItem('plush-portal/tutorial-seen', '1');
+    } catch {
+      /* storage unavailable: do not nag */
+    }
+    if (seen) return;
+    app.ui.setState({ modal: 'tutorial' });
+    app.game.setModalOpen(true);
+  }, [app, phase, demo]);
 
   const ui = THEMES[themeId].ui;
   const style = {

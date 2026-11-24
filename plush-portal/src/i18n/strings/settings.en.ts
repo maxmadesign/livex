@@ -385,4 +385,6 @@ export const settingsEn: Record<string, string> = {
   'system.copyLog': 'Copy diagnostics',
   'system.clearLog': 'Clear log',
   'system.confirm': 'Tap again to confirm',
+  'camera.eyeHelper': 'Set eye height from installation',
+  'camera.eyeHelper.hint': 'Screen centre is {centre} m above the floor. Pick the eye height of a typical player to set the vertical reference.',
 };

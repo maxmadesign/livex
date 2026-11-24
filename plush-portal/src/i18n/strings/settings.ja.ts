@@ -379,4 +379,6 @@ export const settingsJa: Record<string, string> = {
   'system.copyLog': '診断情報をコピー',
   'system.clearLog': 'ログを消去',
   'system.confirm': 'もういちどタップして確定',
+  'camera.eyeHelper': '設置高さから目の高さを設定',
+  'camera.eyeHelper.hint': '画面中心は床から {centre} m です。想定プレイヤーの目の高さを選ぶと、基準視点の上下位置が設定されます。',
 };

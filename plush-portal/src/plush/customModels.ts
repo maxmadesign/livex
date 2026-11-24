@@ -85,7 +85,14 @@ export async function buildCustomTemplate(data: ArrayBuffer, asset: PlushAsset, 
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await loader.parseAsync(data.slice(0), '');
-  const source = gltf.scene;
+  return templateFromScene(gltf.scene, asset, entry);
+}
+
+/**
+ * Turns any glTF scene into a slot-space template (also used when a manifest
+ * entry points at an ordinary GLB without the plush vertex attributes).
+ */
+export function templateFromScene(source: Object3D, asset: PlushAsset, entry: Pick<CustomModelEntry, 'scale' | 'yawDeg'>): Group {
   source.updateMatrixWorld(true);
   const box = new Box3().setFromObject(source);
   const size = box.getSize(new Vector3());

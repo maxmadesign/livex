@@ -237,7 +237,7 @@ export function LayoutTab() {
           </p>
           {layout.adjusted ? <p className="pp-note warn">{t('layout.adjusted')}</p> : null}
           <div className="pp-actions">
-            <button type="button" className="pp-btn small soft" onClick={() => app.settings.getState().resetProfile(profile)} data-testid="btn-reset-preset">
+            <button type="button" className="pp-btn small soft" onClick={() => app.settings.getState().resetProfile(profile, 'layout')} data-testid="btn-reset-preset">
               {t('layout.resetPreset')}
             </button>
           </div>

@@ -35,7 +35,8 @@ export interface SettingsState {
   isDirty(): boolean;
   resetAll(): void;
   resetSection(section: keyof Settings): void;
-  resetProfile(id: DisplayProfileId): void;
+  /** Resets a display preset: its layout, its viewing geometry + calibration, or both. */
+  resetProfile(id: DisplayProfileId, part?: 'layout' | 'view'): void;
   exportJson(): string;
   /** Validates and loads a configuration file. Unknown or out-of-range values are repaired. */
   importJson(text: string): { ok: boolean; message: string; changed: number };
@@ -126,10 +127,13 @@ export function createSettingsStore() {
         persist(clean);
       }
     },
-    resetProfile(id) {
+    resetProfile(id, part) {
       if (!DISPLAY_PROFILE_IDS.includes(id)) return;
       const current = structuredClone(get().view());
-      current.profiles[id] = profileDefaults(id);
+      const fresh = profileDefaults(id);
+      if (part === 'layout') current.profiles[id].layout = fresh.layout;
+      else if (part === 'view') current.profiles[id].view = fresh.view;
+      else current.profiles[id] = fresh;
       if (get().draft) set({ draft: current });
       else {
         set({ settings: current });
@@ -156,7 +160,7 @@ export function createSettingsStore() {
       // Never import the local settings PIN and keep this device's display preset choice.
       clean.system.lockPin = current.system.lockPin;
       clean.system.lockSettings = current.system.lockSettings;
-      if (!clean.display.profile) clean.display.profile = current.display.profile;
+      if (current.display.profile) clean.display.profile = current.display.profile;
       const changed = diffSettings(current, clean).length;
       if (get().draft) set({ draft: clean });
       else {

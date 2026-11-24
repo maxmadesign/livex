@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FIXED_DT } from '../../physics/fieldSpec';
 import { THEME_IDS, type ThemeId, type Vec3 } from '../../core/types';
 import { clearLog, formatLog } from '../../diagnostics/log';
+import { getValueAt } from '../../settings/spec';
 import { useApp, useLogEntries, useSettings, useT, useUi } from '../context';
 import { Field, Row, Section, useSetter } from './Field';
 
@@ -358,6 +359,7 @@ export function CameraTab() {
       <Field path={`${view}.screenH`} />
       <Field path={`${view}.bottomElevation`} />
       <Field path={`${view}.eye`} />
+      <EyeHeightHelper profilePath={view} />
       <Section title={t('sec.camera.mount')} />
       <Field path={`${view}.camPos`} />
       <Field path={`${view}.camPitch`} />
@@ -390,6 +392,28 @@ export function CameraTab() {
       <Field path="camera.numFaces" />
       <Field path="camera.delegate" />
     </>
+  );
+}
+
+/** Turns the installation height into a reference eye height for a standing adult or a child. */
+function EyeHeightHelper({ profilePath }: { profilePath: string }) {
+  const t = useT();
+  const set = useSetter();
+  const bottom = useSettings((s) => getValueAt(s, `${profilePath}.bottomElevation`) as number);
+  const height = useSettings((s) => getValueAt(s, `${profilePath}.screenH`) as number);
+  const eye = useSettings((s) => getValueAt(s, `${profilePath}.eye`) as Vec3);
+  const centre = bottom + height / 2;
+  const apply = (eyeHeight: number) => set(`${profilePath}.eye`, [eye[0], Number((eyeHeight - centre).toFixed(2)), eye[2]]);
+  return (
+    <Row label={t('camera.eyeHelper')} hint={t('camera.eyeHelper.hint', { centre: centre.toFixed(2) })} stack>
+      <div className="pp-seg" data-testid="eye-helper">
+        {[1.15, 1.4, 1.6, 1.75].map((h) => (
+          <button key={h} type="button" onClick={() => apply(h)} data-value={h}>
+            {h.toFixed(2)} m
+          </button>
+        ))}
+      </div>
+    </Row>
   );
 }
 

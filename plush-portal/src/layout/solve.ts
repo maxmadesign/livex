@@ -104,8 +104,10 @@ export function solveLayout(profile: DisplayProfileId, s: LayoutSettings, vw: nu
   const minY = safeTop + marginY * 0.5;
   const maxY = safeBottom - marginY * 0.5 - panelH;
   if (panelY < minY || panelY > maxY) {
-    if (s.autoFit || maxY < minY) adjusted = true;
-    panelY = clamp(panelY, minY, Math.max(minY, maxY));
+    const moved = clamp(panelY, minY, Math.max(minY, maxY));
+    // Sub-percent nudges are not worth telling the player about.
+    if (Math.abs(moved - panelY) > vh * 0.01) adjusted = true;
+    panelY = moved;
   }
   const panel: Rect = { x: (vw - panelW) / 2, y: panelY, w: panelW, h: panelH };
   void touchUnits;

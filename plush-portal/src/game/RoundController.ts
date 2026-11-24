@@ -38,10 +38,15 @@ export interface RoundControllerEvents extends Record<string, unknown> {
 }
 
 const _v = new Vector3();
-/** How far the winch may run ahead of the claw while it descends (m). */
-const SLACK_ALLOWANCE = 0.022;
-/** Seconds the claw must sit still on something before the descent is declared finished. */
-const STALL_TIME = 0.2;
+/** Timing of the automatic sequence (see docs/PHYSICS.md). Never changed at run time. */
+export const ROUND_TUNING = {
+  /** How far the winch may run ahead of the claw once the cable has gone slack (m). */
+  slackAllowance: 0.022,
+  /** Seconds the claw must sit still on something before the descent is declared finished. */
+  stallTime: 0.12,
+  /** Hub speed below which the claw counts as "sitting still" (m/s). */
+  stallSpeed: 0.035,
+};
 
 /**
  * Drives one round: translates player input into trolley motion, runs the
@@ -277,7 +282,7 @@ export class RoundController {
         const scale = near < 0.08 ? clamp(0.32 + (0.68 * near) / 0.08, 0.32, 1) : 1;
         // Pay the cable out only a little ahead of the claw: when a finger rests on something the
         // claw keeps working its way down under its own weight instead of dropping onto a slack rope.
-        const limit = claw.slackTime > 0 ? Math.min(CLAW.ropeMax, claw.tautLength() + SLACK_ALLOWANCE) : CLAW.ropeMax;
+        const limit = claw.slackTime > 0 ? Math.min(CLAW.ropeMax, claw.tautLength() + ROUND_TUNING.slackAllowance) : CLAW.ropeMax;
         claw.setWinch(limit, p.descendSpeed * scale);
         break;
       }
@@ -306,9 +311,9 @@ export class RoundController {
         let palm = false;
         for (const c of grip.contacts) if (c.part === 3) palm = true;
         this.palmTime = palm ? this.palmTime + dt : 0;
-        const resting = claw.slackTime > 0.05 && claw.hubSpeed() < 0.035;
+        const resting = claw.slackTime > 0.05 && claw.hubSpeed() < ROUND_TUNING.stallSpeed;
         this.stallTime = resting ? this.stallTime + dt : 0;
-        const slack = (this.palmTime > 0.05 && claw.slackTime > 0.03) || this.stallTime > STALL_TIME;
+        const slack = (this.palmTime > 0.05 && claw.slackTime > 0.03) || this.stallTime > ROUND_TUNING.stallTime;
         const bottom = claw.ropeLength > CLAW.ropeMax - 0.004 && Math.abs(claw.ropeSpeed) < 0.02;
         if (m.phaseTime > 0.25 && (slack || bottom)) {
           if (!this.touched) {

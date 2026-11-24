@@ -112,14 +112,11 @@ export default function SettingsDialog({ layout, onClose }: { layout: HudLayout;
   const active = TABS.find((x) => x.id === tab)!;
   const resetTab = () => {
     const store = app.settings.getState();
-    if (tab === 'layout') store.resetProfile(app.ui.getState().profile);
+    if (tab === 'layout') store.resetProfile(app.ui.getState().profile, 'layout');
     else if (tab === 'camera') {
+      // Camera settings plus this preset's viewing geometry and calibration; its layout is kept.
       store.resetSection('camera');
-      // Viewing geometry lives in the profile; layout values of the preset are kept.
-      const id = app.ui.getState().profile;
-      const keep = structuredClone(store.view().profiles[id].layout);
-      store.resetProfile(id);
-      for (const [k, v] of Object.entries(keep)) store.set(`profiles.${id}.layout.${k}`, v);
+      store.resetProfile(app.ui.getState().profile, 'view');
     } else if (active.section) store.resetSection(active.section);
   };
 
