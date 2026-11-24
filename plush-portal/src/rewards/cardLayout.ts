@@ -90,6 +90,16 @@ export const CARD = {
   rewardMinW: 300,
   /** Narrowest QR column of the side arrangement (the code row under the tile). */
   codeMinW: 240,
+  /**
+   * The code row as reward.css draws it: XXXX-XXXX (9 characters at 40 units, letter spacing
+   * 0.08 em), a 14 unit gap and the 56 unit countdown ring. A character advances about 0.8 em in
+   * the bold display fonts (measured: 288 units for WJGR-25WS); 0.84 leaves room for wide letters.
+   */
+  codeChars: 9,
+  codeFont: 40,
+  codeAdvance: 0.84,
+  codeGap: 14,
+  ring: 56,
   /** Reward block: gap above the tile, instruction lines, code row (with the countdown ring), label. */
   tileGap: 12,
   instrLine: 30,
@@ -202,8 +212,24 @@ export function cardBounds(layout: HudLayout): Rect {
     // Split panel: the status line and the compact menu sit at its bottom between pad and button.
     const cluster = (25 * 1.3 * layout.fontScale + 12 + 6) * u + layout.touch * 0.62;
     bottom = Math.min(bottom, layout.panel.y + layout.panel.h - cluster - 10);
+    // Momo's line beside the play field (it grows down to maxH): the card keeps clear of it, so the
+    // win line (which invites the scan) is never cut off by the card it talks about.
+    const g = layout.guide;
+    if (g.place === 'side' && !g.hidden) {
+      if (g.align === 'left') left = Math.max(left, g.x + g.w + 10);
+      else right = Math.min(right, g.x - 10);
+    }
   }
   return { x: left, y: top, w: Math.max(0, right - left), h: Math.max(0, bottom - top) };
+}
+
+/**
+ * Width of the code row (CSS px) for a card unit `k` and font scale `fs`: wider than the QR tile on
+ * the small presets, so the side arrangement's QR column must make room for it (it used to stick
+ * out of the 1280 × 720 desktop card by about 8 px).
+ */
+export function codeRowWidth(k: number, fs: number): number {
+  return k * (CARD.codeGap + fs * (CARD.codeChars * CARD.codeAdvance * CARD.codeFont + CARD.ring));
 }
 
 function pointsHeight(rows: number): number {
@@ -268,7 +294,7 @@ function sideSize(layout: HudLayout, input: WinCardInput, s: number, qrMin: numb
   const q = Math.max(qrMin, Math.round(QR_DESIGN[layout.profile] * k));
   const rightH = q + k * (CARD.gap + CARD.codeRow * fs);
   const h = Math.max(leftH, rightH) + k * (CARD.padTop + CARD.padBottom);
-  const w = k * (2 * CARD.padX + CARD.sideLeft + CARD.sideGap) + Math.max(q, k * CARD.codeMinW);
+  const w = k * (2 * CARD.padX + CARD.sideLeft + CARD.sideGap) + Math.max(q, k * CARD.codeMinW, codeRowWidth(k, fs));
   return { w, h, q };
 }
 

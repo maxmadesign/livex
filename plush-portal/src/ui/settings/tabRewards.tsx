@@ -86,7 +86,7 @@ export function previewClaimUrl(claimUrl: string, status: RewardsStatusBody | nu
  * The card as it will look on this screen, over the dialog, labelled PREVIEW. Nothing is issued:
  * the code is a placeholder and the QR only opens the claim page address.
  */
-function RewardPreview({ url, onClose }: { url: string | null; onClose: () => void }) {
+function RewardPreview({ url, localOnly, onClose }: { url: string | null; localOnly: boolean; onClose: () => void }) {
   const t = useT();
   const app = useApp();
   const layout = useHudLayout();
@@ -111,6 +111,7 @@ function RewardPreview({ url, onClose }: { url: string | null; onClose: () => vo
     totalMs: rewards.qrSeconds * 1000,
     reason: null,
     discountText: rewards.discountText,
+    localOnly,
   };
   const geometry = winCardGeometry(layout, { withPoints: false, kind: 'qr', label: true, screenWidthM: env.screenWidthM });
   const overlay = (
@@ -235,7 +236,7 @@ export function RewardsTab() {
         </button>
       </div>
       <p className="pp-note">{t('rewards.preview.hint')}</p>
-      {preview ? <RewardPreview url={previewClaimUrl(claimUrl, body)} onClose={closePreview} /> : null}
+      {preview ? <RewardPreview url={previewClaimUrl(claimUrl, body)} localOnly={!!body && !ownLink && body.reach === 'loopback'} onClose={closePreview} /> : null}
     </>
   );
 }

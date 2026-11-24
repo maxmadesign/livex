@@ -9,8 +9,10 @@
 import type { RewardUiState } from '../app/gameStore';
 import {
   CODE_ALPHABET,
+  MAX_ISSUED_URL_CHARS,
   REWARD_LIMITS,
   REWARD_OPTIONS,
+  cleanDisplayText,
   isSafeHttpUrl,
   type ClaimReach,
   type IssueRequestBody,
@@ -106,7 +108,8 @@ export function validIssueResponse(body: unknown): body is IssueResponseBody {
   if (!b || typeof b !== 'object') return false;
   if (typeof b.code !== 'string' || b.code.length !== REWARD_LIMITS.codeLength) return false;
   for (const ch of b.code) if (!CODE_ALPHABET.includes(ch)) return false;
-  if (typeof b.url !== 'string' || !isSafeHttpUrl(b.url)) return false;
+  // A filled-in owner template may be longer than the template itself (the settings allow 300).
+  if (typeof b.url !== 'string' || !isSafeHttpUrl(b.url, MAX_ISSUED_URL_CHARS)) return false;
   if (!REACHES.includes(b.reach as ClaimReach)) return false;
   if (!(REWARD_OPTIONS as readonly string[]).includes(b.options as string)) return false;
   return typeof b.expiresAt === 'string';
@@ -158,11 +161,15 @@ export function createRewardClient(options: RewardClientOptions = {}): RewardCli
     issue(input) {
       const pending = issued.get(input.roundId);
       if (pending) return pending;
+      // Text the server would refuse (controls, bidi overrides, an empty name) is cleaned here, so a
+      // stray character in a setting can never make every claim fail.
       const body: IssueRequestBody = {
         ...input,
         session,
-        prizeName: input.prizeName.slice(0, REWARD_LIMITS.maxPrizeNameChars),
-        discountText: input.discountText.slice(0, REWARD_LIMITS.maxDiscountTextChars),
+        prizeName: cleanDisplayText(input.prizeName, REWARD_LIMITS.maxPrizeNameChars) || input.prizeId,
+        discountText: cleanDisplayText(input.discountText, REWARD_LIMITS.maxDiscountTextChars),
+        claimUrl: input.claimUrl.trim(),
+        swagUrl: input.swagUrl.trim(),
       };
       const request = call('POST', '/api/rewards/issue', body, options.issueTimeoutMs ?? ISSUE_TIMEOUT_MS, validIssueResponse);
       issued.set(input.roundId, request);

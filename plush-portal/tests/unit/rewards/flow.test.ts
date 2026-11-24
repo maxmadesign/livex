@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { INITIAL_REWARD, createGameStore } from '../../../src/app/gameStore';
+import { INITIAL_REWARD, createGameStore, type RewardUiState } from '../../../src/app/gameStore';
 import { BRAND_KITS, type BrandKit } from '../../../src/brand/kits';
 import { THEME_IDS, type ThemeId } from '../../../src/core/types';
 import type { IssueInput, RewardClient } from '../../../src/rewards/client';
-import { RewardFlow, type RewardWin, type RewardsSettings } from '../../../src/rewards/flow';
+import { RewardFlow, localOnly, ownLink, scannableQrOnScreen, type RewardWin, type RewardsSettings } from '../../../src/rewards/flow';
 import { DEMO_CLAIM_BASE, localDemoCode, rewardsApply, shouldIssue } from '../../../src/rewards/policy';
-import { CODE_ALPHABET, type IssueResponseBody } from '../../../src/rewards/protocol';
+import { CODE_ALPHABET, UNSAFE_TEXT_CHARS, cleanDisplayText, type IssueResponseBody } from '../../../src/rewards/protocol';
 import { defaultSettings } from '../../../src/settings/spec';
 
 const kitFor = (kit: BrandKit | null) => (theme: ThemeId) => (kit && kit.theme === theme ? kit : null);
@@ -188,5 +188,75 @@ describe('reward flow', () => {
     const d = setup({ demoBuild: true });
     d.flow.onWin(win({ demo: true }));
     expect(d.reward()).toBe(INITIAL_REWARD);
+  });
+
+  it('a client that throws while asking never leaves the card spinning', async () => {
+    const ui = createGameStore('desktop', true, 'gpu');
+    const client: RewardClient = {
+      session: 'S',
+      status: vi.fn(),
+      issue: () => {
+        throw new Error('boom');
+      },
+    };
+    const flow = new RewardFlow({ ui, settings: () => defaultSettings().rewards, client, demoBuild: false, kitFor: kitFor(BRAND_KITS.gtc) });
+    flow.onWin(win());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(ui.getState().reward).toMatchObject({ state: 'unavailable', reason: 'error', roundId: 5 });
+  });
+
+  it('owner links are trimmed and only well-formed http(s) links are kept', () => {
+    expect(ownLink('  https://claim.example.com/c/{code} ')).toBe('https://claim.example.com/c/{code}');
+    expect(ownLink('ftp://x/{code}')).toBe('');
+    expect(ownLink('javascript:alert(1)')).toBe('');
+    expect(ownLink('https://user:pw@example.com/')).toBe('');
+    expect(ownLink('   ')).toBe('');
+    const t = setup({ settings: { claimUrl: ' https://claim.example.com/c/{code} ', discountText: '20% off\tall swag' } });
+    t.flow.onWin(win());
+    expect(t.issue.mock.calls[0]![0]).toMatchObject({ claimUrl: 'https://claim.example.com/c/{code}', discountText: '20% off all swag' });
+  });
+});
+
+describe('what the card and the guide may say about the QR', () => {
+  const ready = (over: Partial<RewardUiState> = {}): RewardUiState => ({ ...INITIAL_REWARD, state: 'ready', roundId: 5, code: 'K7M2QX9D', url: ISSUED.url, reach: 'lan', visibleUntil: 2_000, ...over });
+  const at = { roundId: 5, demo: false, phone: false, now: 1_000 };
+
+  it('a ready code of this round on a kiosk screen is a scannable QR until its time is up', () => {
+    expect(scannableQrOnScreen(ready(), at)).toBe(true);
+    expect(scannableQrOnScreen(ready({ visibleUntil: 0 }), at)).toBe(true); // card not shown yet
+    expect(scannableQrOnScreen(ready(), { ...at, now: 2_000 })).toBe(false);
+    expect(scannableQrOnScreen(ready({ state: 'demoBuild', reach: null }), at)).toBe(true);
+  });
+
+  it('never for another round, a demo round, a lost round, while issuing or after a failure', () => {
+    expect(scannableQrOnScreen(ready(), { ...at, roundId: 6 })).toBe(false);
+    expect(scannableQrOnScreen(ready(), { ...at, demo: true })).toBe(false);
+    expect(scannableQrOnScreen(ready(), { ...at, outcome: 'slipped' })).toBe(false);
+    expect(scannableQrOnScreen(ready(), { ...at, outcome: 'won' })).toBe(true);
+    expect(scannableQrOnScreen(ready({ state: 'issuing', code: null, url: null }), at)).toBe(false);
+    expect(scannableQrOnScreen(ready({ state: 'unavailable', code: null, url: null }), at)).toBe(false);
+  });
+
+  it('not on a phone (the card shows a claim link) and not for a loopback-only link (no QR is drawn)', () => {
+    expect(scannableQrOnScreen(ready(), { ...at, phone: true })).toBe(false);
+    expect(localOnly(ready({ reach: 'loopback' }))).toBe(true);
+    expect(localOnly(ready({ reach: 'lan' }))).toBe(false);
+    expect(localOnly(ready({ state: 'issuing', reach: 'loopback' }))).toBe(false);
+    expect(scannableQrOnScreen(ready({ reach: 'loopback' }), at)).toBe(false);
+    expect(scannableQrOnScreen(ready({ reach: 'external' }), at)).toBe(true);
+  });
+});
+
+describe('display text as the server accepts it', () => {
+  it('controls and bidi overrides become spaces, runs collapse, the result is trimmed and cut safely', () => {
+    expect(cleanDisplayText('20% off\tall swag', 80)).toBe('20% off all swag');
+    expect(cleanDisplayText('‮20% off⁩ ', 80)).toBe('20% off');
+    expect(cleanDisplayText('a\u0085b c', 80)).toBe('a b c');
+    expect(cleanDisplayText('   ', 80)).toBe('');
+    // A cut never leaves half of a surrogate pair (an emoji) behind.
+    expect(cleanDisplayText('abcd\u{1F381}', 5)).toBe('abcd');
+    expect(cleanDisplayText('ab \u{1F381}', 4)).toBe('ab');
+    expect(UNSAFE_TEXT_CHARS.test('fine text 20%')).toBe(false);
   });
 });

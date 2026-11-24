@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { RewardUiState } from '../app/gameStore';
 import { brandForTheme } from '../brand';
+import { registerStrings } from '../i18n';
 import type { HudLayout } from '../layout/solve';
 import { portraitUnits, screenWidthMetres, subtitleLines, winCardGeometry, type RewardCardKind, type WinCardGeometry } from '../rewards/cardLayout';
-import { formatCode, type RewardOptions } from '../rewards/protocol';
+import { localOnly } from '../rewards/flow';
+import { REWARD_LIMITS, cleanDisplayText, formatCode, type RewardOptions } from '../rewards/protocol';
 import { qrMatrix, qrPath } from '../rewards/qr';
+import { rewardCardStrings } from '../rewards/strings';
 import { useSettings, useT, useUi } from './context';
 import './reward.css';
+
+registerStrings(rewardCardStrings);
 
 /**
  * The prize-claim part of the win card (src/ui/Hud.tsx ResultLayer): QR tile, instruction, the code
@@ -28,6 +33,11 @@ export interface RewardView {
   reason: RewardUiState['reason'];
   /** Owner wording for the swag offer ('' = generic). */
   discountText: string;
+  /**
+   * The link only opens on this machine (reach "loopback"): no QR is drawn (a phone would open
+   * 127.0.0.1 on itself), the code and "show it to booth staff" instead. The phone's link stays.
+   */
+  localOnly?: boolean;
 }
 
 /** The reward slice as a view for the card of `roundId`, or null when it belongs to no card. */
@@ -42,6 +52,7 @@ export function rewardViewFor(reward: RewardUiState, roundId: number, qrSeconds:
     totalMs: Math.max(1, qrSeconds) * 1000,
     reason: reward.reason,
     discountText,
+    localOnly: localOnly(reward),
   };
 }
 
@@ -103,6 +114,7 @@ export function useWinCard(layout: HudLayout, expected = false): WinCardState | 
 
 /** Inline SVG QR code: dark modules on a white tile (quiet zone included), crisp at any size. */
 export function QrCode({ text, size }: { text: string; size: number }) {
+  const t = useT();
   const matrix = qrMatrix(text);
   const path = useMemo(() => qrPath(matrix), [matrix]);
   return (
@@ -113,6 +125,7 @@ export function QrCode({ text, size }: { text: string; size: number }) {
       height={size}
       shapeRendering="crispEdges"
       role="img"
+      aria-label={t('reward.qrLabel')}
       data-testid="reward-qr"
       data-modules={matrix.size}
       data-url={text}
@@ -157,7 +170,8 @@ function CountdownRing({ until, totalMs }: { until: number; totalMs: number }) {
 
 /** The instruction for the offers this code unlocks. */
 export function instructionKey(options: RewardOptions, discountText: string, phone: boolean): { key: string; params?: Record<string, string> } {
-  const discount = discountText.trim();
+  // The same wording the claim page shows (src/rewards/flow.ts sends it cleaned the same way).
+  const discount = cleanDisplayText(discountText, REWARD_LIMITS.maxDiscountTextChars);
   const base = phone ? 'reward.instr.phone' : 'reward.instr';
   if (options === 'prize') return { key: `${base}.prize` };
   if (discount) return { key: `${base}.${options}.custom`, params: { discount } };
@@ -178,9 +192,10 @@ export function RewardLabel({ state }: { state: RewardView['state'] }) {
 function CodeRow({ view }: { view: RewardView }) {
   const t = useT();
   const code = view.code ? formatCode(view.code) : view.state === 'preview' ? 'XXXX-XXXX' : '····-····';
+  // A named group: screen readers say "Prize code" and then the code (a plain span cannot carry a name).
   return (
-    <div className="pp-reward-code">
-      <span className="code" data-testid="reward-code" aria-label={t('reward.codeLabel')} data-pending={!view.code}>
+    <div className="pp-reward-code" role="group" aria-label={t('reward.codeLabel')} data-testid="reward-code-row">
+      <span className="code" data-testid="reward-code" data-pending={!view.code} aria-hidden={view.code ? undefined : true}>
         {code}
       </span>
       <CountdownRing until={view.visibleUntil} totalMs={view.totalMs} />
@@ -188,18 +203,26 @@ function CodeRow({ view }: { view: RewardView }) {
   );
 }
 
-/** The QR tile, or its placeholder (code on its way / nothing to encode in the preview). */
+/** The QR tile, or its placeholder (code on its way / nothing to encode in the preview / a loopback-only link). */
 function Tile({ view, size }: { view: RewardView; size: number }) {
   const t = useT();
-  if (view.url && view.state !== 'issuing') {
+  if (view.url && view.state !== 'issuing' && !view.localOnly) {
     return (
       <div className="pp-reward-tile" style={{ width: size, height: size }}>
         <QrCode text={view.url} size={size} />
       </div>
     );
   }
+  if (view.localOnly) {
+    return (
+      <div className="pp-reward-tile placeholder" style={{ width: size, height: size }} data-testid="reward-qr-local">
+        <span>{t('reward.local')}</span>
+      </div>
+    );
+  }
+  // The instruction line under the tile says the same in words, so the tile itself is decoration.
   return (
-    <div className="pp-reward-tile placeholder" style={{ width: size, height: size }} data-testid="reward-qr-pending" role="status" aria-label={t(view.state === 'issuing' ? 'reward.issuing' : 'reward.previewNoQr')}>
+    <div className="pp-reward-tile placeholder" style={{ width: size, height: size }} data-testid="reward-qr-pending" aria-hidden={view.state === 'issuing' ? true : undefined}>
       {view.state === 'issuing' ? <i className="pp-spinner" aria-hidden="true" /> : <span>{t('reward.previewNoQr')}</span>}
     </div>
   );
@@ -209,7 +232,12 @@ function Tile({ view, size }: { view: RewardView; size: number }) {
 export function RewardInstruction({ view }: { view: RewardView }) {
   const t = useT();
   if (view.state === 'unavailable') return null;
-  const { key, params } = view.state === 'issuing' ? { key: 'reward.issuing', params: undefined } : instructionKey(view.options, view.discountText, false);
+  const { key, params } =
+    view.state === 'issuing'
+      ? { key: 'reward.issuing', params: undefined }
+      : view.localOnly
+        ? { key: 'reward.instr.local', params: undefined }
+        : instructionKey(view.options, view.discountText, false);
   return (
     <p className="pp-reward-instr" data-testid="reward-instruction">
       {t(key, params)}
@@ -226,7 +254,8 @@ export function RewardBlock({ view, geometry, part }: { view: RewardView; geomet
   const t = useT();
   if (part === 'note' || view.state === 'unavailable') {
     return (
-      <p className="pp-reward-note" data-testid="reward-unavailable" data-reason={view.reason ?? ''} role="status">
+      // No role of its own: the whole card is already a status region (a nested one is read twice).
+      <p className="pp-reward-note" data-testid="reward-unavailable" data-reason={view.reason ?? ''}>
         {t('reward.unavailable')}
       </p>
     );
@@ -239,7 +268,19 @@ export function RewardBlock({ view, geometry, part }: { view: RewardView; geomet
         <RewardLabel state={view.state} />
         <CodeRow view={view} />
         {ready ? (
-          <a className="pp-btn small accent pp-reward-link" href={view.url!} target="_blank" rel="noopener noreferrer" data-testid="reward-link" title={t(instr.key, instr.params)}>
+          <a
+            className="pp-btn small accent pp-reward-link"
+            href={view.url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="reward-link"
+            title={t(instr.key, instr.params)}
+            // Enter / Space on the focused link belong to the link: the game's own keys (src/ui/App.tsx)
+            // would otherwise swallow them and press PLAY AGAIN, which drops the card with the code.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+            }}
+          >
             {t('reward.openClaim')}
           </a>
         ) : (

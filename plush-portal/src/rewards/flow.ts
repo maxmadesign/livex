@@ -3,6 +3,7 @@
  * and keeps the `reward` slice of the UI store (src/app/gameStore.ts) in step with the round.
  *
  *   prize passes the exit ─▶ issuing ─▶ ready (QR)          the win card appears: visibleUntil is set
+ *                                   │   (reach loopback: the code without a QR, see localOnly)
  *                                   └─▶ unavailable (note)   no QR, ever faked
  *   demo build (VITE_REWARDS_DEMO=1) ─▶ demoBuild            local DEMO code, nothing sent
  *   PLAY AGAIN / theme change / idle reset / visibleUntil passed ─▶ idle (INITIAL_REWARD)
@@ -15,11 +16,42 @@ import type { Lang, ThemeId } from '../core/types';
 import { log } from '../diagnostics/log';
 import type { RarityTier } from '../game/rarity';
 import type { Settings } from '../settings/spec';
-import { createRewardClient, type RewardClient } from './client';
+import { createRewardClient, type RewardClient, type RewardResult } from './client';
 import { REWARDS_DEMO_BUILD, demoClaimUrl, localDemoCode, shouldIssue } from './policy';
-import { isSafeHttpUrl } from './protocol';
+import { REWARD_LIMITS, cleanDisplayText, isSafeHttpUrl, type IssueResponseBody } from './protocol';
 
 export type RewardsSettings = Settings['rewards'];
+
+/** An owner link setting as it is sent: trimmed, and '' unless it is a well-formed http(s) URL. */
+export function ownLink(value: string): string {
+  const link = value.trim();
+  return link && isSafeHttpUrl(link) ? link : '';
+}
+
+/**
+ * A code only this machine can open (reach "loopback": no LAN address, claim listener off or its
+ * port busy): a phone scanning its QR would open 127.0.0.1 on itself. The kiosk draws no QR for
+ * it; the code stays on the card for booth staff (docs/REWARDS.md, "reach").
+ */
+export function localOnly(reward: Pick<RewardUiState, 'state' | 'reach'>): boolean {
+  return reward.state === 'ready' && reward.reach === 'loopback';
+}
+
+/**
+ * True while the win card of the current round shows a QR code a visitor can scan: a real code
+ * (or the labelled public-demo code) for this very round, not past its time, not a loopback-only
+ * link, and not on a phone (the phone card shows a claim link instead). The guide only invites a
+ * scan then (Game.facts → facts.reward).
+ */
+export function scannableQrOnScreen(
+  reward: RewardUiState,
+  at: { roundId: number; demo: boolean; phone: boolean; now: number; outcome?: string },
+): boolean {
+  if (at.demo || at.phone || (at.outcome !== undefined && at.outcome !== 'won')) return false;
+  if (reward.roundId !== at.roundId || (reward.state !== 'ready' && reward.state !== 'demoBuild')) return false;
+  if (localOnly(reward)) return false;
+  return reward.visibleUntil <= 0 || at.now < reward.visibleUntil;
+}
 
 /** A real (or demo) win as the game reports it. */
 export interface RewardWin {
@@ -86,8 +118,9 @@ export class RewardFlow {
     }
     this.set({ ...base, state: 'issuing' });
     this.client ??= createRewardClient();
-    void this.client
-      .issue({
+    let request: Promise<RewardResult<IssueResponseBody>>;
+    try {
+      request = this.client.issue({
         roundId: win.roundId,
         prizeId: win.prizeId,
         prizeName: win.prizeName,
@@ -95,11 +128,17 @@ export class RewardFlow {
         themeId: win.themeId,
         lang: win.lang,
         options: cfg.options,
-        // Only well-formed owner links travel; anything else falls back to the built-in page / wording.
-        claimUrl: cfg.claimUrl && isSafeHttpUrl(cfg.claimUrl) ? cfg.claimUrl : '',
-        discountText: cfg.discountText.trim(),
-        swagUrl: cfg.swagUrl && isSafeHttpUrl(cfg.swagUrl) ? cfg.swagUrl : '',
-      })
+        // Only well-formed owner links travel (trimmed: a pasted space must not end up in the QR);
+        // anything else falls back to the built-in page / wording.
+        claimUrl: ownLink(cfg.claimUrl),
+        discountText: cleanDisplayText(cfg.discountText, REWARD_LIMITS.maxDiscountTextChars),
+        swagUrl: ownLink(cfg.swagUrl),
+      });
+    } catch {
+      // Never leave the card spinning: no request went out, so the card says no code came.
+      request = Promise.resolve({ ok: false, reason: 'error' });
+    }
+    void request
       .then((result) => {
         const now = this.state;
         // PLAY AGAIN, a theme change or an idle reset came first: this answer belongs to nobody.
@@ -107,7 +146,7 @@ export class RewardFlow {
         if (result.ok) {
           const b = result.body;
           this.set({ ...now, state: 'ready', code: b.code, url: b.url, reach: b.reach, options: b.options, expiresAt: b.expiresAt, reason: null });
-          if (b.reach === 'loopback') log('warn', 'rewards', 'claim page is only reachable on this machine: phones cannot open the QR code (see Settings → Rewards)');
+          if (b.reach === 'loopback') log('warn', 'rewards', 'claim page is only reachable on this machine: the card shows the code without a QR (see Settings → Rewards)');
         } else {
           // No QR without a real code: the card says so honestly and the idle reset need not wait.
           this.set({ ...now, state: 'unavailable', reason: result.reason, code: null, url: null, visibleUntil: 0 });
