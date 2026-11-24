@@ -20,9 +20,13 @@ const displayText = (max: number, min: number) =>
     .transform((value) => value.trim())
     .refine((value) => value.length >= min, 'too short');
 
+// The URL parser would quietly drop tabs and line breaks (and keep bidi overrides) that then sit in
+// the stored link: refused like in display text, and surrounding spaces are trimmed.
 const optionalUrl = z
   .string()
   .max(REWARD_LIMITS.maxUrlChars)
+  .refine((value) => !UNSAFE_CHARS.test(value), 'contains control characters')
+  .transform((value) => value.trim())
   .refine((value) => value === '' || isSafeHttpUrl(value), 'must be empty or an http(s) URL');
 
 const token = (max: number) =>

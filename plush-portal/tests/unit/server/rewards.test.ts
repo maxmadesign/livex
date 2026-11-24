@@ -10,6 +10,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../server/config';
 import { createLogger } from '../../../server/log';
 import {
+  KEEP_EXPIRED_MS,
+  MAX_RECORDS,
   RewardFailure,
   allowedChoices,
   createFileRewardStorage,
@@ -19,6 +21,7 @@ import {
   generateCode,
   initialClaimTarget,
   parseIssueRequest,
+  salvageRecords,
   selectClaimBase,
   uniqueCode,
   type RewardStorage,
@@ -313,7 +316,7 @@ describe('rewards file', () => {
     expect(data.records).toHaveLength(2);
 
     const restarted = service({ storage: createFileRewardStorage(dir) });
-    expect(restarted.rewards.loadReport).toEqual({ loaded: 2, skipped: 0, error: null });
+    expect(restarted.rewards.loadReport).toEqual({ loaded: 2, skipped: 0, pruned: 0, problem: 'none', movedTo: null, error: null });
     expect(restarted.rewards.find(issued.code)).toMatchObject({ choice: 'prize', prizeName: 'Neon Byte' });
     expect(restarted.rewards.issue(issueBody())).toMatchObject({ code: issued.code, repeated: true });
     expect(restarted.rewards.list().map((record) => record.code)).toEqual([second.code, issued.code]);
@@ -331,7 +334,92 @@ describe('rewards file', () => {
     const old = { ...good, code: 'ABCDEFGH', session: 'old', expiresAt: '2026-09-01T00:00:00.000Z' };
     writeFileSync(path.join(dir, 'rewards.json'), JSON.stringify({ version: 1, records: [good, { ...good, code: 'lower!!!' }, { nope: true }, old] }));
     const reloaded = service({ storage: createFileRewardStorage(dir) });
-    expect(reloaded.rewards.loadReport).toEqual({ loaded: 1, skipped: 3, error: null });
+    expect(reloaded.rewards.loadReport).toMatchObject({ loaded: 1, skipped: 2, pruned: 1, problem: 'none' });
+    expect(reloaded.rewards.loadReport.error).toMatch(/2 stored records could not be read.*kept in the file/);
+  });
+
+  it('writes records this version can not read back unchanged instead of deleting them', () => {
+    // A build with another theme list (or a hand edit) must not wipe the codes at the next change.
+    const dir = tempDir();
+    const first = service({ storage: createFileRewardStorage(dir) });
+    const codes = [1, 2, 3].map((round) => first.rewards.issue(issueBody({ roundId: round })).code);
+    const file = path.join(dir, 'rewards.json');
+    const data = JSON.parse(readFileSync(file, 'utf8'));
+    data.records = data.records.map((record: Record<string, unknown>) => ({ ...record, themeId: 'blackwell' }));
+    writeFileSync(file, JSON.stringify(data));
+
+    const other = service({ storage: createFileRewardStorage(dir) });
+    expect(other.rewards.loadReport).toMatchObject({ loaded: 0, skipped: 3, problem: 'none' });
+    const fresh = other.rewards.issue(issueBody({ roundId: 9 }));
+    const after = JSON.parse(readFileSync(file, 'utf8')).records as { code: string; themeId: string }[];
+    expect(after.map((record) => record.code)).toEqual([...codes, fresh.code]);
+    expect(after.slice(0, 3).every((record) => record.themeId === 'blackwell')).toBe(true);
+
+    // Their codes are never drawn again: a random source that keeps producing one of them is refused.
+    const taken = codes[0]!;
+    const scripted = () => Uint8Array.from([...taken].map((ch) => CODE_ALPHABET.indexOf(ch)));
+    const stuck = service({ storage: createFileRewardStorage(dir), random: scripted });
+    expect(failure(() => stuck.rewards.issue(issueBody({ roundId: 10 })))).toMatchObject({ code: 'internal' });
+  });
+
+  it('recovers the complete records of a truncated file and keeps the damaged original', () => {
+    const dir = tempDir();
+    const first = service({ storage: createFileRewardStorage(dir) });
+    const codes = [1, 2, 3, 4].map((round) => first.rewards.issue(issueBody({ roundId: round, prizeName: `Brace {${round}} "quoted" \\ name` })).code);
+    first.rewards.choose(codes[1]!, 'swag');
+    const file = path.join(dir, 'rewards.json');
+    const text = readFileSync(file, 'utf8');
+    // Cut in the middle of the last record, as a crash during a non-atomic copy would.
+    writeFileSync(file, text.slice(0, text.lastIndexOf('"prizeName"')));
+
+    const restarted = service({ storage: createFileRewardStorage(dir) });
+    expect(restarted.rewards.loadReport).toMatchObject({ loaded: 3, problem: 'damaged' });
+    expect(restarted.rewards.loadReport.movedTo).toMatch(/^rewards\.json\.corrupt-/);
+    expect(restarted.rewards.loadReport.error).toMatch(/moved aside to rewards\.json\.corrupt-.* and 3 complete records were recovered/);
+    expect(restarted.rewards.find(codes[1]!)).toMatchObject({ choice: 'swag', prizeName: 'Brace {2} "quoted" \\ name' });
+    expect(restarted.rewards.find(codes[3]!)).toBeNull();
+    // The damaged original stays for inspection; the recovered codes are on disk at once.
+    expect(readdirSync(dir).filter((name) => name.startsWith('rewards.json.corrupt-'))).toHaveLength(1);
+    const again = service({ storage: createFileRewardStorage(dir) });
+    expect(again.rewards.loadReport).toMatchObject({ loaded: 3, problem: 'none', error: null });
+
+    expect(salvageRecords('{"version":1,"records":[{"a":"}{"},{"b":1},{"c":')).toEqual([{ a: '}{' }, { b: 1 }]);
+    expect(salvageRecords('garbage')).toEqual([]);
+  });
+
+  it('never overwrites a file written by a newer version', () => {
+    const dir = tempDir();
+    const first = service({ storage: createFileRewardStorage(dir) });
+    const { code } = first.rewards.issue(issueBody());
+    const file = path.join(dir, 'rewards.json');
+    const newer = JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), version: 2 });
+    writeFileSync(file, newer);
+    const older = service({ storage: createFileRewardStorage(dir) });
+    expect(older.rewards.loadReport).toMatchObject({ loaded: 1, problem: 'blocked' });
+    expect(older.rewards.loadReport.error).toMatch(/newer version/);
+    expect(older.rewards.find(code)).not.toBeNull(); // still shown
+    expect(failure(() => older.rewards.issue(issueBody({ roundId: 2 })))).toMatchObject({ code: 'storage' });
+    expect(failure(() => older.rewards.choose(code, 'prize'))).toMatchObject({ code: 'storage' });
+    expect(readFileSync(file, 'utf8')).toBe(newer);
+  });
+
+  it(`holds at most ${MAX_RECORDS} records and makes room only by dropping long-expired ones`, () => {
+    const storage = createMemoryRewardStorage();
+    const seed = service({ storage });
+    const template = seed.rewards.find(seed.rewards.issue(issueBody()).code)!;
+    const codeOf = (i: number) => Array.from({ length: 8 }, (_, k) => CODE_ALPHABET[Math.floor(i / 32 ** k) % 32]).join('');
+    const records = Array.from({ length: MAX_RECORDS }, (_, i) => ({ ...template, code: codeOf(i), session: `s${i}` }));
+    storage.text = JSON.stringify({ version: 1, records });
+    const full = service({ storage });
+    expect(full.rewards.loadReport.loaded).toBe(MAX_RECORDS);
+    expect(failure(() => full.rewards.issue(issueBody({ session: 'new' })))).toMatchObject({ code: 'storage', message: expect.stringMatching(/full/) });
+    expect(full.rewards.storeFull()).toBe(true);
+    expect(full.logs.join('\n')).toMatch(/could not be stored.*reason="full"/);
+    // Once the oldest codes are expired for longer than KEEP_EXPIRED_MS, they make room.
+    full.clock.now += KEEP_EXPIRED_MS + 25 * 3_600_000;
+    expect(full.rewards.storeFull()).toBe(false);
+    expect(full.rewards.issue(issueBody({ session: 'new' })).repeated).toBe(false);
+    expect(full.rewards.counts().issued).toBe(1);
   });
 
   it('refuses to issue (storage error) when the data folder can not be written', () => {

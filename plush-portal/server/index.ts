@@ -20,6 +20,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createServer as createHttpsServer } from 'node:https';
+import type { Server as NetServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -27,8 +28,10 @@ import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import { BRAND_KITS } from '../src/brand/kits';
 import { createApp, type ClientBundle, type OpenAILike } from './app';
-import { loadConfig, type ServerConfig } from './config';
-import { createFileKeyStore, createKeyManager, maskKey, type KeyManager } from './keys';
+import { makeClientKey } from './clientKey';
+import { MIN_ADMIN_TOKEN_CHARS, loadConfig, type ServerConfig } from './config';
+import { LAN_CONNECTION_LIMITS, limitConnections } from './connLimit';
+import { createFileKeyStore, createKeyManager, isLoopbackHostName, maskKey, type KeyManager } from './keys';
 import { createLogger, type Logger } from './log';
 import { setupNetwork, type NetworkSetup } from './net';
 import {
@@ -37,7 +40,6 @@ import {
   createFileRewardStorage,
   createRewardsService,
   initialClaimTarget,
-  makeClientKey,
   startClaimListener,
   type BrandAssets,
   type ClaimListener,
@@ -152,6 +154,7 @@ function listenHttps(config: ServerConfig, app: ReturnType<typeof createApp>, lo
       });
     },
   );
+  limitConnections(server as unknown as NetServer, LAN_CONNECTION_LIMITS);
   return server;
 }
 
@@ -184,11 +187,23 @@ export function start(env: Record<string, string | undefined> = process.env, arg
       brand: rewards.brand.id,
       codes: report.loaded,
       skipped: report.skipped || undefined,
+      pruned: report.pruned || undefined,
       ttlHours: rewards.ttlHours,
       store: storeLabel(rewards.location),
     });
+    // Also shown on the prize desk, so staff know why a visitor's code may say "not found".
     if (report.error) logger.error('rewards store problem', { detail: report.error });
+    // The token issues codes and opens the prize desk from any device; wrong guesses are slowed
+    // down (ADMIN_TOKEN_FAILURES_PER_MIN per device), which only protects a long random token.
+    if (config.adminToken && config.adminToken.length < MIN_ADMIN_TOKEN_CHARS) {
+      logger.error('PLUSH_ADMIN_TOKEN is short and can be guessed', { detail: `use at least ${MIN_ADMIN_TOKEN_CHARS} random characters, e.g. the output of: openssl rand -hex 24` });
+    }
+    if (config.adminToken && !isLoopbackHostName(config.host) && !config.https.enabled) {
+      logger.info('config note', { detail: 'the admin token travels in clear text over plain http on the network; staff devices should use the HTTPS listener (PLUSH_HTTPS=1)' });
+    }
   });
+  // On the network (PLUSH_API_HOST=0.0.0.0) one device must not be able to use up every file descriptor.
+  if (!isLoopbackHostName(config.host)) limitConnections(server as unknown as NetServer, LAN_CONNECTION_LIMITS);
   const secure = config.https.enabled ? listenHttps(config, app, logger) : null;
   const claims = listenClaims(config, rewards, brandAssets, logger);
   const shutdown = () => {

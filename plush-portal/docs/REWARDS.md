@@ -57,8 +57,8 @@ Server side, in `.env` (see `.env.example`):
 | `PLUSH_REWARD_TTL_HOURS` | `24` | How long a code stays valid (1–720). |
 | `PLUSH_BRAND` | `gtc` | Brand kit of the claim and staff pages: `gtc` or `neutral`. Keep it equal to the build's `VITE_BRAND`. |
 | `PLUSH_DATA_DIR` | `.data` | Where `rewards.json` is kept (same folder as the replaced OpenAI key). |
-| `PLUSH_ADMIN_TOKEN` | – | Lets a device that is not the booth machine issue codes and open the prize desk. |
-| `PLUSH_TRUST_PROXY` | `false` | Rate limits use the first `X-Forwarded-For` address. Only behind a reverse proxy that sets it. |
+| `PLUSH_ADMIN_TOKEN` | – | Lets a device that is not the booth machine issue codes and open the prize desk. Use at least 16 random characters (`openssl rand -hex 24`); a shorter one gets an error line in the start-up log. |
+| `PLUSH_TRUST_PROXY` | `false` | Rate limits use the **last** `X-Forwarded-For` address (the one the proxy in front of this server appended). Only behind exactly one reverse proxy or tunnel, and only when the port can not be reached around it. |
 
 Kiosk side (Settings → Rewards, stored in the browser): `rewards.mode` (`gtc` theme only / all / off),
 `rewards.options` (`both` / `prize` / `swag`), `rewards.claimUrl` (an https URL template with
@@ -92,7 +92,9 @@ If it fails, use one of these:
    `PLUSH_CLAIM_PUBLIC_URL=https://claim.example.com`. Forward only the claim listener's port: it
    serves nothing else, so the game and the staff page stay private. If the proxy sets
    `X-Forwarded-For` and the claim port is not reachable directly, set `PLUSH_TRUST_PROXY=true` so
-   the per-visitor rate limit sees real addresses.
+   the per-visitor rate limit sees real addresses. Never put a plain TCP forwarder (`ssh -R`,
+   `socat`, a port forward that adds no `X-Forwarded-For`) in front of the **main** server: its
+   requests arrive from `127.0.0.1` and would count as the booth machine itself.
 2. **Own claim system.** Set the kiosk's `rewards.claimUrl` to a template such as
    `https://example.com/claim?c={code}`. The code is still issued, stored and redeemable here;
    whatever runs at that URL must show the visitor their code (for example by proxying `/c/{code}`).
@@ -106,7 +108,10 @@ If it fails, use one of these:
   (`PLUSH_API_HOST=0.0.0.0`; this also exposes the game and API there) and `PLUSH_ADMIN_TOKEN` must
   be set. Open `http://<booth-ip>:8787/staff/rewards?token=<admin token>` **once**: the token is
   exchanged for a random HttpOnly, SameSite=Strict cookie (12 hours, kept in server memory, so a
-  restart signs everyone out) and removed from the address bar. Scripts can send
+  restart signs everyone out) and removed from the address bar. On shared event Wi-Fi anyone can
+  read plain `http://` traffic, token and cookie included: turn on the HTTPS listener
+  (`PLUSH_HTTPS=1`) and use `https://<booth-ip>:8443/staff/rewards?token=…` instead (the start-up
+  log reminds you when the main server is on the network without it). Scripts can send
   `Authorization: Bearer <admin token>` instead.
 
 ## Visitor flow
@@ -146,7 +151,7 @@ A code can only be redeemed after the visitor chose a reward and before it expir
 | `GET /api/rewards/status` | anyone | `RewardsStatusBody` (`canIssue` true for loopback or admin token) |
 | `POST /api/rewards/issue` | loopback or admin token | `IssueResponseBody`; same session + round → same code, `repeated: true` |
 | `GET /c/:code` | public (main server and claim listener) | claim page (HTML); 404 unknown, 410 expired; `Accept: application/json` → `{ code, state, choice, options, expiresAt }` |
-| `POST /c/:code/choose` | public | form field `choice=prize\|swag` → 303 to the page; 409 `already_chosen`, 400 option not offered |
+| `POST /c/:code/choose` | public, from the claim page itself | form field `choice=prize\|swag` → 303 to the page; 409 `already_chosen`, 400 option not offered, 403 posted from another site |
 | `GET /claim-assets/claim.css`, `/logo`, `/host-logo`, `/font/:weight` | public | stylesheet and brand files |
 | `GET /staff/rewards` | loopback, admin token or staff cookie | prize desk (`?q=` search, `?token=` sign-in) |
 | `POST /staff/rewards/:code/redeem` | same, from a page of this origin | 303 back to the desk; JSON with `Accept: application/json` |
@@ -157,10 +162,10 @@ API errors use `{ error: { code, message } }` with these codes:
 | Code | Status | When |
 | --- | --- | --- |
 | `rewards_off` | 503 | `PLUSH_REWARDS=off` |
-| `forbidden` | 403 | not loopback and no admin token; foreign `Origin`; staff post from another origin |
+| `forbidden` | 403 | not loopback and no admin token (or too many wrong tokens from this device); foreign `Origin`; staff post or claim choice from another site |
 | `bad_request` | 400 / 413 | body is not JSON, fails validation, or is larger than 4 KB |
 | `rate_limited` | 429 | see limits below (`Retry-After` is set) |
-| `storage` | 500 | `rewards.json` could not be written: **nothing was issued** (or changed) |
+| `storage` | 500 | `rewards.json` could not be written, is blocked (see Storage) or holds 20,000 codes: **nothing was issued** (or changed) |
 | `not_found` | 404 | unknown code / route |
 | `expired` / `already_chosen` / `already_redeemed` | 410 / 409 / 409 | state rules |
 
@@ -168,14 +173,25 @@ API errors use `{ error: { code, message } }` with these codes:
 
 `<PLUSH_DATA_DIR>/rewards.json` (`.data/` by default, git-ignored): `{ "version": 1, "records": [...] }`
 with one `ClaimRecord` per code. It is loaded once at start into an in-memory index (by code and by
-session + round) and rewritten as a whole for every change: temp file, then rename, file mode 0600
-in a 0700 folder. A change only counts once the file was written; if writing fails the request
-answers `storage` and memory and disk keep the previous state.
+session + round) and rewritten as a whole for every change: temp file, flushed to disk (`fsync`),
+then renamed over the old one, and the folder flushed too; file mode 0600 in a 0700 folder. A power
+cut at any moment leaves either the old or the new file. A change only counts once the file was
+written; if writing fails (disk full, folder gone) the request answers `storage` and memory and disk
+keep the previous state.
 
-At start, records whose code expired more than 30 days ago are dropped, malformed records are
-skipped (both counted in the log line), and a file that is not valid JSON is renamed to
-`rewards.json.corrupt-<time>` and a new one is started. A file that exists but can not be read
-blocks new codes instead of being overwritten.
+At start nothing is thrown away silently:
+
+| Found at start | What happens | Log | Prize desk |
+| --- | --- | --- | --- |
+| codes that expired more than 30 days ago | dropped | `pruned=N` | – |
+| records this version can not read (another build's theme or limits, a hand edit, a repeated code) | kept in the file exactly as they were and written back on every change; their codes are never drawn again | error line | warning |
+| not valid JSON (for example truncated) | moved aside to `rewards.json.corrupt-<time>`; every complete record in it is recovered and written to a new `rewards.json` at once | error line | warning with the file name and the number recovered |
+| written by a newer version (`version` above 1) | codes are shown, but nothing is issued or changed, so the newer file is never overwritten | error line | warning |
+| exists but can not be read, or can not be moved aside | same: nothing is issued or changed | error line | warning |
+
+The file holds at most 20,000 codes (each change then takes about 30 ms). When it is full, codes
+that expired more than 30 days ago make room; if there are none, new codes are refused with
+`storage` and the prize desk says so.
 
 To wipe all codes, stop the server and delete `rewards.json`.
 
@@ -191,31 +207,77 @@ lines. The only cookie is the staff sign-in cookie, a random value with no perso
 
 ## Security
 
-- **Issuing** needs a request made on this machine (`isLocalRequest`: loopback socket, no forwarding
-  header naming another client, loopback `Host` and `Origin`, which also defeats DNS rebinding) or
-  the admin token. The `/api` origin check refuses foreign pages before that. Bodies are validated
-  strictly: unknown fields, wrong enums, over-long text, control and bidi-override characters, and
-  URLs other than `http(s)` without credentials are refused.
+Threat model: the booth machine runs the main server (normally on `127.0.0.1`) and the claim
+listener (`0.0.0.0:8788`) on shared event Wi-Fi. Anyone on that network can reach the claim
+listener, and the main server too when `PLUSH_API_HOST=0.0.0.0`. Visitors are untrusted; staff use
+the prize desk on the booth machine or with the admin token.
+
+- **Issuing** needs a request made on this machine (`isLocalRequest`: loopback socket; no
+  forwarding header naming another client: `X-Forwarded-For`, `Forwarded`, `X-Real-IP`,
+  `CF-Connecting-IP`, `True-Client-IP`, `X-Client-IP`, `X-Cluster-Client-IP`, `Fastly-Client-IP`,
+  `X-Original-Forwarded-For`; an `X-Forwarded-Host`, if any, naming this machine; loopback `Host`
+  and `Origin`, which also defeats DNS rebinding) or the admin token. Forwarding headers are only
+  ever used to refuse. The `/api` origin check refuses foreign pages before that. Through the Vite
+  dev proxy (`xfwd`) a phone is refused, the kiosk on this machine is not. `GET /api/rewards/status`
+  answers `canIssue` by the same rule. A refused caller does not use up the issue budget (behind a
+  local proxy every phone shares the kiosk's loopback address). A plain TCP forwarder that adds no
+  header can not be told apart from the kiosk: never put one in front of the main server.
+- **Validation**: unknown fields, wrong enums, over-long text, control and bidi-override characters
+  (in URLs too), and URLs other than `http(s)` without credentials are refused; spaces around
+  URLs are trimmed.
+- **Admin token**: compared in constant time on SHA-256 digests (its length does not show). Every
+  wrong token (header or `?token=`) counts against the device; after 10 in a minute even the right
+  one is not compared until the budget refills (one guess per 6 s), so neither `canIssue` nor the
+  prize desk is a fast oracle. `?token=` is exchanged for a random session cookie (HttpOnly,
+  SameSite=Strict, path `/staff`, Secure over https) and a 303 to a URL without it; the token is
+  never logged (the logger also redacts it) or echoed. Use 16+ random characters, and https on
+  shared Wi-Fi (see Staff devices).
 - **Codes** are 8 symbols of Crockford base32 from the OS CSPRNG (40 bits, uniform). With the
-  claim-page limit of 40 requests per minute and address, guessing one valid code among thousands
-  would take years per address.
+  claim-page limit of 40 requests per minute and device (GET and POST together), guessing one
+  valid code among thousands would take years per device. Unknown codes answer 404, expired ones
+  410 (the code existed but is worthless); the lookup is a hash-map access, so timing tells nothing
+  more. Typed codes ignore case, spaces and dashes and read `O` as `0`, `I`/`L` as `1`.
+- **Rate-limit keys**: the socket address; an IPv6 device counts by its /64 (it can use any address
+  in it), an IPv4-mapped address as IPv4. With `PLUSH_TRUST_PROXY=true` the last `X-Forwarded-For`
+  entry, the one the proxy appended; the entries before it are whatever the client sent.
 - **Pages** carry `Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self';
   font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` (no script at all,
   no inline style), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Cache-Control: no-store`, `Cross-Origin-Resource-Policy: same-origin` and a restrictive
   `Permissions-Policy`. Every value (plush names and discount text come from the kiosk) is
-  HTML-escaped; the swag link is re-checked before it is rendered and opens with
-  `rel="noopener noreferrer"`. The CSV defuses spreadsheet formulas (`=`, `+`, `-`, `@`).
+  HTML-escaped for text and quoted attributes; the language comes from a fixed list; the swag link
+  is re-checked before it is rendered and opens with `rel="noopener noreferrer"`. The CSV is
+  `nosniff`, `default-src 'none'`, an attachment, and defuses spreadsheet formulas (cells starting
+  with `=`, `+`, `-`, `@`, tab or CR get a leading `'`).
 - **Referrer policy**: claim pages send `no-referrer`. Staff pages send `same-origin`: under
   `no-referrer` browsers send `Origin: null` with form posts, which would make the booth machine
   fail its own same-origin and loopback checks. Neither leaks a Referer to another site.
 - **Staff posts** must come from this origin: `Sec-Fetch-Site: same-origin` when the browser sends
   it, else an `Origin` naming this host; `Origin: null` is refused. Requests with neither header are
-  not browsers (curl), so they can not be cross-site forgeries.
-- **Rate limits** (per client address, token bucket): issuing 10/min, claim pages 40/min, claim
-  assets 240/min, staff routes 120/min.
-- **Claim listener**: only `/c/*` and `/claim-assets/*`; it can not issue, redeem or serve the game.
+  not browsers (curl), so they can not be cross-site forgeries. The session cookie is SameSite=Strict
+  on top of that.
+- **Claim choices** posted from another site (`Sec-Fetch-Site` other than `same-origin`) are
+  refused with 403. `Origin` can not be used here: the claim page's own form sends `Origin: null`.
+  The code itself is the visitor's secret; whoever holds it can choose, by design.
+- **State**: Node runs one request at a time and choose / redeem read and write without waiting in
+  between, so two posts at the same moment never both win (checked with six parallel choices and
+  three parallel redeems per code). Redeem needs a choice first and refuses expired and redeemed
+  codes.
+- **Rate limits** (per device, token bucket): issuing 10/min (authorized callers only), claim pages
+  40/min, claim assets 240/min, staff routes 120/min, wrong admin tokens 10/min.
+- **Claim listener**: only `/c/*` and `/claim-assets/*` (GET, HEAD, and POST for choose); 404 for
+  everything else, other methods, `..` in any spelling and absolute-form targets; no directory
+  listings (assets are fixed names, never paths from the request). It can not issue, redeem or
+  serve the game. One device may hold 16 connections and all devices 256; requests must send
+  their headers within 10 s and finish within 20 s. So a visitor can not use up the process's file
+  descriptors and take the kiosk's own server down with it. When `PLUSH_API_HOST` (or the HTTPS
+  listener) faces the network, one device may hold 48 connections there; loopback is never capped.
 - Use https (`PLUSH_CLAIM_PUBLIC_URL` behind a TLS proxy) when the claim page crosses the internet.
+
+Not covered here (kiosk side): the QR code on the win card is the visitor's secret, so someone who
+photographs the kiosk screen first can claim the reward; and anyone at the kiosk who can open
+Settings can change `rewards.claimUrl` / `rewards.swagUrl`, so later QR codes or swag links could
+point elsewhere. Keep Settings out of visitors' reach at a booth.
 
 ## Brand
 
@@ -233,14 +295,18 @@ kit (`PLUSH_BRAND=neutral`) shows "GPU Party" and its own emblem and no GTC or N
 ## Limits
 
 - One server process per data folder: the index lives in memory and every change rewrites the
-  file, so two servers sharing `rewards.json` would overwrite each other. Thousands of codes are
-  fine; it is not built for hundreds of thousands.
+  file, so two servers sharing `rewards.json` would overwrite each other. At most 20,000 codes
+  (see Storage).
 - The server does not draw QR codes; the kiosk does (from `url`).
 - De-duplication is per page load + round. A reload of the game starts a new session.
 - Expiry uses the server clock. Redeemed codes stay redeemed after their expiry time.
 - Staff can not redeem a code before the visitor chose a reward, nor after it expired.
 - Rate limits are per address: many visitors behind one NAT share a bucket (40 page views per
-  minute is still plenty for a booth).
+  minute is still plenty for a booth). A device that sends wrong admin tokens also locks out the
+  right one from that address for a short while; staff already signed in keep their cookie.
+- With `PLUSH_TRUST_PROXY=true` the rate limits believe the last `X-Forwarded-For` entry. If the
+  port can also be reached around the proxy, a client can put any address there: keep the port
+  closed to everyone but the proxy.
 - `reach: lan` is a guess (first non-internal IPv4 address); with several networks or a VPN,
   set `PLUSH_CLAIM_PUBLIC_URL` to the right one.
 
@@ -262,6 +328,21 @@ Verified by running it (headless Chromium on Linux, keyless server):
   restarted on the same data folder (all states came back, expired page shown), neutral kit, staff
   sign-in with `?token=` from a non-loopback address and redeem from there, and a busy claim port
   with `--serve-dist` (logged, main server kept serving, QR fallback to loopback).
+- Security review (`tests/unit/server/rewards-security.test.ts` plus scripted attacks on a running
+  keyless server, before and after the fixes): spoofed `X-Forwarded-For` / `Forwarded` /
+  `X-Real-IP` / `X-Forwarded-Host` / CDN headers, Host tricks (`localhost.evil.example`,
+  `127.0.0.1.nip.io`, `0.0.0.0`, none), the real Vite dev proxy from the LAN address, a LAN caller
+  with `PLUSH_API_HOST=0.0.0.0`, `/api` through the claim listener; 300 wrong admin tokens against
+  `/api/rewards/status` (oracle closed after 10); 400 code guesses with a fresh forged
+  `X-Forwarded-For` each behind `PLUSH_TRUST_PROXY` (all limited); cross-site posts to choose and
+  redeem (a real Chromium form on another origin is refused, the page's own form still works);
+  hostile `swagUrl` / plush names / `lang`; six parallel choices and three parallel redeems on 30
+  codes; a 64 KB data folder filling up (nothing half-issued, file intact); `strace` showing
+  `fsync` before the rename; a truncated file (complete records recovered), records of an unknown
+  theme (kept), a version 2 file (left untouched); path traversal and odd methods on the claim
+  listener; 1,100 slow connections from one LAN address with a 1,024 file limit (before: the
+  kiosk's own `/api/health` and issue failed; after: both answer, and the slow connections are
+  closed within 14 s).
 
 Not verified:
 

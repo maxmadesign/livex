@@ -9,9 +9,8 @@
  * nosniff, no-store and a referrer policy; nothing on them loads anything from elsewhere.
  * Codes are only ever logged at debug level.
  */
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getCookie, setCookie } from 'hono/cookie';
@@ -23,43 +22,34 @@ import type { BrandAssets, BrandFile } from './assets';
 import { t, type TextKey } from './i18n';
 import { renderClaim, renderCsv, renderCss, renderMessage, renderStaff, renderStaffMessage, type PageContext } from './pages';
 import { RewardFailure, type RewardsService } from './service';
+import { MAX_RECORDS, REWARDS_FILE } from './store';
 import { ChoiceSchema, parseIssueRequest } from './validate';
+
+export { makeClientKey } from '../clientKey';
 
 export interface RewardRouteDeps {
   rewards: RewardsService;
   assets: BrandAssets;
   logger: Logger;
   now: () => number;
-  /** Rate-limit key of the caller: the socket address, or X-Forwarded-For behind a trusted proxy. */
+  /** Rate-limit key of the caller (server/clientKey.ts: socket address, or the proxy's X-Forwarded-For entry). */
   clientKey(c: Context): string;
 }
+
+/** 'locked': too many wrong tokens from this client lately, so the token was not even compared. */
+export type AdminTokenCheck = 'ok' | 'wrong' | 'locked';
 
 export interface RewardAuthDeps {
   /** A request made on this machine (the rule the /api/ai/key routes use). */
   isLocal(c: Context): boolean;
-  /** `Authorization: Bearer <PLUSH_ADMIN_TOKEN>` (false when no token is configured). */
+  /** `Authorization: Bearer <PLUSH_ADMIN_TOKEN>` (false when no token is configured, or while locked). */
   hasAdminToken(c: Context): boolean;
-  /** Compares a token given some other way (?token=) with PLUSH_ADMIN_TOKEN. */
-  isAdminToken(value: string): boolean;
+  /** Compares a token given some other way (?token=) with PLUSH_ADMIN_TOKEN; wrong ones count against the client. */
+  checkAdminToken(c: Context, value: string): AdminTokenCheck;
 }
 
 /** Requests per minute and client. Issuing: a kiosk wins far less than once every 6 s. */
 export const REWARD_RATES = { issue: 10, claimPages: 40, claimAssets: 240, staff: 120 } as const;
-
-/** Socket address, or the first X-Forwarded-For entry when the server sits behind a trusted proxy. */
-export function makeClientKey(trustProxy: boolean): (c: Context) => string {
-  return (c) => {
-    if (trustProxy) {
-      const forwarded = c.req.header('x-forwarded-for');
-      if (forwarded) return forwarded.split(',')[0]!.trim().slice(0, 64) || 'unknown';
-    }
-    try {
-      return getConnInfo(c).remote.address ?? 'unknown';
-    } catch {
-      return 'unknown'; // no socket (in-process tests)
-    }
-  };
-}
 
 /* ---------------------------------------------------------- headers */
 
@@ -184,9 +174,11 @@ export function createRewardApiRoutes(deps: RewardRouteDeps & RewardAuthDeps): H
     }),
     async (c) => {
       if (!rewards.enabled) throw jsonError(503, 'rewards_off', 'Prize codes are switched off on this server.');
+      // Refused callers do not use up the budget: behind a local proxy (the Vite dev server) every
+      // phone shares the kiosk's loopback address, and its refused attempts would block the kiosk.
+      if (!canIssue(c)) throw jsonError(403, 'forbidden', 'Only the kiosk on this machine (or a request with the admin token) can issue prize codes.');
       const rate = limited(limiter, deps.clientKey(c));
       if (!rate.ok) throw jsonError(429, 'rate_limited', 'Too many codes requested. Please slow down.', { 'retry-after': rate.retryAfter });
-      if (!canIssue(c)) throw jsonError(403, 'forbidden', 'Only the kiosk on this machine (or a request with the admin token) can issue prize codes.');
       let raw: unknown;
       try {
         raw = JSON.parse(await c.req.text());
@@ -262,6 +254,14 @@ export function createClaimRoutes(deps: RewardRouteDeps): Hono {
     async (c) => {
       const rate = limited(pageLimiter, deps.clientKey(c));
       if (!rate.ok) return tooMany(c, rate.retryAfter);
+      // The claim form posts from this origin. A browser that says the post comes from another
+      // site (Sec-Fetch-Site is set by the browser itself) means a form on someone else's page.
+      // Origin is no help here: under the page's no-referrer policy the own form sends `Origin: null`.
+      const site = c.req.header('sec-fetch-site');
+      if (site && site !== 'same-origin') {
+        if (wantsJson(c)) return failJson(c, jsonError(403, 'forbidden', 'Choose on the claim page itself.'));
+        return message(c, context(c), 403, 'foreign.title', 'foreign.text');
+      }
       const code = normalizeCode(c.req.param('code'));
       const record = code ? rewards.find(code) : null;
       if (!code || !record) {
@@ -343,12 +343,6 @@ const STAFF_COOKIE = 'plush_staff';
 const STAFF_SESSION_MS = 12 * 3_600_000;
 const MAX_STAFF_SESSIONS = 200;
 
-function sameToken(a: string, b: string): boolean {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-}
-
 /**
  * Form posts must come from a page of this origin. Sec-Fetch-Site (set by the browser, not
  * scriptable) decides when present; otherwise Origin must name this host. A request with neither
@@ -368,6 +362,17 @@ export function isSameOriginPost(c: Context): boolean {
 }
 
 const STAFF_NOTICES = new Set(['redeemed', 'already_redeemed', 'expired', 'not_found', 'bad_request', 'storage', 'forbidden']);
+
+/** What the prize desk must tell staff about the rewards file: codes lost at start, a blocked or full store. */
+export function storeWarnings(lang: Lang, rewards: RewardsService): string[] {
+  const report = rewards.loadReport;
+  const out: string[] = [];
+  if (report.problem === 'damaged') out.push(t(lang, 'staff.store.damaged', { file: report.movedTo ?? REWARDS_FILE, n: report.loaded }));
+  if (report.problem === 'blocked') out.push(t(lang, 'staff.store.blocked'));
+  if (report.skipped > 0) out.push(t(lang, 'staff.store.skipped', { n: report.skipped }));
+  if (rewards.storeFull()) out.push(t(lang, 'staff.store.full', { max: MAX_RECORDS }));
+  return out;
+}
 
 export function createStaffRoutes(deps: RewardRouteDeps & RewardAuthDeps): Hono {
   const { rewards, assets, logger } = deps;
@@ -434,7 +439,9 @@ export function createStaffRoutes(deps: RewardRouteDeps & RewardAuthDeps): Hono 
     // One-time ?token=: becomes an HttpOnly cookie and leaves the address bar (and history) at once.
     const token = c.req.query('token');
     if (token !== undefined) {
-      if (!deps.isAdminToken(token)) return staffMessage(c, 403, 'staff.denied.title', 'staff.denied.text');
+      const check = deps.checkAdminToken(c, token);
+      if (check === 'locked') return tooMany(c, '60');
+      if (check !== 'ok') return staffMessage(c, 403, 'staff.denied.title', 'staff.denied.text');
       startSession(c);
       c.header('cache-control', 'no-store');
       c.header('referrer-policy', 'no-referrer');
@@ -459,7 +466,7 @@ export function createStaffRoutes(deps: RewardRouteDeps & RewardAuthDeps): Hono 
       : null;
     const records = rewards.list({ query, limit: 50 }).map((record) => ({ record, state: rewards.stateOf(record) }));
     pageHeaders(c, 'same-origin');
-    return c.html(renderStaff(ctx, { counts: rewards.counts(), records, query, notice }));
+    return c.html(renderStaff(ctx, { counts: rewards.counts(), records, query, notice, store: storeWarnings(ctx.lang, rewards) }));
   });
 
   app.get('/staff/rewards.csv', (c) => {
