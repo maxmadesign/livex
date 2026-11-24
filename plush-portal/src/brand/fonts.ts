@@ -10,6 +10,7 @@
  * kit's family first when it loaded, then its fallback families. src/ui/theme-gpu.css appends the
  * existing Chinese / Japanese fonts after it, so CJK text keeps them.
  */
+import { mayExist, resetBrandFiles } from './files';
 import type { BrandKit } from './kits';
 
 export interface BrandFontStatus {
@@ -133,7 +134,8 @@ export function loadBrandFont(kit: BrandKit): Promise<BrandFontStatus> {
     const missing: string[] = [];
     await Promise.all(
       kit.font.files.map(async (file) => {
-        const data = await fetchFont(`${base}${file.url}`);
+        // Files the brand listing does not contain are not requested (no 404 in the console).
+        const data = (await mayExist(file.url)) ? await fetchFont(`${base}${file.url}`) : null;
         if (!data) {
           missing.push(file.url);
           return;
@@ -162,4 +164,5 @@ export function loadBrandFont(kit: BrandKit): Promise<BrandFontStatus> {
 export function resetBrandFonts(): void {
   statuses.clear();
   pending.clear();
+  resetBrandFiles();
 }

@@ -1,4 +1,4 @@
-import { loadEnv } from 'vite';
+import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +27,26 @@ export default defineConfig(async ({ command, mode }) => {
     : null;
   if (tls) console.log(`[plush-dev] HTTPS with ${tls.source === 'user' ? 'PLUSH_TLS_CERT' : 'a self-signed certificate'} (SHA-256 ${tls.fingerprint256})`);
   const devHost = pick('PLUSH_DEV_HOST') || (devHttps ? '0.0.0.0' : '127.0.0.1');
+  // assets/brand/files.json (server/brandFiles.ts): the brand-kit files that exist, so the game never
+  // requests a missing official logo or font (a 404 in the console). Live in dev, a snapshot in builds.
+  const { BRAND_FILES_PATH, brandFilesJson } = await import('./server/brandFiles.js');
+  const publicDir = path.join(root, 'public');
+  const brandFiles: Plugin = {
+    name: 'plush-brand-files',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if ((req.url ?? '').split('?')[0] !== `${server.config.base}${BRAND_FILES_PATH}`) return next();
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.setHeader('cache-control', 'no-cache');
+        res.end(brandFilesJson(publicDir));
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: BRAND_FILES_PATH, source: brandFilesJson(publicDir) });
+    },
+  };
   return {
-  plugins: [react()],
+  plugins: [react(), brandFiles],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

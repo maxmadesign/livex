@@ -66,7 +66,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `node tools/fetch-tracking-assets.mjs && npx vite build --outDir ${DIST} --emptyOutDir && npx tsx server/index.ts --serve-dist`,
-    env: { PLUSH_API_PORT: String(PORT), PLUSH_DIST_DIR: DIST, OPENAI_API_KEY: '', PLUSH_KEY_MANAGEMENT: 'off', PLUSH_DATA_DIR: DATA_DIR, PLUSH_HTTPS: '0', PLUSH_RATE_LIMIT_PER_MIN: '600' },
+    env: { PLUSH_API_PORT: String(PORT), PLUSH_DIST_DIR: DIST, OPENAI_API_KEY: '', PLUSH_KEY_MANAGEMENT: 'off', PLUSH_DATA_DIR: DATA_DIR, PLUSH_HTTPS: '0', PLUSH_RATE_LIMIT_PER_MIN: '600', PLUSH_CLAIM_PORT: '0' },
     url: `http://127.0.0.1:${PORT}/api/health`,
     reuseExistingServer: true,
     timeout: 240_000,

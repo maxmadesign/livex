@@ -80,6 +80,8 @@ const _p = new Vector3();
 const _eye: Vec3 = [0, 0, 1];
 const _eyeWorld: Vec3 = [0, 0, 1];
 const FRAME_SAMPLES = 180;
+/** Longest wait for a claim code before the win line goes out without the scan invitation. */
+const PRIZE_LINE_WAIT_MS = 1500;
 /** Cabinet LED energy of a win, by rarity (the existing materials.updateLeds input). */
 const TIER_LED: Record<RarityTier, number> = { common: 0.75, rare: 1, epic: 1.3, legendary: 1.7 };
 /** Where a won prize leaves the field: the prize exit, just below the floor. */
@@ -916,7 +918,7 @@ export class Game {
       this.lossStreak = 0;
       const prize = ui.getState().prize;
       if (prize?.isNew) audio.playSfx('collect_unlock', { delay: 0.9 });
-      this.emitGuide('prize_won', result);
+      this.emitPrizeWon(result);
     } else if (result.outcome === 'slipped') {
       this.lossStreak++;
       this.emitGuide('slipped_after_grip', result);
@@ -1079,6 +1081,36 @@ export class Game {
       facts.reward = { qr: true, options: reward.options };
     }
     return facts;
+  }
+
+  /**
+   * The win line may invite the player to scan the claim QR (facts.reward), which needs the code.
+   * The code is normally issued while the prize drops; if it is still on its way when the card
+   * appears, the line waits for it (at most PRIZE_LINE_WAIT_MS) rather than going out without the
+   * invitation. A line for a round that has already ended is not sent.
+   */
+  private emitPrizeWon(result: RoundResult): void {
+    const codePending = () => {
+      const reward = this.deps.ui.getState().reward;
+      return reward.roundId === result.roundId && reward.state === 'issuing';
+    };
+    if (!codePending()) {
+      this.emitGuide('prize_won', result);
+      return;
+    }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      unsubscribe();
+      clearTimeout(timer);
+      if (this.disposed || this.core.machine.roundId !== result.roundId) return;
+      this.emitGuide('prize_won', result);
+    };
+    const unsubscribe = this.deps.ui.subscribe(() => {
+      if (!codePending()) finish();
+    });
+    const timer = setTimeout(finish, PRIZE_LINE_WAIT_MS);
   }
 
   private emitGuide(type: GuideEventType, result?: RoundResult): void {

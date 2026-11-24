@@ -6,6 +6,7 @@
  * copies that must not carry a real event's marks). It dresses only `kit.theme`.
  */
 import type { ThemeId } from '../core/types';
+import { mayExist, resetBrandFiles, siteBase } from './files';
 import { BRAND_KITS, parseBrandId, type BrandKit, type LogoSlot } from './kits';
 
 export * from './kits';
@@ -34,11 +35,6 @@ export interface ResolvedLogo {
 
 const resolved = new Map<string, Promise<ResolvedLogo>>();
 
-function siteBase(): string {
-  const base = (import.meta.env.BASE_URL as string | undefined) ?? '/';
-  return base.endsWith('/') ? base : `${base}/`;
-}
-
 /** True when `path` answers with an image (a dev server's HTML fallback does not count). */
 async function isImage(url: string): Promise<boolean> {
   try {
@@ -64,6 +60,8 @@ export function resolveLogo(slot: LogoSlot): Promise<ResolvedLogo> {
     pending = (async (): Promise<ResolvedLogo> => {
       const base = siteBase();
       for (const path of slot.official) {
+        // The listing (./files.ts) rules out missing official files without requesting them.
+        if (!(await mayExist(path))) continue;
         if (await isImage(`${base}${path}`)) return { url: `${base}${path}`, official: path !== slot.placeholder, path };
       }
       if (slot.placeholder) return { url: `${base}${slot.placeholder}`, official: false, path: slot.placeholder };
@@ -77,4 +75,5 @@ export function resolveLogo(slot: LogoSlot): Promise<ResolvedLogo> {
 /** Test hook: forget probed logo files. */
 export function resetBrandCache(): void {
   resolved.clear();
+  resetBrandFiles();
 }

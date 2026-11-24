@@ -7,6 +7,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { BRAND_FILES_PATH, brandFilesJson } from './brandFiles';
 
 export const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -99,6 +100,13 @@ export function createStaticHandler(distDir: string): StaticHandler {
 
   return async (urlPath: string, method: string) => {
     if (method !== 'GET' && method !== 'HEAD') return null;
+    // Live listing of the brand-kit files in dist/ (server/brandFiles.ts): official artwork dropped
+    // into dist/assets/brand/ is picked up on the next page load, without a rebuild.
+    if (urlPath === `/${BRAND_FILES_PATH}`) {
+      const body = brandFilesJson(root);
+      const headers = new Headers({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+      return new Response(method === 'HEAD' ? null : body, { status: 200, headers });
+    }
     const target = resolveInside(root, urlPath);
     if (target === null) return new Response('Bad path', { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8' } });
 
@@ -107,9 +115,11 @@ export function createStaticHandler(distDir: string): StaticHandler {
       const size = await fileSize(target);
       if (size !== null) {
         const isIndex = target === indexFile;
-        // Vite puts content-hashed files in /assets/: they can be cached forever.
-        const hashed = target.startsWith(path.join(root, 'assets') + path.sep);
-        return respond(target, size, method, isIndex ? 'no-cache' : hashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
+        // Vite puts content-hashed files in /assets/: they can be cached forever. Brand-kit files
+        // keep fixed names and may be replaced at a booth (official artwork), so they are revalidated.
+        const brand = target.startsWith(path.join(root, 'assets', 'brand') + path.sep);
+        const hashed = !brand && target.startsWith(path.join(root, 'assets') + path.sep);
+        return respond(target, size, method, isIndex || brand ? 'no-cache' : hashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
       }
       // A missing asset must be a real 404, not the HTML shell.
       return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
