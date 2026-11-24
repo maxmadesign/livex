@@ -1,10 +1,40 @@
-import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
+import {
+  CanvasTexture,
+  ClampToEdgeWrapping,
+  DataTexture,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  NoColorSpace,
+  RepeatWrapping,
+  RGBAFormat,
+  SRGBColorSpace,
+  UnsignedByteType,
+  type Texture,
+} from 'three';
 import { makeRng } from '../core/math';
 import type { ThemeDef } from '../themes/themes';
+import { braidHeight, brushedHeight, flakeNormals, heightToNormal, quiltHeight, stippleHeight, streakRoughness, weave } from './texgen';
+
+export type TextureTier = '512' | '1k' | '2k' | '4k';
 
 /** Texture edge length for a quality tier. */
-export function textureSize(tier: '512' | '1k' | '2k' | '4k'): number {
+export function textureSize(tier: TextureTier): number {
   return tier === '512' ? 512 : tier === '1k' ? 1024 : tier === '2k' ? 2048 : 4096;
+}
+
+/** Edge length of tiled detail maps (normal / roughness): they repeat, so 1K is plenty even on Ultra. */
+export function detailSize(tier: TextureTier): number {
+  return tier === '512' ? 256 : tier === '1k' ? 512 : 1024;
+}
+
+let maxAnisotropy = 4;
+/** Called by the Stage with the renderer's limit; textures use the highest the tier allows. */
+export function setMaxAnisotropy(value: number): void {
+  maxAnisotropy = Math.max(1, Math.floor(value));
+}
+function anisotropyFor(size: number): number {
+  // Small (phone tier) textures do not benefit from 16× filtering; keep the sampler cheap.
+  return Math.min(maxAnisotropy, size <= 512 ? 4 : size <= 1024 ? 8 : 16);
 }
 
 function canvas(size: number, height = size): { c: HTMLCanvasElement; g: CanvasRenderingContext2D } {
@@ -20,8 +50,20 @@ function finish(c: HTMLCanvasElement, color = true, repeat = true): CanvasTextur
   if (repeat) t.wrapS = t.wrapT = RepeatWrapping;
   t.minFilter = LinearMipmapLinearFilter;
   t.magFilter = LinearFilter;
-  t.anisotropy = 4;
+  t.anisotropy = anisotropyFor(Math.max(c.width, c.height));
   t.generateMipmaps = true;
+  return t;
+}
+
+function dataTexture(data: Uint8Array, w: number, h: number, repeat = true): DataTexture {
+  const t = new DataTexture(data, w, h, RGBAFormat, UnsignedByteType);
+  t.colorSpace = NoColorSpace;
+  t.wrapS = t.wrapT = repeat ? RepeatWrapping : ClampToEdgeWrapping;
+  t.minFilter = LinearMipmapLinearFilter;
+  t.magFilter = LinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = anisotropyFor(Math.max(w, h));
+  t.needsUpdate = true;
   return t;
 }
 
@@ -66,6 +108,157 @@ function cloud(g: CanvasRenderingContext2D, x: number, y: number, s: number): vo
   g.arc(x + s * 0.38, y - s * 0.02, s * 0.34, 0, Math.PI * 2);
   g.rect(x - s * 0.5, y - s * 0.02, s * 0.9, s * 0.34);
   g.fill();
+}
+
+/** A small chip outline with pins, used by the circuit wallpaper and the mat. */
+function chipIcon(g: CanvasRenderingContext2D, x: number, y: number, s: number, body: string, pins: string, die: string | null): void {
+  const half = s / 2;
+  const pinCount = 5;
+  g.fillStyle = pins;
+  for (let i = 0; i < pinCount; i++) {
+    const o = -half + ((i + 0.5) / pinCount) * s;
+    const pw = s * 0.07, pl = s * 0.16;
+    g.fillRect(x + o - pw / 2, y - half - pl, pw, pl);
+    g.fillRect(x + o - pw / 2, y + half, pw, pl);
+    g.fillRect(x - half - pl, y + o - pw / 2, pl, pw);
+    g.fillRect(x + half, y + o - pw / 2, pl, pw);
+  }
+  g.fillStyle = body;
+  g.beginPath();
+  g.roundRect(x - half, y - half, s, s, s * 0.1);
+  g.fill();
+  if (die) {
+    g.strokeStyle = die;
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath();
+    g.roundRect(x - half * 0.55, y - half * 0.55, s * 0.55, s * 0.55, s * 0.05);
+    g.stroke();
+    // Pin-1 dot.
+    g.fillStyle = die;
+    g.beginPath();
+    g.arc(x - half * 0.72, y - half * 0.72, s * 0.05, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+
+/**
+ * Printed-circuit wallpaper (GPU Party): dark green-black laminate with a faint glass-fibre
+ * weave, routed traces with 45° bends, vias, chip footprints and a few glowing lime lines.
+ */
+function drawCircuit(g: CanvasRenderingContext2D, size: number, theme: ThemeDef, variant: 'board' | 'fascia', rng: () => number): void {
+  const u = size / 512;
+  const cab = theme.cabinet;
+  const lime = theme.ui.primary;
+  const bright = theme.ui.glow;
+  const copper = cab.backboardInk;
+  const tiled = (draw: (dx: number, dy: number) => void) => {
+    for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) draw(dx, dy);
+  };
+  // Laminate: faint weave of the glass fibre.
+  g.globalAlpha = 0.06;
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = Math.max(1, 0.6 * u);
+  const pitch = 6 * u;
+  for (let p = 0; p < size; p += pitch) {
+    g.beginPath();
+    g.moveTo(p, 0);
+    g.lineTo(p, size);
+    g.moveTo(0, p + pitch / 2);
+    g.lineTo(size, p + pitch / 2);
+    g.stroke();
+  }
+  const grid = 16 * u;
+  const cells = Math.round(size / grid);
+  const dirs = [
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [-1, 1],
+    [-1, 0],
+    [-1, -1],
+    [0, -1],
+    [1, -1],
+  ] as const;
+  const density = variant === 'board' ? 1 : 0.55;
+  // Chip footprints first, so traces appear to run into them.
+  const chips: { x: number; y: number; s: number }[] = [];
+  for (let i = 0; i < Math.round(7 * density); i++) {
+    const s = (3 + Math.floor(rng() * 4)) * grid;
+    chips.push({ x: Math.round(rng() * cells) * grid, y: Math.round(rng() * cells) * grid, s });
+  }
+  // Traces: random walks on the routing grid.
+  const traces: { pts: [number, number][]; w: number; glow: boolean }[] = [];
+  for (let i = 0; i < Math.round(46 * density); i++) {
+    let x = Math.floor(rng() * cells), y = Math.floor(rng() * cells);
+    let d = Math.floor(rng() * 4) * 2;
+    const pts: [number, number][] = [[x * grid, y * grid]];
+    const segments = 2 + Math.floor(rng() * 5);
+    for (let s = 0; s < segments; s++) {
+      const len = 1 + Math.floor(rng() * 5);
+      x += dirs[d]![0] * len;
+      y += dirs[d]![1] * len;
+      pts.push([x * grid, y * grid]);
+      d = (d + (rng() < 0.5 ? 1 : 7)) % 8; // 45° turns
+    }
+    traces.push({ pts, w: (rng() < 0.2 ? 3.2 : 1.6) * u, glow: rng() < 0.12 });
+  }
+  const strokeTrace = (t: { pts: [number, number][] }, dx: number, dy: number) => {
+    g.beginPath();
+    t.pts.forEach(([px, py], k) => (k === 0 ? g.moveTo(px + dx, py + dy) : g.lineTo(px + dx, py + dy)));
+    g.stroke();
+  };
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.globalAlpha = variant === 'board' ? 0.9 : 0.6;
+  for (const t of traces) {
+    if (t.glow) continue;
+    g.strokeStyle = copper;
+    g.lineWidth = t.w;
+    tiled((dx, dy) => strokeTrace(t, dx, dy));
+  }
+  // Vias and pads at trace ends.
+  for (const t of traces) {
+    const [ex, ey] = t.pts[t.pts.length - 1]!;
+    const [sx, sy] = t.pts[0]!;
+    tiled((dx, dy) => {
+      for (const [px, py] of [
+        [ex, ey],
+        [sx, sy],
+      ] as const) {
+        g.fillStyle = copper;
+        g.beginPath();
+        g.arc(px + dx, py + dy, 3.4 * u, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = cab.backboard;
+        g.beginPath();
+        g.arc(px + dx, py + dy, 1.4 * u, 0, Math.PI * 2);
+        g.fill();
+      }
+    });
+  }
+  g.globalAlpha = 1;
+  for (const c of chips) tiled((dx, dy) => chipIcon(g, c.x + dx, c.y + dy, c.s, '#06080a', '#9aa39a', variant === 'board' ? copper : null));
+  // A few lime traces with a soft glow: the "powered" lines.
+  g.save();
+  g.shadowColor = bright;
+  g.shadowBlur = 7 * u;
+  g.globalAlpha = variant === 'board' ? 0.95 : 0.7;
+  for (const t of traces) {
+    if (!t.glow) continue;
+    g.strokeStyle = lime;
+    g.lineWidth = t.w * 1.1;
+    tiled((dx, dy) => strokeTrace(t, dx, dy));
+  }
+  g.restore();
+  // Tiny silkscreen tick marks.
+  g.globalAlpha = 0.25;
+  g.fillStyle = '#e8f5dc';
+  for (let i = 0; i < Math.round(60 * density); i++) {
+    const x = rng() * size, y = rng() * size;
+    const horizontal = rng() < 0.5;
+    tiled((dx, dy) => g.fillRect(x + dx, y + dy, horizontal ? 7 * u : 1.2 * u, horizontal ? 1.2 * u : 7 * u));
+  }
+  g.globalAlpha = 1;
 }
 
 /** Tileable wallpaper for the back board (and fascia) of a theme. */
@@ -186,50 +379,136 @@ export function makePatternTexture(theme: ThemeDef, size: number, variant: 'boar
       }
       break;
     }
+    case 'circuit': {
+      g.globalAlpha = 1;
+      drawCircuit(g, size, theme, variant, rng);
+      break;
+    }
   }
   g.globalAlpha = 1;
   return finish(c);
 }
 
-/** Quilted padding: height map (diamond pillows with stitched valleys). */
-export function makeQuiltBump(size: number): Texture {
+/** Quilted padding as a normal map (diamond pillows with stitched valleys). */
+export function makeQuiltNormal(size: number): Texture {
+  return dataTexture(heightToNormal(quiltHeight(size), size, size, 9 * (size / 512)), size, size);
+}
+
+/**
+ * Floor-mat normal map: the quilting plus a woven fabric surface (`threads` threads per tile),
+ * so the mat reads as fabric up close and as padding from afar.
+ */
+export function makeMatNormal(size: number, threads: number): Texture {
+  const quilt = quiltHeight(size);
+  const { height } = weave(size, threads, 11);
+  const h = new Float32Array(size * size);
+  // Weave slopes are much steeper (short period), so it is mixed in at a lower amplitude.
+  const weaveAmp = 0.05 * (512 / size) * (threads / 96);
+  for (let i = 0; i < h.length; i++) h[i] = quilt[i]! + height[i]! * weaveAmp;
+  return dataTexture(heightToNormal(h, size, size, 8 * (size / 512)), size, size);
+}
+
+/** Brushed metal: grooves along +u. Returns a normal map and a roughness (G) map. */
+export function makeBrushedMaps(size: number, seed = 7): { normal: Texture; roughness: Texture } {
+  const h = brushedHeight(size, seed);
+  return {
+    normal: dataTexture(heightToNormal(h, size, size, 1.6), size, size),
+    roughness: dataTexture(streakRoughness(h, size, 0.62), size, size),
+  };
+}
+
+/** Metallic flake normal map for lacquer (High and Ultra). */
+export function makeFlakeNormal(size: number): Texture {
+  return dataTexture(flakeNormals(size, 2, 0.5, 23), size, size);
+}
+
+/** Moulded rubber stipple. */
+export function makeStippleNormal(size: number): Texture {
+  return dataTexture(heightToNormal(stippleHeight(size, 31), size, size, 2.2), size, size);
+}
+
+/** Braided cable normal map (u = around the cable, v = along it). */
+export function makeBraidNormal(): Texture {
+  const w = 64, h = 64;
+  return dataTexture(heightToNormal(braidHeight(w, h, 3, 5), w, h, 3.2), w, h);
+}
+
+/**
+ * Micro-scratches and faint wipe marks for glass and acrylic: R = how strongly a texel
+ * scatters light, G = roughness factor (three.js reads roughness from G).
+ */
+export function makeScratchTexture(size: number, seed = 3): Texture {
   const { c, g } = canvas(size);
-  const img = g.createImageData(size, size);
-  const cells = 8;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const u = (x / size) * cells, v = (y / size) * cells;
-      // Rotate 45° so the pillows are diamonds.
-      const a = (u + v) % 1, b = (u - v + cells) % 1;
-      const da = Math.min(a, 1 - a), db = Math.min(b, 1 - b);
-      const d = Math.min(da, db) * 2; // 0 at a seam, 1 in the middle of a pillow
-      const h = Math.pow(Math.sin(Math.min(1, d * 1.6) * Math.PI * 0.5), 0.7);
-      const val = Math.round(40 + 215 * h);
-      const i = (y * size + x) * 4;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = val;
-      img.data[i + 3] = 255;
-    }
+  g.fillStyle = 'rgb(0, 70, 255)';
+  g.fillRect(0, 0, size, size);
+  const rng = makeRng(seed);
+  const u = size / 1024;
+  g.globalCompositeOperation = 'lighter';
+  g.lineCap = 'round';
+  // Wipe marks: big faint arcs.
+  for (let i = 0; i < 14; i++) {
+    const x = rng() * size, y = rng() * size, r = (120 + rng() * 260) * u;
+    g.strokeStyle = `rgba(14, 30, 0, ${0.5 + rng() * 0.5})`;
+    g.lineWidth = (14 + rng() * 30) * u;
+    g.beginPath();
+    g.arc(x, y, r, rng() * 6.28, rng() * 6.28 + 0.6 + rng() * 1.2);
+    g.stroke();
   }
-  g.putImageData(img, 0, 0);
+  // Hairline scratches.
+  for (let i = 0; i < 220; i++) {
+    const x = rng() * size, y = rng() * size;
+    const len = (10 + Math.pow(rng(), 2) * 160) * u;
+    const a = rng() * Math.PI;
+    const bend = (rng() - 0.5) * len * 0.3;
+    const strength = 40 + rng() * 140;
+    g.strokeStyle = `rgba(${Math.round(strength)}, ${Math.round(strength * 0.9)}, 0, 1)`;
+    g.lineWidth = Math.max(0.6, (0.5 + rng() * 0.9) * u);
+    for (const dx of [-size, 0, size])
+      for (const dy of [-size, 0, size]) {
+        g.beginPath();
+        g.moveTo(x + dx, y + dy);
+        g.quadraticCurveTo(x + dx + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + dy + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + dx + Math.cos(a) * len, y + dy + Math.sin(a) * len);
+        g.stroke();
+      }
+  }
+  g.globalCompositeOperation = 'source-over';
   return finish(c, false);
 }
 
-/** Soft play mat: base colour with a faint woven grain and theme motifs. */
+/** Soft play mat: base colour with a woven thread shade and theme motifs. */
 export function makeMatTexture(theme: ThemeDef, size: number): Texture {
   const { c, g } = canvas(size);
   g.fillStyle = theme.cabinet.mat;
   g.fillRect(0, 0, size, size);
   const rng = makeRng(4242 + theme.id.length);
   const u = size / 512;
+  // Thread-by-thread shade, so the colour breaks up like real fabric.
+  const threads = 96;
+  const p = size / threads;
+  g.globalAlpha = 0.07;
+  for (let i = 0; i < threads; i++) {
+    g.fillStyle = rng() < 0.5 ? '#000000' : '#ffffff';
+    g.fillRect(i * p, 0, p * 0.55, size);
+    g.fillStyle = rng() < 0.5 ? '#000000' : '#ffffff';
+    g.fillRect(0, i * p, size, p * 0.55);
+  }
   g.globalAlpha = 0.5;
   g.fillStyle = theme.cabinet.matInk;
+  const pattern = theme.cabinet.pattern;
   for (let i = 0; i < 18; i++) {
     const x = rng() * size, y = rng() * size, r = (7 + rng() * 9) * u, rot = rng() * 6.28;
     for (const dx of [-size, 0, size])
       for (const dy of [-size, 0, size]) {
-        if (theme.cabinet.pattern === 'sakura') flower(g, x + dx, y + dy, r, rot, theme.cabinet.matInk, '#ffffff');
-        else if (theme.cabinet.pattern === 'cosmos' || theme.cabinet.pattern === 'storybook') star(g, x + dx, y + dy, r, rot, theme.cabinet.pattern === 'cosmos' ? 4 : 5, 0.45);
-        else {
+        if (pattern === 'sakura') flower(g, x + dx, y + dy, r, rot, theme.cabinet.matInk, '#ffffff');
+        else if (pattern === 'cosmos' || pattern === 'storybook') star(g, x + dx, y + dy, r, rot, pattern === 'cosmos' ? 4 : 5, 0.45);
+        else if (pattern === 'circuit') {
+          if (i % 3 === 0) chipIcon(g, x + dx, y + dy, r * 1.5, theme.cabinet.matInk, theme.cabinet.matInk, null);
+          else {
+            g.beginPath();
+            g.arc(x + dx, y + dy, r * 0.35, 0, 6.28);
+            g.fill();
+          }
+        } else {
           g.beginPath();
           g.arc(x + dx, y + dy, r * 0.7, 0, 6.28);
           g.fill();
@@ -257,6 +536,14 @@ export function makeBadgeTexture(theme: ThemeDef, size: number, font: string): T
   g.beginPath();
   g.arc(r, r, r * 0.86, 0, 6.28);
   g.stroke();
+  // Printed micro-ring of dots (only resolvable at higher tiers, harmless at low ones).
+  g.fillStyle = theme.cabinet.frameAccent;
+  for (let i = 0; i < 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    g.beginPath();
+    g.arc(r + Math.cos(a) * r * 0.765, r + Math.sin(a) * r * 0.765, size * 0.006, 0, 6.28);
+    g.fill();
+  }
   g.fillStyle = theme.ui.primaryDeep;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -279,15 +566,21 @@ export function makeBadgeTexture(theme: ThemeDef, size: number, font: string): T
   return finish(c, true, false);
 }
 
-/** Small "PRIZE ▼" sign for the chute. */
-export function makeSignTexture(theme: ThemeDef, text: string, font: string): Texture {
-  const { c, g } = canvas(512, 160);
+/** Small "PRIZE" sign for the chute. */
+export function makeSignTexture(theme: ThemeDef, text: string, font: string, scale = 1): Texture {
+  const W = Math.round(512 * scale), H = Math.round(160 * scale);
+  const { c, g } = canvas(W, H);
+  g.scale(scale, scale);
   g.clearRect(0, 0, 512, 160);
   g.fillStyle = theme.cabinet.frameAccent;
-  const rr = 36;
   g.beginPath();
-  g.roundRect(8, 8, 496, 144, rr);
+  g.roundRect(8, 8, 496, 144, 36);
   g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.55)';
+  g.lineWidth = 4;
+  g.beginPath();
+  g.roundRect(18, 18, 476, 124, 28);
+  g.stroke();
   g.fillStyle = '#ffffff';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -296,7 +589,106 @@ export function makeSignTexture(theme: ThemeDef, text: string, font: string): Te
   return finish(c, true, false);
 }
 
-/** Out-of-focus arcade lights seen through the side glass. */
+/** Cells of the decal atlas (2 × 2). */
+export const DECAL = { win: 0, free: 1, caution: 2, arrow: 3 } as const;
+export type DecalId = keyof typeof DECAL;
+
+/** UV rectangle [u0, v0, u1, v1] of a decal in the atlas (three.js: v grows upwards, canvas rows downwards). */
+export function decalUv(id: DecalId): [number, number, number, number] {
+  const i = DECAL[id];
+  const col = i % 2, row = Math.floor(i / 2);
+  return [col / 2, 1 - (row + 1) / 2, (col + 1) / 2, 1 - row / 2];
+}
+
+/**
+ * Printed stickers on the cabinet: a starburst "WIN!", a "FREE PLAY" price card, a
+ * caution label and a "PRIZE" arrow. One atlas per theme, transparent outside the stickers.
+ */
+export function makeDecalAtlas(theme: ThemeDef, size: number, font: string): Texture {
+  const { c, g } = canvas(size);
+  g.clearRect(0, 0, size, size);
+  const h = size / 2;
+  const dark = theme.cabinet.pattern === 'circuit' || theme.cabinet.pattern === 'cosmos';
+  const cell = (i: number, draw: (s: number) => void) => {
+    g.save();
+    g.translate((i % 2) * h, Math.floor(i / 2) * h);
+    draw(h);
+    g.restore();
+  };
+  const label = (text: string, x: number, y: number, px: number, color: string, weight = 700) => {
+    g.fillStyle = color;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `${weight} ${Math.round(px)}px ${font}`;
+    g.fillText(text, x, y);
+  };
+  // WIN! starburst.
+  cell(DECAL.win, (s) => {
+    g.fillStyle = '#ffffff';
+    star(g, s / 2, s / 2, s * 0.48, 0.1, 14, 0.8);
+    g.fillStyle = theme.ui.primary;
+    star(g, s / 2, s / 2, s * 0.43, 0.1, 14, 0.8);
+    g.fillStyle = theme.ui.accent2;
+    g.beginPath();
+    g.arc(s / 2, s / 2, s * 0.29, 0, Math.PI * 2);
+    g.fill();
+    label(theme.cabinet.pattern === 'circuit' ? 'GG!' : 'WIN!', s / 2, s * 0.52, s * 0.22, theme.ui.primaryDeep);
+  });
+  // FREE PLAY card.
+  cell(DECAL.free, (s) => {
+    g.fillStyle = dark ? '#0b0f08' : '#ffffff';
+    g.beginPath();
+    g.roundRect(s * 0.06, s * 0.2, s * 0.88, s * 0.6, s * 0.08);
+    g.fill();
+    g.strokeStyle = theme.ui.primary;
+    g.lineWidth = s * 0.035;
+    g.stroke();
+    label(theme.cabinet.pattern === 'circuit' ? 'FREE COMPUTE' : 'FREE PLAY', s / 2, s * 0.42, s * 0.12, dark ? theme.ui.glow : theme.ui.primaryDeep);
+    label('1 GRAB = 1 TRY', s / 2, s * 0.62, s * 0.075, dark ? '#e8f5dc' : theme.ui.ink, 600);
+  });
+  // Caution label with hazard stripes.
+  cell(DECAL.caution, (s) => {
+    g.save();
+    g.beginPath();
+    g.roundRect(s * 0.04, s * 0.3, s * 0.92, s * 0.4, s * 0.05);
+    g.clip();
+    g.fillStyle = '#ffd23a';
+    g.fillRect(0, 0, s, s);
+    g.fillStyle = '#1c1c1c';
+    for (let x = -s; x < s * 2; x += s * 0.12) {
+      g.beginPath();
+      g.moveTo(x, s * 0.3);
+      g.lineTo(x + s * 0.06, s * 0.3);
+      g.lineTo(x + s * 0.06 + s * 0.4, s * 0.7);
+      g.lineTo(x + s * 0.4, s * 0.7);
+      g.fill();
+    }
+    g.fillStyle = '#ffd23a';
+    g.fillRect(s * 0.12, s * 0.38, s * 0.76, s * 0.24);
+    g.restore();
+    label('MIND THE CLAW', s / 2, s * 0.505, s * 0.09, '#1c1c1c');
+  });
+  // PRIZE arrow.
+  cell(DECAL.arrow, (s) => {
+    g.fillStyle = theme.cabinet.frameAccent;
+    g.beginPath();
+    g.moveTo(s * 0.5, s * 0.92);
+    g.lineTo(s * 0.86, s * 0.52);
+    g.lineTo(s * 0.64, s * 0.52);
+    g.lineTo(s * 0.64, s * 0.1);
+    g.lineTo(s * 0.36, s * 0.1);
+    g.lineTo(s * 0.36, s * 0.52);
+    g.lineTo(s * 0.14, s * 0.52);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = s * 0.025;
+    g.stroke();
+  });
+  return finish(c, true, false);
+}
+
+/** Out-of-focus arcade lights seen through the side glass (2:1 equirectangular-ish strip). */
 export function makeBackdropTexture(theme: ThemeDef, size: number): Texture {
   const { c, g } = canvas(size * 2, size);
   const grad = g.createLinearGradient(0, 0, 0, size);
@@ -305,6 +697,30 @@ export function makeBackdropTexture(theme: ThemeDef, size: number): Texture {
   g.fillStyle = grad;
   g.fillRect(0, 0, size * 2, size);
   const rng = makeRng(99 + theme.id.length * 13);
+  if (theme.cabinet.pattern === 'circuit') {
+    // Server hall: rows of tiny status LEDs on dark racks, a few big soft lime glows.
+    const racks = 14;
+    for (let i = 0; i < racks; i++) {
+      const x = (i / racks) * size * 2 + rng() * size * 0.04;
+      const w = size * 0.09;
+      const top = size * (0.22 + rng() * 0.08), bottom = size * (0.82 + rng() * 0.06);
+      g.globalAlpha = 0.55;
+      g.fillStyle = '#05070a';
+      g.fillRect(x, top, w, bottom - top);
+      for (let r = 0; r < 26; r++) {
+        const y = top + ((r + 0.5) / 26) * (bottom - top);
+        for (let k = 0; k < 4; k++) {
+          if (rng() < 0.45) continue;
+          const col = theme.backdrop.bokeh[Math.floor(rng() * theme.backdrop.bokeh.length)]!;
+          g.globalAlpha = 0.25 + rng() * 0.6;
+          g.fillStyle = col;
+          g.beginPath();
+          g.arc(x + w * (0.2 + k * 0.2), y, size * 0.0035, 0, 6.28);
+          g.fill();
+        }
+      }
+    }
+  }
   for (let i = 0; i < 70; i++) {
     const x = rng() * size * 2, y = size * (0.15 + rng() * 0.7), r = size * (0.012 + rng() * 0.05);
     const col = theme.backdrop.bokeh[Math.floor(rng() * theme.backdrop.bokeh.length)]!;
@@ -312,15 +728,14 @@ export function makeBackdropTexture(theme: ThemeDef, size: number): Texture {
     rg.addColorStop(0, col);
     rg.addColorStop(0.7, col);
     rg.addColorStop(1, 'rgba(255,255,255,0)');
-    g.globalAlpha = 0.1 + rng() * 0.28;
+    g.globalAlpha = (0.1 + rng() * 0.28) * (theme.cabinet.pattern === 'circuit' ? 0.7 : 1);
     g.fillStyle = rg;
     g.beginPath();
     g.arc(x, y, r, 0, 6.28);
     g.fill();
   }
   g.globalAlpha = 1;
-  const t = finish(c, true, true);
-  return t;
+  return finish(c, true, true);
 }
 
 /** Soft radial sprite used for particles and the aim reticle glow. */
@@ -332,5 +747,63 @@ export function makeGlowTexture(): Texture {
   rg.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = rg;
   g.fillRect(0, 0, 128, 128);
+  return finish(c, true, false);
+}
+
+/**
+ * Procedural stand-in for a theme emblem (drawn when the emblem image cannot be loaded):
+ * a stylised chip with the word "GPU". Original artwork, no real company logo.
+ */
+export function drawChipEmblem(g: CanvasRenderingContext2D, size: number, lime: string, font: string): void {
+  const s = size;
+  g.clearRect(0, 0, s, s);
+  g.fillStyle = '#b8c2b0';
+  for (let i = 0; i < 6; i++) {
+    const o = s * (0.24 + i * 0.104);
+    g.fillRect(o - s * 0.018, s * 0.05, s * 0.036, s * 0.1);
+    g.fillRect(o - s * 0.018, s * 0.85, s * 0.036, s * 0.1);
+    g.fillRect(s * 0.05, o - s * 0.018, s * 0.1, s * 0.036);
+    g.fillRect(s * 0.85, o - s * 0.018, s * 0.1, s * 0.036);
+  }
+  g.fillStyle = '#10140c';
+  g.beginPath();
+  g.roundRect(s * 0.14, s * 0.14, s * 0.72, s * 0.72, s * 0.07);
+  g.fill();
+  g.strokeStyle = lime;
+  g.lineWidth = s * 0.025;
+  g.stroke();
+  g.fillStyle = lime;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `800 ${Math.round(s * 0.22)}px ${font}`;
+  g.fillText('GPU', s / 2, s * 0.52);
+}
+
+/**
+ * Loads an image file (SVG or bitmap) into a square texture of `size` texels. Resolves to
+ * null when the file is missing or cannot be decoded, so callers can keep a fallback.
+ */
+export async function loadImageTexture(url: string, size: number): Promise<Texture | null> {
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    await img.decode();
+    const { c, g } = canvas(size);
+    g.clearRect(0, 0, size, size);
+    // Fit inside the square, keeping the aspect ratio.
+    const w = img.naturalWidth || size, h = img.naturalHeight || size;
+    const k = Math.min(size / w, size / h);
+    g.drawImage(img, (size - w * k) / 2, (size - h * k) / 2, w * k, h * k);
+    return finish(c, true, false);
+  } catch {
+    return null;
+  }
+}
+
+/** Canvas texture from a drawing callback (square). */
+export function drawTexture(size: number, draw: (g: CanvasRenderingContext2D, size: number) => void): Texture {
+  const { c, g } = canvas(size);
+  draw(g, size);
   return finish(c, true, false);
 }

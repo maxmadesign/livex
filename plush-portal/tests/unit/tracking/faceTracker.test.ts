@@ -74,7 +74,9 @@ const flush = async () => {
 function createRig(options: { backendBehaviour?: Partial<Record<BackendKind, 'ok' | 'fail'>>; autoAnswer?: boolean; trueHfov?: number } = {}): Rig {
   const settings = defaultSettings();
   const config: TrackerConfig = {
-    camera: { ...settings.camera, delegate: 'auto' },
+    // These tests check the position pipeline; the synthetic faces keep facing along the camera
+    // axis, so the head-turn term (tested in countdownTracker.test.ts) is switched off here.
+    camera: { ...settings.camera, delegate: 'auto', headWeight: 0 },
     view: { ...settings.profiles.desktop.view },
     window: { widthM: 0.531, heightM: 0.299, centerOffsetM: [0, 0] },
   };

@@ -14,9 +14,21 @@ describe('tracking strings', () => {
     for (const lang of LANGS) {
       expect(Object.keys(trackingStrings[lang]).sort()).toEqual(reference);
       for (const key of reference) {
-        expect(key.startsWith('tracking.')).toBe(true);
+        // Head-tracking setting labels are looked up by path (set.camera.<field>).
+        expect(key.startsWith('tracking.') || key.startsWith('set.camera.'), key).toBe(true);
         expect(trackingStrings[lang][key]!.trim().length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('labels every calibration / phone setting of the Camera & Parallax tab', () => {
+    for (const lang of LANGS) {
+      const table = trackingStrings[lang];
+      for (const key of ['set.camera.headWeight', 'set.camera.lowPower']) {
+        expect(table[key], `${lang}:${key}`).toBeTruthy();
+        expect(table[`${key}.hint`], `${lang}:${key}.hint`).toBeTruthy();
+      }
+      for (const o of ['auto', 'on', 'off']) expect(table[`set.camera.lowPower.o.${o}`], `${lang}:${o}`).toBeTruthy();
     }
   });
 

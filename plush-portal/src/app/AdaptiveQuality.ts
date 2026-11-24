@@ -4,7 +4,8 @@ import type { GraphicsSettings } from '../settings/spec';
  * Automatic optimiser. Judges the frame times of consecutive ~1 s windows and, only when
  * the target cannot be held for several windows in a row, removes cost in this order:
  *   decorative particles → bloom → ambient occlusion → expensive reflections /
- *   glass → internal resolution → shadow resolution.
+ *   glass → internal resolution → shadow resolution (one level down; from Medium that
+ *   also turns the contact shadows off) → internal resolution.
  * It never touches physics, input, the number of toys or the layout. Upper and
  * lower thresholds plus hold counters give it hysteresis so it does not flap.
  */
@@ -17,6 +18,26 @@ export interface AdaptiveState {
 
 const STEPS = ['particles', 'bloom', 'ao', 'reflections', 'glass', 'scale90', 'scale80', 'scale70', 'shadows', 'scale60', 'scale50'] as const;
 export type ReductionStep = (typeof STEPS)[number];
+/** Every reduction in the order it is applied. */
+export const REDUCTION_STEPS: readonly ReductionStep[] = STEPS;
+
+/**
+ * i18n key of the readable label of a reduction step (strings in src/i18n/strings/graphics.ts),
+ * e.g. "scale90" → "graphics.step.scale90" → "3D resolution 90 %". The settings dialog and the
+ * performance panel show these instead of the internal ids.
+ */
+export function reductionLabelKey(step: string): string {
+  return `graphics.step.${step}`;
+}
+
+/**
+ * The reductions worth listing to a person: every step that is not a resolution step, plus only
+ * the current (last) resolution step — "3D resolution 70 %" rather than "90 %, 80 %, 70 %".
+ */
+export function visibleReductions(steps: readonly string[]): string[] {
+  const scale = steps.filter((s) => s.startsWith('scale')).pop();
+  return steps.filter((s) => !s.startsWith('scale') || s === scale);
+}
 
 const WINDOW = 120;
 

@@ -10,7 +10,7 @@ export const AUDIO_THEME_SOURCE: Record<ThemeId, ThemeId> = {
   storybook: 'storybook',
   ocean: 'ocean',
   cosmic: 'cosmic',
-  gpu: 'cosmic',
+  gpu: 'gpu',
 };
 
 /** Themes that have their own recordings (the music tracks and jingle sets that really exist). */

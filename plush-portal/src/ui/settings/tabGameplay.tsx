@@ -1,4 +1,5 @@
 import { applyDifficultyPreset } from '../../app/presets';
+import { TIER_POINTS } from '../../game/rarity';
 import { useApp, useSettings, useT } from '../context';
 import { Field, Row, Section } from './Field';
 
@@ -40,6 +41,9 @@ export function GameplayTab() {
       <Field path="gameplay.aimTimeLimit" />
       <Field path="gameplay.restock" />
       <Field path="gameplay.scoring" />
+      <p className="pp-note" data-testid="score-tiers">
+        {t('score.tiers', { common: TIER_POINTS.common, rare: TIER_POINTS.rare, epic: TIER_POINTS.epic, legendary: TIER_POINTS.legendary })}
+      </p>
       <div className="pp-actions">
         <button type="button" className="pp-btn small soft" onClick={() => app.game.restartRound()} data-testid="btn-restart-round">
           {t('btn.restartRound')}

@@ -1,6 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 import { IDLE_CALIBRATION, type AudioStatus, type GuideLine, type GuideStatus, type TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, RoundPhase, RoundResult, ThemeId } from '../core/types';
+import type { RarityTier } from '../game/rarity';
+import type { ScoreAward } from '../game/scoring';
 import type { EffectiveGraphics } from '../scene/Stage';
 
 export interface PerfSnapshot {
@@ -32,6 +34,37 @@ export interface PrizeInfo {
 }
 
 export type ModalId = 'settings' | 'collection' | 'tutorial' | 'device' | 'themes' | null;
+
+/** Points system state shown by the HUD (src/ui/ScoreHud.tsx and the result card). */
+export interface ScoreUiState {
+  /** gameplay.scoring */
+  enabled: boolean;
+  /** True while the numbers are the demo's show score (attract mode). */
+  demo: boolean;
+  session: number;
+  /** Consecutive wins of the shown track. */
+  streak: number;
+  /** Combo multiplier the next win would get. */
+  nextMultiplier: number;
+  best: number;
+  lifetime: number;
+  /** Award of the most recently settled round (the result card shows its breakdown). */
+  last: ScoreAward | null;
+}
+
+/** A floating "+250" at the prize's position on screen (CSS pixels). */
+export interface ScorePopup {
+  id: number;
+  x: number;
+  y: number;
+  points: number;
+  tier: RarityTier | null;
+  kind: 'win' | 'slip';
+  demo: boolean;
+  multiplier: number;
+}
+
+export const INITIAL_SCORE: ScoreUiState = { enabled: true, demo: false, session: 0, streak: 0, nextMultiplier: 1, best: 0, lifetime: 0, last: null };
 
 /** Everything the React HUD needs. Updated only when something changes, never per frame. */
 export interface GameUiState {
@@ -68,6 +101,9 @@ export interface GameUiState {
   /** Non-fatal problems worth showing in diagnostics. */
   warnings: string[];
   firstPlayDone: boolean;
+  score: ScoreUiState;
+  /** Score popups currently on screen (removed by the HUD after their animation). */
+  scorePopups: ScorePopup[];
 }
 
 export const INITIAL_TRACKER: TrackerStatus = {
@@ -149,6 +185,8 @@ export function createGameStore(profile: DisplayProfileId, profileChosen: boolea
     webglLost: false,
     warnings: [],
     firstPlayDone: false,
+    score: INITIAL_SCORE,
+    scorePopups: [],
   }));
 }
 

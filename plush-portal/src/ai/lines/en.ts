@@ -37,6 +37,10 @@ export const en: LangBank = {
         ['Welcome aboard the cosmic arcade! Steer the claw and catch a little star.', 'happy'],
         ['Three, two, one, launch! Space plushies are floating by, go grab one.', 'cheer'],
       ],
+      gpu: [
+        ['Welcome to the GPU Party! The fans are spinning and the plushies are ready to render.', 'happy'],
+        ["Boot sequence complete! Pick a plush from the server rack and let's start the show.", 'cheer'],
+      ],
     },
     first_play: {
       all: [
@@ -49,6 +53,7 @@ export const en: LangBank = {
       storybook: [['Chapter one: steer the claw over a friend and press grab to begin.', 'calm']],
       ocean: [['First dive! Float the claw above a sea friend, then press grab.', 'happy']],
       cosmic: [['First mission! Steer above your target, then press grab for touchdown.', 'happy']],
+      gpu: [['First benchmark! Line the claw up over a plush, then press grab to run it.', 'happy']],
     },
     idle: {
       all: [
@@ -62,6 +67,7 @@ export const en: LangBank = {
       storybook: [['Every story needs a hero. Which friend will you rescue first?', 'think']],
       ocean: [['The tide is calm right now, a perfect moment to line up.', 'calm']],
       cosmic: [["The stars are drifting slowly. Lock onto a target whenever you're ready, captain.", 'calm']],
+      gpu: [['The fans are humming along. Take your time picking the next target, no lag here.', 'calm']],
     },
     'idle.tracking': {
       all: [
@@ -82,6 +88,7 @@ export const en: LangBank = {
       storybook: [["Steady now, hero. Centre the claw over your friend's belly.", 'think']],
       ocean: [['Drift the claw above the roundest part, like a bubble settling down.', 'think']],
       cosmic: [['Lock on! Centre the target ring on the plush before you descend.', 'think']],
+      gpu: [['Calibrating! Centre the target ring on the plush, pixel-perfect, before you drop.', 'think']],
     },
     grab: {
       all: [
@@ -95,6 +102,7 @@ export const en: LangBank = {
       storybook: [['The claw swoops in! Will our hero make the rescue?', 'cheer']],
       ocean: [["Diving down! Let's scoop up a friend from the deep.", 'cheer']],
       cosmic: [['Descent started! Landing gear out, steady, steady, steady.', 'cheer']],
+      gpu: [['Executing grab! The claw is processing at full speed, hold on tight.', 'cheer']],
     },
     'empty.dir': {
       all: [
@@ -194,6 +202,10 @@ export const en: LangBank = {
         ['Touchdown! {toy} has landed safely in your collection.', 'cheer'],
         ['Stellar grab! {toy} just joined your crew.', 'cheer'],
       ],
+      gpu: [
+        ['Render complete! {toy} has been delivered to your collection.', 'cheer'],
+        ['Full frame rate catch! {toy} is coming home with you.', 'cheer'],
+      ],
     },
     'win.new': {
       all: [
@@ -206,6 +218,7 @@ export const en: LangBank = {
       storybook: [['A new character joins the story. Welcome, {toy}!', 'cheer']],
       ocean: [['A new sea friend just surfaced. Welcome aboard, {toy}!', 'cheer']],
       cosmic: [['New star discovered! {toy} is now on your star map.', 'cheer']],
+      gpu: [['New hardware unlocked! {toy} just joined your collection for the first time.', 'cheer']],
     },
     'win.demo': {
       all: [
@@ -245,6 +258,11 @@ export const en: LangBank = {
         ['Blast off! A galaxy of plush explorers is floating by.', 'cheer'],
         ['Welcome to orbit. Catch a star before it drifts away!', 'happy'],
       ],
+      gpu: [
+        ['GPU Party! Green lights, whirring fans and the cutest little chips in town.', 'cheer'],
+        ['The keynote stage is lit. Graphics cards, robots and pixel cubes are waiting!', 'happy'],
+        ['Welcome to the plush tech expo. Every cooling fan is spinning just for you.', 'happy'],
+      ],
     },
     retry: {
       all: [
@@ -257,6 +275,7 @@ export const en: LangBank = {
       storybook: [['Shall we turn the page and try another round?', 'happy']],
       ocean: [['The tide always comes back around. Want to cast the claw again?', 'calm']],
       cosmic: [['Ready for another orbit? Launch whenever you like, captain.', 'happy']],
+      gpu: [['Ready for another run? Reboot the claw whenever you like, no pressure.', 'happy']],
     },
     'retry.streak': {
       all: [
@@ -279,6 +298,10 @@ export const en: LangBank = {
       storybook: [["Heroes aim for the belly. That's where the claw holds best.", 'think']],
       ocean: [['Round sea friends are easiest. Tentacles and fins tend to slip away.', 'think']],
       cosmic: [['Lock onto round bodies, captain. Antennas and ears are slippery.', 'think']],
+      gpu: [
+        ['Chunky shapes like cubes and chips sit nicely in the claw. Aim for the middle.', 'think'],
+        ['Thin fan blades and cables slip easily. Go for the solid body instead.', 'think'],
+      ],
     },
     'tip.tracking': {
       all: [

@@ -5,8 +5,9 @@ view is rendered for the real position of the player's eyes (head-coupled,
 off-axis perspective), so objects at different depths show different parallax
 while the window frame and the HUD stay put.
 
-This document covers the tracking side: conventions, calibration, parameters,
-mounting, troubleshooting and what was (and was not) verified.
+This document covers the tracking side: conventions, the countdown calibration
+(baseline), the quick distance calibration, parameters, phones, mounting,
+troubleshooting and what was (and was not) verified.
 Code: `src/tracking/` (pipeline), `src/perspective/` (projection).
 
 ---
@@ -47,8 +48,8 @@ camera frame (video only, ~640×480)
   → primary player association (position continuity, bystanders ignored)
   → eye estimate in camera space (rigid 3D fit, see below)
   → camera-to-screen transform (rotation, mirror, pitch / yaw / roll, camera position)
-  → One Euro filter, outlier gate, dead zone
-  → view mapping (neutral pose, gains, soft limits, minimum distance)
+  → One Euro filter, outlier gate, dead zone        (+ head direction → head-turn offset, One Euro)
+  → view mapping (baseline, gains, soft limits, minimum distance)
   → ViewpointController (hold / return / re-acquire, 60 Hz interpolation)
   → OffAxisCamera (asymmetric frustum)
 ```
@@ -60,9 +61,9 @@ model (MediaPipe's own Procrustes basis without jaw and cheek points) are fitted
 to their image positions with a scaled-orthographic camera in a virtual view that
 looks straight at the face, refined by three POSIT iterations. The fitted scale
 (pixels per metre at the face) is independent of head rotation, so turning or
-nodding in place does not fake a depth change. Head orientation is only used to
-place the eyes relative to the face centre and for diagnostics; it is never used
-as the viewpoint.
+nodding in place does not fake a depth change. Head orientation places the eyes relative to the face centre and, after a
+calibration, feeds the optional head-turn term of the view mapping (section 3); it is
+never used as the viewpoint by itself.
 
 **Primary player.** The first steady face near the centre of the picture is
 locked after ~0.3 s and then followed by position and size continuity only.
@@ -77,9 +78,106 @@ view cross-fades onto it (`reacquireMs`). There is never a jump.
 
 ---
 
-## 3. Quick calibration
+## 3. Countdown calibration (baseline)
 
-Open **Settings → Camera & Parallax**.
+The default calibration on every device (desktop, phone, 32", 86"). It needs no tape
+measure: whatever position and head direction the player has when the countdown ends
+becomes the centre of the view.
+
+**Flow**
+
+1. Head tracking is switched on and the camera starts (first press of START, or
+   switching it on again later).
+2. With `camera.autoCalibrate` on (default), the first time a face has been tracked
+   steadily for 0.7 s, a countdown of `camera.calibrationSeconds` (default 3) starts
+   automatically — but only while the round is READY or ATTRACT (or a demo round),
+   no dialog is open and the page is visible. If the player starts aiming during the
+   countdown, it is cancelled and runs again at the next READY / ATTRACT. This happens
+   once per camera start (every re-enable counts).
+3. The overlay shows a big 3-2-1 with a ring, "Look at the screen and hold still", a
+   face-found indicator and Cancel.
+4. After the countdown the tracker averages the newest **0.7 s** of raw samples as soon as
+   they are steady (at least 4 samples — on a slow device inferring at only 3–5 Hz the window
+   stretches back to hold them, never beyond 1 s; lateral spread ≤ 8 mm + 1.2 % of the distance, depth
+   spread ≤ 10 mm + 2 %, head-direction spread ≤ 4°, and no drift between the first and the
+   second half of the window — half those limits). Trimmed means (20 % off each end) make the
+   result robust against the tail of a movement.
+5. Success: a tick is shown for 1.8 s, the baseline is applied at once and stored for the
+   **active display preset**. Failure after 3 s without a steady window: `no_face` (hardly
+   any face samples) or `unstable` (too much movement), shown with **Retry** and **Skip**.
+   A failure left on screen is dismissed after 30 s in view (time under a dialog does not
+   count), and an automatic one also as soon as a
+   round starts (it is not retried automatically). The game's idle reset
+   (`system.idleSeconds`) also cancels a countdown / clears a result.
+
+"Calibrate now" in Settings → Camera & Parallax does the same by hand (it starts the camera
+first if it is enabled but not running, or while the inference backend is being replaced; the
+countdown waits for it). It is disabled on a page that is not HTTPS / localhost. A baseline
+taken while the dialog is open goes into the dialog's draft like every other setting: **Apply**
+keeps it, Cancel / closing the dialog drops it. Cancel / Skip never change the stored baseline. Contract: `TrackerPort.startCalibration(seconds)` /
+`cancelCalibration()`, progress in `TrackerStatus.calibration`:
+
+| phase | `remaining` | `detail` |
+| --- | --- | --- |
+| `idle` | 0 | `''`, or `rotated` after the camera picture rotated (prompt for a new baseline) |
+| `countdown` | whole seconds left | `''`, or `waiting_camera` while the camera is still starting |
+| `capturing` | 0 | `''` |
+| `done` | 0 | `ok` (shown 1.8 s, then `idle`) |
+| `failed` | 0 | `no_face`, `unstable`, `not_running` (head tracking off), `camera_lost`, `denied`, `no_device`, `in_use`, `insecure`, `model_error` |
+
+Stop / switch-off cancel a running countdown (idle); a hidden page drops it (the
+automatic one runs again later); a camera that disappears ends it with `camera_lost`.
+
+**What is stored** (per display preset, `src/tracking/baseline.ts`):
+
+| setting | meaning |
+| --- | --- |
+| `profiles.<id>.view.calNeutral` | eye position at the baseline (window space, m) — the same field the quick calibration uses |
+| `profiles.<id>.view.calibrated` | `true` |
+| `camera.headBaseline.<id>.yaw / .pitch` | head direction at the baseline, degrees, relative to facing the centre of the game window (0.1° grid) |
+
+`calDepthK` (the distance scale) is kept as it is. The application persists the
+`CalibrationEvent` (`kind: 'baseline'`); in this app the calibration coordinator in
+`src/ui/CalibrationOverlay.tsx` writes `baselineWrites(profile, values)` and tells the
+tracker the active preset (`setActiveProfile`).
+
+**Baseline-relative view.** After calibration
+
+```
+viewpoint = eye_ref + gain ∘ ( (measured − calNeutral) + headTurn )        (soft limit maxOffset, minDistance)
+headTurn  = headWeight × eye_ref.z × sin( shaped(head − directionToWindowCentre − headBaseline) )
+```
+
+`eye_ref` is the neutral, screen-centred eye at the design distance (`view.eye`). The head
+direction is taken in screen space (camera tilt / roll / rotation removed) and compared with
+the direction from the eyes to the window centre, so walking sideways while watching the
+cabinet is pure position parallax, while turning the head away from the middle ("looking
+around") moves the view in that direction. `shaped` = 2° dead zone, limited to 45°. With the
+default `camera.headWeight = 0.4` a 20° turn moves the view about 8 cm on a desktop (0.62 m)
+and about 12 cm on the 86" preset (0.95 m); 0 switches it off. The head term is filtered with
+the same One Euro parameters as the position and applies only while the preset is calibrated.
+Hold / return / re-acquire and the soft limits work exactly as before.
+
+**Phones** (`camera.lowPower`, `src/tracking/devicePolicy.ts`): on phones / tablets (and
+devices with ≤ 2 cores, or ≤ 4 cores and ≤ 4 GB) `auto` requests 360p, caps inference at
+12 Hz and follows one face; `on` / `off` force it. The front camera is used (`facingMode:
+'user'`) unless a device was chosen. Video only (`audio: false`), and only on HTTPS or
+localhost — otherwise the overlay shows a notice with the page origin ("The camera needs a
+secure page", 30 s or until OK) and the game keeps the fixed view. Phones rotate the camera picture with the
+screen: a portrait ↔ landscape change of the frames (or a `screen.orientation` change) resets
+the filters and the player lock and asks for a new baseline (automatic countdown with
+`autoCalibrate`, otherwise a "Screen rotated — Calibrate / Not now" prompt). A hidden page
+pauses inference.
+
+**Overlay placement.** The card is placed inside the interactive safe zone (86" portrait:
+25 %–75 % of the height), below the title bar and above the control panel; a short region
+(landscape phone) gets a compact card with the ring beside the text. Only its buttons take
+pointer input (`calib-cancel`, `calib-retry`, `calib-skip`, `calib-start`, `calib-notice-close`).
+
+## 3b. Quick (distance) calibration
+
+Optional, for installations: also measures the distance scale (the camera's field of view).
+Open **Settings → Camera & Parallax → Distance scale (advanced)**.
 
 1. Stand where players normally stand, at the *reference distance* from the screen
    (`refDistance`; defaults: desktop 0.62 m, 32" 0.62 m, 86" 0.95 m — measure it once
@@ -152,7 +250,7 @@ Global (`camera`):
 | `enabled` | on | Head Tracking / Window Perspective |
 | `deviceId` | – | preferred camera (falls back to any camera if it is gone) |
 | `resolution` | 480p | requested frame size (360p / 480p / 720p); the negotiated size is shown in the status |
-| `inferenceHz` | 18 | upper bound for inferences per second (one inference in flight, newest frame only) |
+| `inferenceHz` | 18 | upper bound for inferences per second (one inference in flight, newest frame only); `lowPower` caps it |
 | `numFaces` | 2 | faces watched, so bystanders can be told apart from the player |
 | `delegate` | auto | `auto`, `gpu`, `cpu` – see "Backends" |
 | `smoothMs` | 70 | time constant of the per-frame follow smoothing |
@@ -160,6 +258,11 @@ Global (`camera`):
 | `deadzoneMm` | 2 | movements smaller than this are ignored |
 | `outlierM` | 0.35 | larger jumps between two samples are ignored unless they persist (≥ 3 samples, ≥ 180 ms) |
 | `lostHoldMs` / `returnMs` / `reacquireMs` | 700 / 1500 / 450 | loss handling |
+| `autoCalibrate` | on | countdown calibration after every camera start (section 3) |
+| `calibrationSeconds` | 3 | countdown length, s |
+| `headWeight` | 0.4 | head-turn effect (0 = off), see section 3 |
+| `lowPower` | auto | phone / low-power capture: 360p, ≤ 12 Hz, 1 face (`auto` / `on` / `off`) |
+| `headBaseline.<id>` | 0 / 0 | head-direction baseline per preset, written by the countdown calibration |
 
 The manual **test viewpoint** sliders move the viewpoint by hand (same soft limits).
 They are reported as source `test` everywhere and are never shown as camera tracking.
@@ -235,7 +338,14 @@ camera.setEyeWorld(world[0], world[1], world[2]);
   without releasing the camera.
 - Calibration values are applied inside the tracker immediately, but the application
   owns the settings: persist the `CalibrationEvent` values and pass them back through
-  `configure()`, otherwise the next `configure()` call reverts them.
+  `configure()`, otherwise the next `configure()` call reverts them (`baselineWrites()` lists
+  the writes; the head-direction baseline is only replaced when the configured value changes).
+- `startCalibration(seconds)` / `cancelCalibration()` run the countdown calibration;
+  `setActiveProfile(id)` (or `TrackerConfig.profile`) selects the preset whose
+  `camera.headBaseline` is used. The automatic start is not inside the tracker: it is the pure
+  `AutoCalibrationPolicy` (`src/tracking/autoCalibration.ts`), driven from the overlay.
+- `diagnostics()` also reports the head direction (`measurement.head`), the capture parameters
+  really in use (`capture`), the head baseline and the last captured baseline.
 - `tracker.diagnostics()` exposes the probe log of every backend, the latest
   measurement and counters for the diagnostics panel.
 
@@ -295,7 +405,11 @@ missing or corrupt). Nothing is loaded from a CDN at run time.
 | jitter while standing still | raise `deadzoneMm` or `smoothMs`, lower `filterMinCutoff` |
 | view lags behind | lower `smoothMs`, raise `filterBeta`, raise `inferenceHz` if the device can do it |
 | someone else is being followed | they were the first steady face in the centre; the lock is released ~2 s after they leave |
-| tracking rate low | lower `resolution`, set `numFaces` to 1, try `delegate: cpu` / `gpu` |
+| tracking rate low | lower `resolution`, set `numFaces` to 1, try `delegate: cpu` / `gpu`, or `lowPower: on` |
+| countdown ends with "Too much movement" | hold still for a second (a phone held in the hand: rest the elbows) and Retry |
+| countdown ends with "Your face wasn't visible" | face the screen, light on the face, not too far / too close to the camera |
+| view drifts sideways when only turning the head | intended head-turn effect; lower `headWeight` (0 = off) |
+| phone: view off-centre after turning it | calibrate again (the prompt / automatic countdown follows a rotation) |
 
 ---
 
@@ -330,7 +444,23 @@ a looping clip built from MediaPipe's own sample portrait — **not** a live per
   `stop()` ends the video track (`readyState: "ended"`), restart works; production build
   of the worker; no external network requests.
 
+Countdown calibration (this round, unit tests in `tests/unit/tracking/`: `countdown`,
+`countdownTracker`, `autoCalibration`, `headPose`, `baseline`, `devicePolicy`,
+`calibrationOverlay`): the countdown state machine and its 3-2-1 timing, averaging of
+synthetic noisy sample streams (40 noise seeds: steady players always pass, 6 cm/s sideways
+or 10 cm/s towards the screen always fail), `no_face` / `unstable` / camera failures,
+cancel without changing the baseline, retry, waiting for the camera, stop / hide / unplug,
+the baseline-relative mapping with the head-turn term (sign, magnitude, gain 0, limits) on the
+fake-camera tracker with synthetic faces, per-preset persistence through the settings store
+and a reload, the automatic-start policy (enable / re-enable, round gate, dialogs, hidden
+page, rotation, skip), phone capture parameters and overlay placement inside the 86" band.
+These use synthetic landmarks, not a person.
+
 Not verified here (needs real hardware / people):
+
+- the countdown calibration, the stability thresholds and the head-turn effect with a real
+  person in front of a real camera, on a real phone (front camera, rotation, battery /
+  thermal behaviour, iOS Safari / Android Chrome), on real 32" / 86" panels;
 
 - a live human in front of a real camera: sideways / vertical / depth movement, turning
   the head in place, loss and re-capture, a real passer-by, glasses, masks, lighting;

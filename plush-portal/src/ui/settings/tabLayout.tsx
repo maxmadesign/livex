@@ -1,10 +1,33 @@
 import { DISPLAY_PROFILE_IDS, type DisplayProfileId } from '../../core/types';
-import { DESIGN } from '../../layout/solve';
-import { useApp, useT, useUi } from '../context';
+import { DESIGN, type HudLayout } from '../../layout/solve';
+import { estimateHandheldScreen, isNominalPhoneScreen, orientScreen } from '../../perspective/windowGeometry';
+import { useApp, useSettings, useT, useUi } from '../context';
 import { useHudLayout } from '../useHudLayout';
 import { Field, Section } from './Field';
 
 /* ---------------------------------------------------------------- Layout */
+
+/** Phone preset: what the solver kept clear, how big the buttons came out, the screen-size estimate. */
+function PhoneNotes({ layout }: { layout: HudLayout }) {
+  const t = useT();
+  const view = useSettings((s) => s.profiles.mobile.view);
+  const r = (n: number) => Math.round(n);
+  let estimate: string | null = null;
+  if (view.windowMode === 'window' && isNominalPhoneScreen(view)) {
+    const s = orientScreen(layout.vw, layout.vh, window.screen?.width ?? layout.vw, window.screen?.height ?? layout.vh);
+    const e = estimateHandheldScreen(s.screenW, s.screenH, window.devicePixelRatio || 1);
+    estimate = t('mobile.layout.estimate', { w: r(e.widthM * 1000), h: r(e.heightM * 1000) });
+  }
+  return (
+    <>
+      <p className="pp-note" data-testid="layout-phone">
+        {t('mobile.layout.phone', { top: r(layout.insets.top), right: r(layout.insets.right), bottom: r(layout.insets.bottom), left: r(layout.insets.left) })}{' '}
+        {t('mobile.layout.touch', { main: r(layout.touch), min: r(Math.min(layout.touchMin, layout.controls?.menuButton ?? layout.touchMin)) })}
+      </p>
+      {estimate ? <p className="pp-note">{estimate}</p> : null}
+    </>
+  );
+}
 
 export function LayoutTab() {
   const app = useApp();
@@ -12,7 +35,8 @@ export function LayoutTab() {
   const profile = useUi((s) => s.profile);
   const layout = useHudLayout();
   const base = `profiles.${profile}.layout`;
-  const design = DESIGN[profile];
+  // The phone's design size turns with the phone.
+  const design = profile === 'mobile' && layout.orientation === 'portrait' ? { w: DESIGN.mobile.h, h: DESIGN.mobile.w } : DESIGN[profile];
   const mapH = 150 * layout.unit * (layout.vh / layout.vw);
   return (
     <>
@@ -26,18 +50,22 @@ export function LayoutTab() {
         ))}
       </div>
       <p className="pp-note">{t('layout.independent')}</p>
+      {profile === 'mobile' ? <PhoneNotes layout={layout} /> : null}
       <div style={{ display: 'flex', gap: 16 * layout.unit, alignItems: 'flex-start', margin: `${12 * layout.unit}px 0` }}>
         <div className="pp-layout-map" style={{ height: Math.min(mapH, 320 * layout.unit) }} aria-hidden="true">
           <i className="zone" style={{ top: `${(layout.safeTop / layout.vh) * 100}%`, height: `${((layout.safeBottom - layout.safeTop) / layout.vh) * 100}%` }} />
-          <i
-            className="pane"
-            style={{
-              top: `${(layout.panel.y / layout.vh) * 100}%`,
-              height: `${(layout.panel.h / layout.vh) * 100}%`,
-              left: `${(layout.panel.x / layout.vw) * 100}%`,
-              right: `${(1 - (layout.panel.x + layout.panel.w) / layout.vw) * 100}%`,
-            }}
-          />
+          {(layout.controls && layout.panelStyle === 'split' ? [layout.controls.dpad, layout.controls.action, layout.controls.menu] : [layout.panel]).map((r, i) => (
+            <i
+              key={i}
+              className="pane"
+              style={{
+                top: `${(r.y / layout.vh) * 100}%`,
+                height: `${(r.h / layout.vh) * 100}%`,
+                left: `${(r.x / layout.vw) * 100}%`,
+                right: `${(1 - (r.x + r.w) / layout.vw) * 100}%`,
+              }}
+            />
+          ))}
           <i className="floor" style={{ top: `${layout.floorY * 100}%` }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

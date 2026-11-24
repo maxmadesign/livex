@@ -11,6 +11,7 @@
 - [Quality tiers (starting budgets)](#quality-tiers-starting-budgets)
 - [What each option costs](#what-each-option-costs)
 - [Internal resolution](#internal-resolution)
+- [Lighting, environment and materials](#lighting-environment-and-materials)
 - [Automatic optimiser](#automatic-optimiser)
 - [Performance panel](#performance-panel)
 - [Measured](#measured)
@@ -23,23 +24,32 @@ Graphics* or with `?quality=`. **Engineering defaults, not measured guarantees.*
 
 | | Safe | Medium | High | Ultra |
 | --- | --- | --- | --- | --- |
-| Intended starting point for | Old or unknown integrated graphics, software rendering | 780M-class integrated graphics | Mid-range discrete GPU | High-end GPU, 4K |
+| Intended starting point for | Phones, old or unknown integrated graphics, software rendering | 780M-class integrated graphics at ≈ 1080p | Mid-range discrete GPU, 1440p, 32" portrait | High-end GPU, 4K, 86" portrait |
 | Frame-rate target | 30 | 60 | 60 | 60 |
-| Render scale | 0.75 | 1.0 | 1.0 | 1.0 |
-| Pixel budget | 0.9 MP | 2.1 MP (≈ 1080p) | 4.0 MP (≈ 1440p) | 8.3 MP (4K) |
+| Render scale | 1.0 | 1.0 | 1.0 | 1.0 |
+| Pixel-density cap (`maxDpr`) | 1.25 × | 2 × | 3 × | 3 × |
+| Pixel budget | 0.7 MP | 2.1 MP (≈ 1080p) | 4.0 MP (≈ 1440p) | 8.3 MP (4K) |
 | Model detail (focused / other toys) | LOD1 / LOD2 | LOD0 / LOD1 | LOD0 / LOD0 | LOD0 / LOD0 |
-| Procedural texture size | 512 | 1024 | 2048 | 4096 |
-| Shadow map | 1024 | 2048 | 4096 | 4096 |
+| Printed surfaces (back wall / mat, fascia, badge, decals, emblem) | 512 / 512 | 1024 / 512–1024 | 2048 / 1024 | 4096 / 2048 |
+| Tiled detail maps (normal / roughness) | 256 | 512 | 1024 | 1024 |
+| Cabinet materials | plain PBR (no clearcoat, no anisotropy, no detail maps) | clearcoat lacquer, anisotropic brushed metal, woven mat with sheen, scratched glass, stippled rubber | + metallic flake under the lacquer, braided cable, bolts / hinge pins / spring, finer bevels | as High, highest tessellation |
+| Studio environment (prefiltered cube face) | 256 | 256 | 512 | 512 — the size of the live capture it lights (1024 with static reflections) |
+| Key-light shadow | 1024, PCF | 2048, PCF | 4096, VSM (soft) | 4096, VSM (soft) |
+| Contact shadows under toys and claw | off | 256², every 2nd frame | 512², every frame | 512², every frame |
 | Ambient occlusion (GTAO) | off | off | 8 samples | 16 samples |
 | Glass | no front reflection | subtle reflection | subtle reflection | real transmission (extra scene pass) |
-| Reflections | static studio environment | static studio environment | cabinet environment, refreshed per round | cabinet environment, refreshed every 0.75 s |
-| Plush detail | sheen only | 10 fur shells on the focused toy | 10 fur shells on the focused toy | 16 shells on the focused toy, 8 on all others |
+| Reflections | static studio environment | static studio environment | cabinet capture per round (512) | cabinet capture every 0.75 s (512) |
+| Plush detail | sheen only (no fur shells) | 10 fur shells on the focused toy | 10 fur shells on the focused toy | 16 shells on the focused toy, 8 on all others |
 | Softness detail | 4 dents | 4 dents | 6 dents, focused toy at LOD0 | 6 dents, all toys at LOD0 |
 | Anti-aliasing | FXAA | FXAA | SMAA | MSAA 4× |
 | Bloom | off | 0.25 | 0.30 | 0.30 |
 | Decor particles | 20 | 60 | 150 | 300 |
+| Effects intensity / light show | 0.5 / off | 1.0 / on | 1.2 / on | 1.5 / on |
 
 The "intended for" row is the design intent behind each tier, nothing more.
+Cabinet and claw tessellation (bevel segments, radial segments) and the small
+details (bolts, hinge pins, strain-relief spring, wound cable, fan bolts) follow the
+*Textures* setting, so they come with the tier without a separate option.
 
 What never changes with quality: the physics step (120 Hz), collision shapes,
 grip rules, number of toys, HUD layout and HUD resolution. See
@@ -49,13 +59,15 @@ grip rules, number of toys, HUD layout and HUD resolution. See
 
 | Option | Cost driver |
 | --- | --- |
-| Render scale, pixel budget | Fragment work of every pass; the single most effective lever on integrated graphics. |
-| Shadows | One extra depth pass over all shadow casters at 1024² / 2048² / 4096². |
+| Render scale, pixel budget, pixel-density cap | Fragment work of every pass; the single most effective lever on integrated graphics and phones. A phone reporting a device pixel ratio of 3 renders 9× the pixels of its CSS size without the cap. |
+| Shadows | One depth pass over all shadow casters at 1024² / 2048² / 4096². On High the map is a variance shadow map: two extra blur passes over the 4096² map (16 taps), and three.js also draws every *shadow-receiving* mesh into it (that includes fur shells). The cabinet therefore keeps its ceiling, frame and walls out of the receivers (they are merged separately from the receiving risers and mats); otherwise the lacquered ceiling would shade the whole play field on High and Ultra. |
+| Contact shadows | One extra draw of the toys and the claw (no cabinet, no shells) into a 256² / 512² height map from below, four tiny blur passes, one transparent floor quad. Off on Safe and Low shadows. |
 | Ambient occlusion | Full-screen GTAO pass plus denoise; scales with pixels and sample count. |
 | Anti-aliasing | FXAA / SMAA are full-screen post passes; MSAA multiplies the samples of the half-float scene target. |
 | Bloom | Several down/up-sampling passes. |
 | Glass = Transmission | Renders the scene once more for the transmission buffer. |
-| Reflections = Cabinet | Re-renders a cube environment and prefilters it (once per round, or every 0.75 s when live). |
+| Reflections = Cabinet | Re-renders a cube environment from the middle of the play volume and prefilters it (once per round at up to 512, or every 0.75 s when live: 256, 512 on Ultra). While captures are used, the studio that lights them is prefiltered at the capture's size, so each lit material compiles a single shader variant (three.js builds the environment size into every program). |
+| Textures | GPU memory (see the table under [Lighting, environment and materials](#lighting-environment-and-materials)) and generation time at theme load (canvas drawing and normal-map maths on the CPU, ≈ 0.1–1 s). Clearcoat, sheen and anisotropy add BRDF work on the cabinet surfaces from Medium up. |
 | Plush detail | Shell fur draws the toy mesh once per layer (instanced): 10 extra layers for one toy, or 8–16 for every toy. This dominates triangle count on High and Ultra (see the measured triangle counts below). |
 | Model detail, softness detail | Vertex count of the toys (about 15 000 / 5 200 / 1 700 triangles per toy) and the per-vertex deformation shader. |
 | Decor particles | Particle update on the CPU and their draw. |
@@ -64,17 +76,85 @@ grip rules, number of toys, HUD layout and HUD resolution. See
 
 ## Internal resolution
 
-`internal size = CSS size × device pixel ratio × render scale × optimiser scale`,
+`internal size = CSS size × min(device pixel ratio, pixel-density cap) × render scale × optimiser scale`,
 then scaled down uniformly if it exceeds the pixel budget (never below 0.2 × CSS
 size). The canvas keeps its CSS size; the HUD is DOM and always native.
-Examples measured in this environment:
 
-| Viewport (CSS px, pixel ratio 1) | Preset | Internal 3D resolution |
+| Viewport (CSS px, pixel ratio) | Preset | Internal 3D resolution | Source |
+| --- | --- | --- | --- |
+| 1280 × 720, 1 | Safe | 1116 × 627 (0.70 MP) — the budget limits it | measured |
+| 1280 × 720, 1 | Medium | 1280 × 720 (0.92 MP) | measured |
+| 390 × 844 (phone, `display=mobile`), 3 | Safe | 488 × 1055 (0.51 MP) — the pixel-density cap, not the budget, limits it | measured |
+| 1080 × 1920, 1 | Medium | 1080 × 1920 (2.07 MP) | measured (earlier run) |
+| 2160 × 3840 (86" 4K portrait), 1 | Medium | 1087 × 1932 (2.10 MP) — the budget halves each dimension | measured (earlier run) |
+
+## Lighting, environment and materials
+
+**Studio environment** (`src/scene/environment.ts`). Image-based lighting and
+reflections come from a procedural studio built per theme and prefiltered with
+three.js' PMREM generator: a graded room in the theme's ceiling / wall / floor
+colours, a long ceiling light strip directly above the play field (it matches the
+cabinet's own diffuser), a thinner strip above the player, two tall side softboxes
+tinted towards the theme's LED colours (only lightly on the dark themes), a rim
+panel behind the cabinet, a large dim front fill, a floor bounce, and a ring of
+small arcade lights that give chrome and glass their glints. The cube face size
+follows the texture tier (256 / 256 / 512 / 1024; three.js r187 never prefilters
+below 256). *Reflections = Cabinet* captures the real interior from the middle of
+the play volume; the capture is always lit by the studio, never by the previous
+capture, so there is no feedback. While captures are in use they replace the studio
+everywhere, so the studio is then prefiltered at the capture's size (512 per round on
+High, 512 every 0.75 s on Ultra): a second size would compile every lit material
+twice and keep an unused 1024 cube (≈ 67 MB) in memory.
+
+**Shadows** (`src/scene/Stage.ts`, `src/scene/contactShadows.ts`). The key light
+(above, slightly front-left) casts the main shadow: hardware PCF on Low and
+Medium, a wide-blur variance shadow map on High (the broad, noise-free penumbra of
+a cabinet lit by a large diffuser). Shadows are never fully black
+(`shadow.intensity` 0.88). From Medium up, *contact shadows* add the soft dark
+rim where toys touch the mat and a faint, wide shadow under the descending claw:
+the toys and the claw are rendered from below into a height-coded map, blurred
+and laid over the mat (never over the chute opening).
+
+**Materials** (`src/scene/materials.ts`, procedural maps in
+`src/scene/textures.ts` / `src/scene/texgen.ts`, all generated at run time):
+
+| Surface | Medium and up | High and up |
 | --- | --- | --- |
-| 1280 × 720 | Safe | 960 × 540 (0.52 MP) |
-| 1280 × 720 | Medium | 1280 × 720 (0.92 MP) |
-| 1080 × 1920 | Medium | 1080 × 1920 (2.07 MP) |
-| 2160 × 3840 (86" 4K portrait) | Medium | 1087 × 1932 (2.10 MP) — the budget halves each dimension |
+| Cabinet frame, claw cap | clearcoat lacquer | metallic flake normal map under the coat |
+| Rails, gantry, claw drum, knuckles | brushed / anodised metal: groove normal map, streaked roughness, anisotropic highlight; UVs run along each part | stronger anisotropy |
+| Chrome (beads, posts, claw body) | mirror chrome | faint scratch roughness map |
+| Side glass, chute acrylic | Fresnel-weighted coverage, full-strength reflections (premultiplied blending), edge tint, micro-scratches and wipe marks | — |
+| Front glass overlay | reflection streaks that follow the viewer, scratches catching light inside them | — |
+| Floor mat, bay mats | quilting plus a woven fabric normal map, sheen | finer weave (128 threads per tile) |
+| Claw tips, wheels | stippled soft-touch rubber | — |
+| Cable | steel | braided normal map at a constant 7 mm pitch |
+| Decals | printed stickers (WIN!, FREE PLAY, MIND THE CLAW, PRIZE arrow) with a clear coat | — |
+
+All colour textures use mipmaps and the renderer's anisotropic filtering (up to
+4× / 8× / 16× by texture size). Approximate texture memory of one theme's cabinet
+(RGBA8 with mip chains, `CabinetMaterials.textureBytes()`), plus the
+environment and shadow targets:
+
+| | Safe | Medium | High | Ultra |
+| --- | --- | --- | --- | --- |
+| Cabinet textures (GPU Party, measured) | 8.7 MB | 40.7 MB | 78.0 MB | 222 MB (89 MB of it the 4K back wall) |
+| Studio environment (half-float cube + mips; the generator keeps a source cube of the same size up to 512) | ≈ 4 (+ 4) MB | ≈ 4 (+ 4) MB | ≈ 17 (+ 17) MB, + 17 MB capture | ≈ 17 (+ 17) MB, + 17 MB live capture (static reflections: ≈ 67 MB, no capture) |
+| Key-light shadow map | 4 MB depth | 17 MB depth | ≈ 200 MB (VSM: two RG16F targets + depth) | as High |
+
+**GPU Party theme** (`pattern: 'circuit'`). Printed-circuit wallpaper (dark
+laminate with glass-fibre weave, 45°-routed traces, vias, chip footprints, a few
+glowing lime lines), a server-hall backdrop, and a 3D wall kit: the emblem on a
+chip carrier, "GPU" block letters, two case fans whose rotors spin (stopped with
+reduced motion), floating chips that bob gently, lightning bolts and raised lit
+traces. All designs are original; no real company logo is used.
+
+**Theme emblem (logo slot).** The emblem on the chip carrier is loaded at run
+time from **`public/assets/themes/gpu/logo.svg`** (an original stylised chip with
+the word "GPU"). An owner with permission to use an official logo can replace
+that one file — same path and name, square artwork, transparent background
+recommended — and nothing else needs to change. If the file is missing or cannot
+be decoded, a procedural stand-in of the same design is shown. The mapping of
+themes to emblem files is `THEME_EMBLEMS` in `src/scene/materials.ts`.
 
 ## Automatic optimiser
 
@@ -82,16 +162,23 @@ Examples measured in this environment:
 removes cost only while the frame-rate target is being missed, in a fixed order,
 and gives it back when there is headroom.
 
-| Step | Reduction |
-| --- | --- |
-| 1 | Decor particles to 30 % |
-| 2 | Bloom off |
-| 3 | Ambient occlusion off |
-| 4 | Reflections → static studio environment |
-| 5 | Glass: transmission → reflective |
-| 6 – 8 | Internal resolution × 0.9, × 0.8, × 0.7 |
-| 9 | Shadows one level down (4096 → 2048, or 2048 → 1024) |
-| 10 – 11 | Internal resolution × 0.6, × 0.5 |
+| Step | Id | Shown as (English) | Reduction |
+| --- | --- | --- | --- |
+| 1 | `particles` | fewer decor particles | Decor particles to 30 % |
+| 2 | `bloom` | bloom off | Bloom off |
+| 3 | `ao` | ambient occlusion off | Ambient occlusion off |
+| 4 | `reflections` | studio reflections | Reflections → static studio environment |
+| 5 | `glass` | reflective glass | Glass: transmission → reflective |
+| 6 – 8 | `scale90` … `scale70` | 3D resolution 90 % … 70 % | Internal resolution × 0.9, × 0.8, × 0.7 |
+| 9 | `shadows` | shadows one level lower | Shadows one level down: 4096 VSM → 2048 PCF (High), or 2048 → 1024 with contact shadows off (Medium) |
+| 10 – 11 | `scale60`, `scale50` | 3D resolution 60 %, 50 % | Internal resolution × 0.6, × 0.5 |
+
+The Graphics tab lists active reductions by their translated labels
+(`src/i18n/strings/graphics.ts`, keys `graphics.step.<id>` from
+`reductionLabelKey()`), never by id, and shows only the current resolution step
+(`visibleReductions()`: "3D resolution 70 %", not "90 %, 80 %, 70 %"). Step 9 on High switches the shadow filter
+from VSM to PCF, which makes three.js recompile the lit materials once; that
+single long frame is ignored by the hitch rule below.
 
 Steps that would change nothing for the current settings are skipped on the way
 down: from Medium (AO off, static reflections, reflective glass) the order is
@@ -146,7 +233,55 @@ container and nowhere else.
 > the measurements (1-minute load average 7–17), which makes the frame times
 > below even slower and noisier than software rendering alone would be.
 
+### Render statistics per tier (environment and materials round)
+
+Method: production build served by `vite preview`, headless Chromium (SwiftShader),
+`?debug=1&camera=off&seed=7&display=desktop&theme=gpu&quality=<tier>` at 1280 × 720, device
+pixel ratio 1, attract screen (1-minute load average 23–55 from other jobs); values read from
+`renderer.info` after the second rendered frame following boot (Ultra: the first). The GPU Party theme still showed the Cosmic characters (its own plush models were
+not in the manifest yet), so the toy share of the triangles is that of the Cosmic toys.
+Draw calls and triangles count every pass of that frame (shadow map, contact-shadow pass on the
+frames that refresh it, main pass, post). These numbers do not depend on the hardware; frame
+times were not measured in this round (seconds per frame in software rendering, see below).
+
+| Tier | Internal resolution | Draw calls | Triangles | Shader programs | Geometries | Textures | Cabinet textures | Environment / shadow / contact |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Safe | 1116 × 627 (0.70 MP) | 133 | 217 294 | 39 | 81 | 35 | 8.7 MB | 256 / 1024 PCF / off |
+| Safe, phone (`display=mobile`, 390 × 844 CSS, pixel ratio 3) | 488 × 1055 (0.51 MP) | 120 | 179 926 | 35 | 76 | 35 | 8.7 MB | 256 / 1024 PCF / off |
+| Medium | 1280 × 720 (0.92 MP) | 148 | 530 643 | 58 | 89 | 54 | 40.7 MB | 256 / 2048 PCF / 256², every 2nd frame |
+| High | 1280 × 720 (0.92 MP) | 373 | 4 103 050 | 71 | 92 | 68 | 78.0 MB | 512 (+ 512 cabinet capture) / 4096 VSM / 512² |
+| Ultra | 1280 × 720 (0.92 MP) | 554 | 8 222 090 | 94 | 98 | 77 | 222 MB | 1024 (+ 256 live capture) / 4096 VSM / 512² — before the review fixes below |
+| High, Sakura (own textured characters) | 1280 × 720 | 334 | 4 086 260 | 71 | 73 | 67 | 72.7 MB | as High |
+| High, Storybook (own textured characters) | 1280 × 720 | 334 | 4 079 929 | 71 | 73 | 67 | 72.7 MB | as High |
+| High, Ocean (own textured characters) | 1280 × 720 | 333 | 4 083 479 | 71 | 72 | 67 | 72.7 MB | as High |
+| High, Cosmic (own textured characters) | 1280 × 720 | 335 | 4 076 012 | 71 | 73 | 67 | 72.7 MB | as High |
+
+The frame-to-frame spread is noticeable on Medium because its contact shadows are refreshed on
+every other frame only. Most of the High / Ultra triangles are toys: the new textured characters
+(about 41 000 triangles at LOD0) are drawn in the main pass, the shadow pass (VSM also draws every
+shadow *receiver*, fur shells included), the contact-shadow pass and, on Ultra, with fur shells on
+every toy. Console output of every run: no shader compile errors, no page errors
+(the only warnings were "KHR_parallel_shader_compile extension not supported" and the GPU Party
+placeholder-toy notice).
+
+After the review of this round two changes altered these numbers: the cabinet merges its
+shadow-receiving parts separately from the rest (one more draw call in landscape; under VSM the
+lacquered ceiling no longer shades the play field), and while cabinet captures are used the
+studio is prefiltered at the capture's size (512 on Ultra, so the lit materials compile once
+instead of once per environment size). Re-measured the same way (load average about 8–18):
+
+| Tier | Internal resolution | Draw calls | Triangles | Shader programs (environment size compiled in) | Cabinet textures | Environment / shadow / contact |
+| --- | --- | --- | --- | --- | --- | --- |
+| Safe | 1116 × 627 (0.70 MP) | 134 | 217 360 | 39 (22 × 256) | 8.7 MB | 256 / 1024 PCF / off |
+| Medium | 1280 × 720 (0.92 MP) | 149 | 530 659 | 58 (28 × 256) | 40.7 MB | 256 / 2048 PCF / 256² |
+| High | 1280 × 720 (0.92 MP) | 375 | 4 085 578 | 71 (32 × 512) | 78.0 MB | 512 (+ 512 capture) / 4096 VSM / 512² |
+| Ultra (960 × 540 viewport) | 960 × 540 (0.52 MP) | 557 | 8 186 742 | 74 (36 × 512) | 222 MB | 512 (+ 512 live capture) / 4096 VSM / 512² |
+
 ### Browser frame time (software rendering)
+
+> The table below predates the environment / materials round (new studio environment, contact
+> shadows, VSM on High, tiered materials and tessellation); its draw-call and triangle columns are
+> therefore lower than the current ones above.
 
 Method: dev server, `?debug=1&camera=off&seed=7&quality=<preset>&display=<preset>`,
 device pixel ratio 1, on the attract screen; 14 s warm-up, then

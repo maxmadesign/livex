@@ -42,22 +42,62 @@ export interface SettingsState {
   importJson(text: string): { ok: boolean; message: string; changed: number };
 }
 
+/** Default and range of the retired `system.attractIdleSec` (replaced by `system.idleSeconds`). */
+const OLD_ATTRACT_IDLE = { def: 45, min: 10, max: 600, step: 5 };
+
+/**
+ * `system.attractIdleSec` (idle time before the attract screen, default 45 s) and
+ * `system.idleSeconds` (full reset after no input, default 60 s) were two settings for
+ * one behaviour. Only idleSeconds remains; a customised old value carries over when
+ * idleSeconds was never chosen (absent, or still at its default).
+ */
+function migrateIdleSetting(settings: unknown): unknown {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return settings;
+  const system = (settings as { system?: unknown }).system;
+  if (!system || typeof system !== 'object' || Array.isArray(system)) return settings;
+  const s = system as Record<string, unknown>;
+  if (!('attractIdleSec' in s)) return settings;
+  const { attractIdleSec: old, ...rest } = s;
+  const next: Record<string, unknown> = { ...rest };
+  const idleDefault = defaultSettings().system.idleSeconds;
+  if (typeof old === 'number' && Number.isFinite(old) && (s.idleSeconds === undefined || s.idleSeconds === idleDefault)) {
+    // The old setting was sanitised to its own range, so do the same before comparing with its default.
+    const stepped = OLD_ATTRACT_IDLE.min + Math.round((old - OLD_ATTRACT_IDLE.min) / OLD_ATTRACT_IDLE.step) * OLD_ATTRACT_IDLE.step;
+    const value = Math.min(OLD_ATTRACT_IDLE.max, Math.max(OLD_ATTRACT_IDLE.min, stepped));
+    if (value !== OLD_ATTRACT_IDLE.def) next.idleSeconds = value;
+  }
+  return { ...(settings as Record<string, unknown>), system: next };
+}
+
 /** Upgrades persisted data from older versions. Returns the settings payload or null when unusable. */
 export function migrate(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as { version?: unknown; settings?: unknown };
   if (typeof o.version !== 'number' || o.settings === undefined) return null;
   if (o.version > SETTINGS_VERSION) return null; // written by a newer build: fall back to defaults
-  // v1 is the first public layout; future versions transform `o.settings` step by step here.
-  return o.settings;
+  // v1 is the first public layout; later changes within it are upgraded key by key.
+  return migrateIdleSetting(o.settings);
+}
+
+/** True when the stored data was written by a newer build (it is then left untouched). */
+function fromNewerBuild(raw: unknown): boolean {
+  const version = raw && typeof raw === 'object' ? (raw as { version?: unknown }).version : undefined;
+  return typeof version === 'number' && version > SETTINGS_VERSION;
 }
 
 function load(): { settings: Settings; repaired: boolean } {
   const raw = readJson(KEY);
   const payload = migrate(raw);
-  if (payload === null) return { settings: defaultSettings(), repaired: raw !== null };
-  const clean = sanitizeSettings(payload);
-  return { settings: clean, repaired: JSON.stringify(clean) !== JSON.stringify(payload) };
+  let result: { settings: Settings; repaired: boolean };
+  if (payload === null) result = { settings: defaultSettings(), repaired: raw !== null };
+  else {
+    const clean = sanitizeSettings(payload);
+    result = { settings: clean, repaired: JSON.stringify(clean) !== JSON.stringify(payload) || payload !== (raw as { settings?: unknown }).settings };
+  }
+  // Write the repaired settings back once, so the next start does not repair (and warn about) the
+  // same thing again. Data from a newer build is kept as it is: that build may still need it.
+  if (result.repaired && !fromNewerBuild(raw)) persist(result.settings);
+  return result;
 }
 
 function persist(settings: Settings): void {

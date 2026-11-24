@@ -2,18 +2,23 @@ import { Vector3 } from 'three';
 import type { AudioPort, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort } from '../core/contracts';
 import type { DisplayProfileId, Lang, RoundResult, ThemeId, Vec3 } from '../core/types';
 import { getLog, log, logError } from '../diagnostics/log';
+import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
+import { rarityOf, type RarityTier } from '../game/rarity';
 import type { RoundParams } from '../game/RoundController';
+import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { solveLayout, type HudLayout } from '../layout/solve';
 import { computeWindowLayout, eyeToWorld, readWindowEnvironment, type WindowLayout } from '../perspective/windowGeometry';
 import type { CollectionStore } from '../persistence/collection';
-import { CLAW, FIXED_DT, GROUP, groups } from '../physics/fieldSpec';
+import { clearScores, loadScores, saveScores } from '../persistence/scores';
+import { CHUTE_CENTER, CLAW, FIXED_DT, GROUP, PRIZE_SENSOR, groups } from '../physics/fieldSpec';
 import { FixedStepper, RAPIER, initRapier, type ImpactEvent, type ToyBody } from '../physics/PhysicsWorld';
 import { PlushLibrary } from '../plush/PlushLibrary';
 import type { PlushAsset } from '../plush/manifest';
 import { Cabinet } from '../scene/Cabinet';
 import { ClawVisual } from '../scene/ClawVisual';
 import { Effects } from '../scene/Effects';
+import type { FxApi, FxBurstKind, Vec3Like } from '../scene/fx/api';
 import { CabinetMaterials } from '../scene/materials';
 import { Stage } from '../scene/Stage';
 import { ToyVisuals } from '../scene/ToyVisuals';
@@ -66,9 +71,17 @@ export interface GameDeps {
 type PauseReason = 'modal' | 'hidden' | 'context' | 'boot' | 'theme';
 
 const _v = new Vector3();
+const _p = new Vector3();
 const _eye: Vec3 = [0, 0, 1];
 const _eyeWorld: Vec3 = [0, 0, 1];
 const FRAME_SAMPLES = 180;
+/** Cabinet LED energy of a win, by rarity (the existing materials.updateLeds input). */
+const TIER_LED: Record<RarityTier, number> = { common: 0.75, rare: 1, epic: 1.3, legendary: 1.7 };
+/** Where a won prize leaves the field: the prize exit, just below the floor. */
+const EXIT_POS: Vec3Like = { x: CHUTE_CENTER.x, y: PRIZE_SENSOR.yTop + 0.04, z: CHUTE_CENTER.z };
+/** Input events that count as "somebody is here" for the idle reset. */
+const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
+type LightMode = Parameters<FxApi['lightShow']>[0];
 
 /**
  * Composition root of the running game: owns the authoritative simulation
@@ -112,8 +125,23 @@ export class Game {
   private physicsMsAcc = 0;
   private stepsAcc = 0;
   private framesAcc = 0;
-  private idleTime = 0;
-  private attractTime = 0;
+  /** Wall-clock idle detection (keeps counting while a dialog is open). */
+  private readonly idle = new IdleTimer();
+  private attract!: AttractDirector;
+  /** Points system (src/game/scoring.ts); best and lifetime persist in src/persistence/scores.ts. */
+  readonly scores = new ScoreKeeper(loadScores(), (record) => saveScores(record));
+  /** Difficulty the current round is played (and scored) with: latched with the round's parameters. */
+  private roundDifficulty: ScoringDifficulty = 'arcade';
+  private popupId = 0;
+  /** Light show: the mode last sent, the mode the game is in, and how long a win show still runs. */
+  private lightSent: LightMode | null = null;
+  private lightWin: LightMode = 'win';
+  private lightWinTime = 0;
+  private ctaTimer = 1.2;
+  private ctaSide = 0;
+  /** Effects already shown in this round (each fires once). */
+  private liftShown = -1;
+  private auraOn = false;
   private lossStreak = 0;
   private lastHintAt = -99;
   private restockTimer = 0;
@@ -138,6 +166,13 @@ export class Game {
     this.committed = deps.settings.getState().settings;
     this.profile = deps.ui.getState().profile;
     this.themeId = this.committed.themes.current;
+    this.roundDifficulty = this.committed.gameplay.difficulty;
+    this.scores.enabled = this.applied.gameplay.scoring;
+  }
+
+  /** The effects contract (src/scene/fx/api.ts); src/scene/Effects.ts implements it. */
+  private get fx(): FxApi {
+    return this.effects;
   }
 
   /* ------------------------------------------------------------------ boot */
@@ -179,6 +214,7 @@ export class Game {
         field: this.fieldOptions(s),
         themeId: this.themeId,
       });
+      this.attract = new AttractDirector(this.core);
       this.bindCore();
 
       await this.loadTheme(this.themeId, (p) => this.setBoot(0.2 + 0.55 * p, 'toys'));
@@ -198,6 +234,9 @@ export class Game {
       window.addEventListener('resize', this.onResize);
       document.addEventListener('visibilitychange', this.onVisibility);
       window.addEventListener('blur', this.onBlur);
+      for (const type of ACTIVITY_EVENTS) window.addEventListener(type, this.onActivity, { capture: true, passive: true });
+      this.idle.touch();
+      this.publishScore(null);
 
       ui.setState({ boot: { stage: 'ready', progress: 1, label: 'ready', error: null }, warnings: [...this.library.warnings], themeId: this.themeId });
       this.setPaused('boot', false);
@@ -392,24 +431,33 @@ export class Game {
     c.inputZ = (this.dir.front ? 1 : 0) - (this.dir.back ? 1 : 0);
   }
 
-  /** Start button / first tap: leaves attract mode, unlocks audio and (once) starts head tracking. */
+  /**
+   * Start button, the attract call to action, Space / Enter: leaves attract mode at once (a
+   * running demo round is stopped, the claw and the field are reset on the spot), unlocks audio,
+   * (once) starts head tracking and begins a player round that is ready to aim.
+   */
   pressStart(): void {
     if (this.paused) return;
     this.touchActivity();
-    const m = this.core.machine;
+    if (!this.attract.active) return;
     void this.deps.audio.unlock();
     if (this.firstStart) {
       this.firstStart = false;
       this.deps.audio.setTheme(this.themeId, { immediate: true });
       if (this.applied.camera.enabled && !this.deps.launch.noCamera) void this.deps.tracker.start();
     }
-    if (m.demo && m.phase !== 'ATTRACT') {
-      // A player takes over from the demo: drop the demo round and start a real one.
-      this.core.controller.resetRound('player_took_over', 'READY');
-      this.afterRoundBoundary();
-    } else if (m.phase === 'ATTRACT') {
-      m.start(false);
-    } else return;
+    this.pilot.reset();
+    this.clearDirections();
+    // New player, new session: the demo's show score and any old combo are gone.
+    this.scores.resetSession();
+    this.deps.ui.setState({ result: null, prize: null, scorePopups: [] });
+    this.attract.leave();
+    this.restockQueue = 0;
+    this.toyVisuals.sync(this.core.phys.toys.values());
+    this.safeFx(() => this.fx.aura(null));
+    this.auraOn = false;
+    this.lightWinTime = 0;
+    this.publishScore(null);
     this.deps.audio.playSfx('start_game');
     if (!this.deps.ui.getState().firstPlayDone) {
       this.deps.ui.setState({ firstPlayDone: true });
@@ -462,8 +510,74 @@ export class Game {
   }
 
   private touchActivity(): void {
-    this.idleTime = 0;
-    this.attractTime = 0;
+    this.idle.touch();
+  }
+
+  private onActivity = (): void => {
+    this.idle.touch();
+  };
+
+  /** Settings → System → Reset scores (best session score and lifetime points). */
+  resetScores(): void {
+    this.scores.resetAll();
+    clearScores();
+    this.publishScore(null);
+  }
+
+  /** Seconds since the last player input (diagnostics / tests). */
+  idleSeconds(): number {
+    return this.idle.idleSeconds();
+  }
+
+  /**
+   * Seconds spent in the ATTRACT phase; the next demo round starts when it passes the delay.
+   * Tests set it to 0 to keep the demo claw still while frames render (tests/e2e/20-screenshots).
+   */
+  get attractTime(): number {
+    return this.attract ? this.attract.attractTime : 0;
+  }
+  set attractTime(seconds: number) {
+    if (this.attract) this.attract.attractTime = seconds;
+  }
+
+  /**
+   * Nobody played for `system.idleSeconds`: a full reset. Open dialogs close (a settings draft
+   * is cancelled), the session score and combo are cleared, the guide stops talking, the view
+   * returns to neutral (tracking keeps running), the field is restocked to the configured count
+   * and the machine goes back to the self-playing attract mode.
+   */
+  idleReset(reason: 'idle' | 'debug' = 'idle'): void {
+    log('info', 'round', reason === 'idle' ? `idle reset (${this.applied.system.idleSeconds} s without input)` : 'idle reset (requested through the debug API)');
+    const { ui, guide, tracker } = this.deps;
+    this.closeDialogs();
+    guide.silence();
+    tracker.setTestViewpoint(null);
+    tracker.cancelCalibration();
+    this.clearDirections();
+    this.scores.resetSession();
+    ui.setState({ result: null, prize: null, scorePopups: [], toast: null });
+    if (!this.attract.active) this.attract.enter('idle_reset');
+    this.lossStreak = 0;
+    this.retryPrompted = false;
+    this.restockQueue = this.core.field.missing();
+    this.publishScore(null);
+    this.idle.touch();
+  }
+
+  /** Closes whatever dialog is open, exactly like its Cancel / close button (no sound). */
+  private closeDialogs(): void {
+    const { ui, settings, tracker, audio } = this.deps;
+    const modal = ui.getState().modal;
+    // The first-run display chooser stays: the machine is not usable before a preset is chosen.
+    if (modal === null || modal === 'device') return;
+    if (modal === 'settings') {
+      settings.getState().cancelEdit();
+      tracker.setTestViewpoint(null);
+      tracker.attachPreview(null);
+      audio.previewTrack(null);
+    }
+    ui.setState({ modal: null });
+    this.setModalOpen(false);
   }
 
   /* ---------------------------------------------------------------- rounds */
@@ -474,10 +588,18 @@ export class Game {
     machine.events.on('phase', (e) => {
       ui.setState({ phase: e.phase, roundId: e.roundId, demo: e.demo, aimSecondsLeft: -1 });
       if (this.applied.system.verboseLog) log('info', 'round', `${e.prev} → ${e.phase} (round ${e.roundId}${e.demo ? ', demo' : ''})`);
-      if (e.phase === 'READY') this.afterRoundBoundary();
-      if (e.phase === 'ATTRACT') {
-        this.attractTime = 0;
+      if (e.phase === 'READY') {
+        // The round's parameters are latched now, so is the difficulty it is scored with.
+        this.roundDifficulty = this.committed.gameplay.difficulty;
         this.afterRoundBoundary();
+        if (e.demo && e.prev === 'ATTRACT') this.publishScore(null);
+      }
+      if (e.phase === 'ATTRACT') {
+        this.attract.attractTime = 0;
+        this.afterRoundBoundary();
+        // Attract mode always shows a full machine, whatever the restock setting.
+        this.restockQueue = this.core.field.missing();
+        this.publishScore(null);
       }
       if (e.phase === 'DESCENDING') {
         audio.playSfx('claw_descend');
@@ -502,39 +624,189 @@ export class Game {
     });
     machine.events.on('abort', (e) => log('info', 'round', `round ${e.roundId} aborted: ${e.reason}`));
     controller.events.on('recovered', (e) => log('warn', 'round', `watchdog forced ${e.phase} in round ${e.roundId}`));
-    controller.events.on('clawTouch', (e) => audio.playSfx('claw_touch', { volume: e.onToy ? 0.9 : 0.6 }));
+    controller.events.on('clawTouch', (e) => {
+      audio.playSfx('claw_touch', { volume: e.onToy ? 0.9 : 0.6 });
+      // First real finger contact with a toy.
+      if (e.onToy) this.burstAt('contact', this.core.claw.gripCenter(_p));
+    });
     controller.events.on('gripEvaluated', (e) => {
       if (e.toy) {
         audio.playSfx('plush_rub', { volume: 0.5 + 0.4 * (e.facts?.quality ?? 0) });
         this.toyVisuals.focus = e.toy;
       }
     });
-    controller.events.on('slipped', () => audio.playSfx('slip'));
-    controller.events.on('prizeDetected', () => {
-      audio.playSfx('chute_drop');
-      this.celebrate = 1;
+    controller.events.on('slipped', (e) => {
+      audio.playSfx('slip');
+      if (this.toyPosition(e.toy, _p)) this.burstAt('slip', _p, rarityOf(e.toy.asset.id));
     });
+    controller.events.on('prizeDetected', (e) => this.onPrizeExit(e.roundId, e.toy));
     controller.events.on('aimTick', (e) => {
       ui.setState({ aimSecondsLeft: e.secondsLeft });
       if (e.secondsLeft <= 3 && e.secondsLeft > 0) audio.playSfx('countdown_tick');
     });
     controller.events.on('grabStarted', () => {
+      const hub = this.core.claw.hubPose.pos;
+      this.burstAt('grab', _p.set(hub[0]!, hub[1]! - 0.12, hub[2]!));
       if (!machine.demo && this.lossStreak === 0 && machine.roundId % 4 === 2) this.emitGuide('grab_started');
+    });
+  }
+
+  /* ---------------------------------------------------------------- effects */
+
+  private burstAt(kind: FxBurstKind, pos: Vec3Like, tier?: RarityTier, scale?: number): void {
+    this.safeFx(() => this.fx.burst(kind, { x: pos.x, y: pos.y, z: pos.z }, tier || scale ? { tier, scale } : undefined));
+  }
+
+  /**
+   * Effects are presentation only: a failing effect is logged and skipped. It must never reach
+   * the frame loop's error recovery, which would abandon the round (every frame, for the aura).
+   */
+  private safeFx(run: () => void): void {
+    try {
+      run();
+    } catch (error) {
+      logError('fx', error);
+    }
+  }
+
+  /** Render position of a toy (interpolated), falling back to its physics pose. */
+  private toyPosition(toy: ToyBody, out: Vector3): Vector3 | null {
+    if (this.toyVisuals.positionOf(toy, out)) return out;
+    const p = toy.pose.pos;
+    return out.set(p[0]!, p[1]!, p[2]!);
+  }
+
+  /** A world position on screen, in CSS pixels (null when behind the viewer). */
+  private toScreen(pos: Vec3Like): { x: number; y: number } | null {
+    const camera = this.stage.camera;
+    _v.set(pos.x, pos.y, pos.z).project(camera);
+    if (!Number.isFinite(_v.x) || !Number.isFinite(_v.y) || _v.z > 1) return null;
+    const rect = this.deps.canvas.getBoundingClientRect();
+    const w = rect.width || this.hud.vw;
+    const h = rect.height || this.hud.vh;
+    return { x: rect.left + ((_v.x + 1) / 2) * w, y: rect.top + ((1 - _v.y) / 2) * h };
+  }
+
+  /**
+   * The prize passed the exit sensor: the round is won (physically decided) and settled right
+   * away, so the points pop up where the prize leaves the field. The result card shows the
+   * same award later (settlement is idempotent per round).
+   */
+  private onPrizeExit(roundId: number, toy: ToyBody): void {
+    const { audio } = this.deps;
+    const demo = this.core.machine.demo;
+    const tier = rarityOf(toy.asset.id);
+    audio.playSfx('chute_drop');
+    this.celebrate = Math.max(this.celebrate, TIER_LED[tier]);
+    const award = this.settleRound(roundId, 'won', toy.asset.id, demo);
+    const streak = award ? award.streak : 0;
+    const jackpot = tier === 'legendary' || (award !== null && award.comboMultiplier >= 3);
+    this.safeFx(() => this.fx.celebrate(tier, EXIT_POS));
+    this.burstAt('score', EXIT_POS, tier);
+    if (streak >= 2) this.burstAt('combo', EXIT_POS, tier, Math.min(2, 0.6 + streak * 0.25));
+    this.lightWin = jackpot ? 'jackpot' : 'win';
+    this.lightWinTime = ATTRACT_TIMING.winShow * (jackpot ? 1.4 : 1);
+    // Rarer prizes get the bigger sound: the unlock chime on top of the drop (no new audio files).
+    if (tier === 'epic' || tier === 'legendary') audio.playSfx('collect_unlock', { delay: 0.25, volume: tier === 'legendary' ? 1 : 0.7, pitch: tier === 'legendary' ? 1.12 : 1 });
+    if (award) {
+      const at = this.toScreen(EXIT_POS);
+      if (at) this.addPopup(at, award);
+      this.publishScore(award);
+    }
+  }
+
+  /** Scores a round once (idempotent per round id); demo rounds never persist. */
+  private settleRound(roundId: number, outcome: RoundResult['outcome'], typeId: string | null, demo: boolean): ScoreAward | null {
+    const already = this.scores.awardFor(roundId);
+    if (already) return null;
+    const prize = this.deps.ui.getState().prize;
+    const facts = this.core.grip.facts;
+    return this.scores.settle({
+      roundId,
+      outcome,
+      typeId,
+      difficulty: this.roundDifficulty,
+      firstCatch: !demo && outcome === 'won' && !!prize?.isNew && prize.typeId === typeId,
+      grip: facts ? { centering: facts.centering, fingers: facts.fingers } : null,
+      demo,
+    });
+  }
+
+  private addPopup(at: { x: number; y: number }, award: ScoreAward): void {
+    const popups = this.deps.ui.getState().scorePopups.slice(-5);
+    popups.push({
+      id: ++this.popupId,
+      x: at.x,
+      y: at.y,
+      points: award.total,
+      tier: award.tier,
+      kind: award.outcome === 'won' ? 'win' : 'slip',
+      demo: award.demo,
+      multiplier: award.comboMultiplier,
+    });
+    this.deps.ui.setState({ scorePopups: popups });
+  }
+
+  /** Removes a popup once its animation finished (called by the HUD). */
+  dismissPopup(id: number): void {
+    const popups = this.deps.ui.getState().scorePopups;
+    if (popups.some((p) => p.id === id)) this.deps.ui.setState({ scorePopups: popups.filter((p) => p.id !== id) });
+  }
+
+  /** Pushes the points state to the HUD. `last` = the award just settled (null keeps the previous one). */
+  private publishScore(last: ScoreAward | null): void {
+    const demo = this.attract ? this.attract.active : true;
+    const totals = this.scores.totals(demo);
+    const prev = this.deps.ui.getState().score;
+    this.deps.ui.setState({
+      score: {
+        enabled: this.applied.gameplay.scoring,
+        demo,
+        session: totals.session,
+        streak: totals.streak,
+        nextMultiplier: comboMultiplier(totals.streak + 1),
+        best: totals.best,
+        lifetime: totals.lifetime,
+        last: last ?? (totals.session === 0 && totals.streak === 0 ? null : prev.last),
+      },
     });
   }
 
   private onResult(result: RoundResult): void {
     const { ui, audio } = this.deps;
+    // Slips and empty grabs are scored here; a win was already scored when the prize passed the exit.
+    if (result.outcome !== 'won') {
+      const award = this.settleRound(result.roundId, result.outcome, result.targetTypeId, result.demo);
+      if (award) {
+        if (award.total > 0) {
+          const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
+          const at = toy && this.toyPosition(toy, _p) ? this.toScreen(_p.setY(_p.y + 0.08)) : null;
+          if (at) this.addPopup(at, award);
+        }
+        this.publishScore(award);
+      }
+    }
     ui.setState({ result });
     this.retryPrompted = false;
-    if (result.demo) return;
+    if (result.outcome === 'won') {
+      // Normally settled at the exit already; this only catches a win the exit event did not score.
+      if (!this.scores.isSettled(result.roundId)) {
+        const award = this.settleRound(result.roundId, 'won', result.targetTypeId, result.demo);
+        if (award) this.publishScore(award);
+      }
+      // The prize lands in the bin (demo rounds show it too).
+      const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
+      if (toy && this.toyPosition(toy, _p)) this.burstAt('drop', _p.setY(_p.y + 0.06), rarityOf(toy.asset.id));
+    }
+    if (result.demo) {
+      if (result.outcome === 'won') audio.playSfx('win', { volume: 0.7 });
+      return;
+    }
     if (result.outcome === 'won') {
       this.lossStreak = 0;
       audio.playSfx('win');
       const prize = ui.getState().prize;
       if (prize?.isNew) audio.playSfx('collect_unlock', { delay: 0.9 });
-      const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
-      if (toy && this.toyVisuals.positionOf(toy, _v)) this.effects.prizeBurst(_v.setY(_v.y + 0.1), 1);
       this.emitGuide('prize_won', result);
     } else if (result.outcome === 'slipped') {
       this.lossStreak++;
@@ -640,6 +912,8 @@ export class Game {
     this.restockQueue--;
     this.toyVisuals.sync(this.core.phys.toys.values(), true);
     this.deps.audio.playSfx('restock_drop', { volume: 0.7 });
+    const p = toy.pose.pos;
+    this.burstAt('restock', _p.set(p[0]!, p[1]!, p[2]!), rarityOf(toy.asset.id));
     if (!this.deps.ui.getState().restocking) this.deps.ui.setState({ restocking: true });
   }
 
@@ -762,6 +1036,10 @@ export class Game {
     if (touched('gameplay.')) {
       this.effects.showReticle = next.gameplay.aimReticle;
       this.effects.showBeam = next.gameplay.aimBeam;
+      if (this.scores.enabled !== next.gameplay.scoring || !prev) {
+        this.scores.enabled = next.gameplay.scoring;
+        if (this.attract) this.publishScore(null);
+      }
     }
     this.effects.reducedMotion = this.toyVisuals.reducedMotion = this.reducedMotion(next);
   }
@@ -800,6 +1078,8 @@ export class Game {
     if (committedDiff.some((p) => p.startsWith('gameplay.'))) {
       this.core.controller.setParams(this.roundParams(committed));
       this.core.phys.setToyFriction(committed.gameplay.toyFriction);
+      // Same rule as the round parameters: between rounds the new difficulty applies at once.
+      if (this.core.machine.atRoundBoundary) this.roundDifficulty = committed.gameplay.difficulty;
     }
     const rebuild = committedDiff.some(
       (p) => p.startsWith('themes.') || p === 'gameplay.toyCount' || p === 'gameplay.toyMass',
@@ -888,6 +1168,9 @@ export class Game {
       this.updateAudio(dt);
     }
     if (this.pendingLayout && (this.layoutTimer -= dt) <= 0) this.applyPendingLayout();
+    // Idle reset: wall clock, also while paused by a dialog. A player round that is still running counts as activity.
+    const m = core.machine;
+    if (this.idle.due(this.applied.system.idleSeconds, m.busy && !m.demo && !paused) && this.needsIdleReset()) this.idleReset();
 
     const alpha = paused ? 1 : this.stepper.alpha;
     const grip = core.grip;
@@ -897,8 +1180,16 @@ export class Game {
     if (this.toyVisuals.heldToy) this.updateGripLocal(this.toyVisuals.heldToy);
     this.clawVisual?.update(alpha);
     this.updateAim();
+    this.updateShow(paused ? 0 : dt);
     this.celebrate = Math.max(0, this.celebrate - dt * 0.45);
-    this.materials?.updateLeds(this.time, this.celebrate, this.effects.reducedMotion);
+    // Cabinet LEDs: the win energy (by rarity) plus whatever the running light show adds.
+    let ledExtra = 0;
+    try {
+      ledExtra = this.fx.ledEnergy?.() ?? 0;
+    } catch (error) {
+      logError('fx', error);
+    }
+    this.materials?.updateLeds(this.time, this.celebrate + (Number.isFinite(ledExtra) ? Math.max(0, ledExtra) : 0), this.effects.reducedMotion);
     this.effects.update(paused ? 0 : dt);
     this.updateEye(now, dt);
     stage.render(dt);
@@ -919,30 +1210,32 @@ export class Game {
     );
   }
 
-  /** Non-physical round flow: idle handling, attract demo, auto-advance after a miss. */
+  /** True when an idle reset has something to do (not already a clean, self-playing attract mode). */
+  private needsIdleReset(): boolean {
+    if (!this.attract.active) return true;
+    const modal = this.deps.ui.getState().modal;
+    return (modal !== null && modal !== 'device') || this.scores.totals(false).session > 0;
+  }
+
+  /**
+   * Non-physical round flow: attract mode and its demo rounds, auto-advance after a miss,
+   * guide hints. (The idle reset itself runs on the wall clock in `update`.)
+   */
   private updateFlow(dt: number): void {
     const m = this.core.machine;
-    const s = this.applied;
-    this.idleTime += dt;
+    const event = this.attract.update(dt, {
+      demoEnabled: this.applied.system.attractDemo,
+      firstDemo: this.firstStart && this.core.time < 30,
+      restockPending: this.restockQueue > 0,
+    });
+    if (event === 'demoStarted') this.pilot.reset();
+    if (event === 'demoEnded') this.deps.ui.setState({ result: null, prize: null });
+    if (m.demo || m.phase === 'ATTRACT') return;
+    const idle = this.idle.idleSeconds();
     switch (m.phase) {
-      case 'ATTRACT':
-        this.attractTime += dt;
-        if (s.system.attractDemo && this.attractTime > 6 && !this.firstStart) {
-          this.pilot.reset();
-          m.start(true);
-        } else if (s.system.attractDemo && this.attractTime > 9) {
-          this.pilot.reset();
-          m.start(true);
-        }
-        break;
       case 'READY':
       case 'AIMING':
-        if (m.demo) break;
-        if (this.idleTime > s.system.attractIdleSec) {
-          this.clearDirections();
-          m.toAttract();
-          this.deps.ui.setState({ result: null, prize: null });
-        } else if (this.idleTime > 12 && this.time - this.lastHintAt > 25) {
+        if (idle > 12 && this.time - this.lastHintAt > 25) {
           this.lastHintAt = this.time;
           this.emitGuide(this.lossStreak >= 2 ? 'aim_help' : 'idle_hint');
         }
@@ -950,26 +1243,74 @@ export class Game {
       case 'RESULT': {
         this.resultTimer += dt;
         const result = this.deps.ui.getState().result;
-        if (m.demo) {
-          if (this.resultTimer > 2.2) {
-            this.deps.ui.setState({ result: null, prize: null });
-            m.toAttract();
-          }
-        } else if (result && result.outcome !== 'won') {
+        if (result && result.outcome !== 'won') {
           // A miss never blocks: the next round is ready almost immediately.
           if (this.resultTimer > 1.15) this.playAgain();
         } else if (!this.retryPrompted && this.resultTimer > 7) {
           this.retryPrompted = true;
           this.emitGuide('retry_prompt');
-        } else if (this.resultTimer > s.system.attractIdleSec) {
-          this.deps.ui.setState({ result: null, prize: null });
-          m.toAttract();
         }
         break;
       }
       default:
-        this.idleTime = 0;
+        break;
     }
+  }
+
+  /**
+   * Per-frame effects that follow the game state: the rarity aura around a held toy, the burst
+   * on a successful lift, the light show mode and the sparkles around the attract call to action.
+   */
+  private updateShow(dt: number): void {
+    const { machine: m, grip } = this.core;
+    const held = this.toyVisuals.heldToy;
+    if (held && this.toyPosition(held, _p)) {
+      const tier = rarityOf(held.asset.id);
+      // A successful lift: the toy really rose while held (GripMonitor's "lifted" milestone).
+      if (grip.contactLevel === 'lifted' && this.liftShown !== m.roundId) {
+        this.liftShown = m.roundId;
+        this.burstAt('lift', _p, tier);
+      }
+      this.safeFx(() => this.fx.aura(_p, tier));
+      this.auraOn = true;
+    } else if (this.auraOn) {
+      this.safeFx(() => this.fx.aura(null));
+      this.auraOn = false;
+    }
+
+    const attract = this.attract.active;
+    if (this.lightWinTime > 0) this.lightWinTime = Math.max(0, this.lightWinTime - dt);
+    const mode: LightMode = this.lightWinTime > 0 ? this.lightWin : attract ? 'attract' : 'idle';
+    if (mode !== this.lightSent) {
+      this.lightSent = mode;
+      this.safeFx(() => this.fx.lightShow(mode));
+    }
+
+    // Attract mode: a gentle LED glow and a sparkle around the call to action every few seconds.
+    if (attract && dt > 0) {
+      this.celebrate = Math.max(this.celebrate, this.effects.reducedMotion ? 0 : 0.18);
+      const modal = this.deps.ui.getState().modal;
+      if ((this.ctaTimer -= dt) <= 0 && modal === null) {
+        this.ctaTimer = ATTRACT_TIMING.ctaSparkle * (this.effects.reducedMotion ? 2 : 1);
+        this.burstAt('cta', this.ctaWorldPosition(_p, this.ctaSide++ % 3));
+      }
+    } else this.ctaTimer = 1.2;
+  }
+
+  /**
+   * A point near the call to action (which is centred in the safe zone), just behind the glass:
+   * alternately left of it, right of it and above it.
+   */
+  private ctaWorldPosition(out: Vector3, side: number): Vector3 {
+    const hud = this.hud;
+    // Same centre as src/ui/AttractOverlay.tsx: the safe zone, above a bar panel.
+    const bottom = hud.panelStyle === 'bar' ? Math.min(hud.safeBottom, hud.panel.y - 10 * hud.unit) : hud.safeBottom;
+    const ny = (hud.safeTop + bottom) / 2 / Math.max(1, hud.vh);
+    const y = this.layout.top - ny * this.layout.height;
+    const dx = Math.min(0.32, this.layout.width * 0.3);
+    if (side === 0) return out.set(-dx, y, -0.06);
+    if (side === 1) return out.set(dx, y, -0.06);
+    return out.set(0, y + Math.min(0.2, this.layout.height * 0.18), -0.06);
   }
 
   private updateAudio(dt: number): void {
@@ -1181,8 +1522,26 @@ export class Game {
         const c = this.deps.collection.getState();
         return { counts: c.counts, attempts: c.attempts, wins: c.wins, prizeIds: c.prizeIds };
       },
+      /** Points system: HUD state, player and demo totals. */
+      score: () => ({ ui: this.deps.ui.getState().score, player: this.scores.totals(false), demo: this.scores.totals(true), popups: this.deps.ui.getState().scorePopups }),
+      /** Attract mode and the idle timer. */
+      attract: () => ({ active: this.attract.active, idleSeconds: this.idle.idleSeconds(), limit: this.applied.system.idleSeconds, light: this.lightSent }),
+      /** Runs the idle reset now (as if nobody had touched the machine for system.idleSeconds). */
+      idleReset: () => this.idleReset('debug'),
       claw: CLAW,
     };
+    // Automation that drives the game through this API plays the role of a player: every call
+    // counts as input for the idle reset (a slow software-rendered test run must not be reset to
+    // attract mode between its steps). Only `attract()` observes the idle clock without touching it.
+    const touched = api as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(touched)) {
+      if (typeof value !== 'function' || key === 'attract') continue;
+      const fn = value as (...args: unknown[]) => unknown;
+      touched[key] = (...args: unknown[]) => {
+        this.idle.touch();
+        return fn(...args);
+      };
+    }
     (window as unknown as { __plush: typeof api }).__plush = api;
   }
 
@@ -1194,6 +1553,7 @@ export class Game {
     window.removeEventListener('resize', this.onResize);
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('blur', this.onBlur);
+    for (const type of ACTIVITY_EVENTS) window.removeEventListener(type, this.onActivity, { capture: true });
     for (const off of this.offs) off();
     this.toyVisuals?.dispose();
     this.effects?.dispose();

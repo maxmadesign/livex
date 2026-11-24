@@ -9,22 +9,27 @@
   },
   "scripts": {
     "dev": "concurrently -k -n web,api -c magenta,cyan \"vite\" \"tsx watch server/index.ts\"",
+    "dev:https": "concurrently -k -n web,api -c magenta,cyan \"vite --mode https\" \"tsx watch server/index.ts\"",
     "dev:web": "node tools/fetch-tracking-assets.mjs && vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "start": "tsx server/index.ts --serve-dist",
+    "start:https": "tsx server/index.ts --serve-dist --https",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
     "assets:plush": "tsx tools/plush/bake.ts",
+    "assets:import": "tsx tools/plush/import-generated.ts",
     "assets:audio": "tsx tools/audio/bake.ts",
     "assets:tracking": "node tools/fetch-tracking-assets.mjs",
     "assets": "npm run assets:plush && npm run assets:audio && npm run assets:tracking",
     "predev": "node tools/fetch-tracking-assets.mjs",
     "prebuild": "node tools/fetch-tracking-assets.mjs",
-    "prestart": "node tools/fetch-tracking-assets.mjs"
+    "prestart": "node tools/fetch-tracking-assets.mjs",
+    "predev:https": "node tools/fetch-tracking-assets.mjs",
+    "prestart:https": "node tools/fetch-tracking-assets.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
@@ -39,6 +44,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "three": "0.187.0",
+    "undici": "6.29.1",
     "ws": "8.23.0",
     "zod": "4.6.7",
     "zustand": "5.1.0"

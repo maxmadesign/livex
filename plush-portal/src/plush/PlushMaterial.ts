@@ -1,4 +1,21 @@
-import { Color, MeshDepthMaterial, MeshPhysicalMaterial, RGBADepthPacking, Vector3, Vector4, type IUniform, type Material, type WebGLProgramParametersWithUniforms } from 'three';
+import {
+  Color,
+  DataTexture,
+  LinearMipmapLinearFilter,
+  LinearFilter,
+  MeshDepthMaterial,
+  MeshPhysicalMaterial,
+  NoColorSpace,
+  RGBADepthPacking,
+  RepeatWrapping,
+  Vector2,
+  Vector3,
+  Vector4,
+  type IUniform,
+  type Material,
+  type Texture,
+  type WebGLProgramParametersWithUniforms,
+} from 'three';
 import type { PlushAsset } from './manifest';
 
 /** Maximum number of simultaneous finger dents evaluated by the vertex shader. */
@@ -41,6 +58,14 @@ export interface PlushUniforms {
   /** 0 = no fibre detail, 1 = full. */
   uFiber: IUniform<number>;
   uSheen: IUniform<number>;
+  /** Textured models: generated tileable fabric relief (see `fabricMicroTexture`). */
+  uMicroTex: IUniform<Texture | null>;
+  /** Textured models: strength of the fabric micro relief (0 = off; follows the quality tier). */
+  uMicro: IUniform<number>;
+  /** Textured models: relief tiles per metre (one 256² tile ≈ 21 mm: tufts of 0.7–1.3 mm, fibres of 0.2 mm). */
+  uMicroScale: IUniform<number>;
+  /** Textured models: lowest roughness of fabric texels (glossy texels such as eyes keep theirs). */
+  uFabricRough: IUniform<number>;
 }
 
 export function createPlushUniforms(): PlushUniforms {
@@ -68,7 +93,81 @@ export function createPlushUniforms(): PlushUniforms {
     uShellDensity: { value: 1500 },
     uFiber: { value: 1 },
     uSheen: { value: 1 },
+    uMicroTex: { value: null },
+    uMicro: { value: 1 },
+    uMicroScale: { value: 48 },
+    uFabricRough: { value: 0.84 },
   };
+}
+
+/** The three PBR textures of a textured (generated) model. */
+export interface PlushTextureSet {
+  /** sRGB base colour. */
+  map: Texture;
+  /** Tangent-space normal map (no tangents needed: derivative frame). */
+  normalMap: Texture | null;
+  /** glTF metallic-roughness texture; only G (roughness) is used, metalness is forced to 0 (fabric). */
+  roughnessMap: Texture | null;
+  /** Normal map scale as glTF loading sets it for derivative tangents (y flipped). */
+  normalScale: Vector2;
+}
+
+let microTexture: DataTexture | null = null;
+
+/**
+ * Tileable fabric relief generated once at run time (256², RGBA8): R = pile tufts (about a
+ * millimetre at the default `uMicroScale`), G = fine fibres, B = slight nap noise. Sampled triplanar in the
+ * toy's rest space by the textured plush shader, so its density is the same everywhere and it
+ * never shows the model's UV seams.
+ */
+export function fabricMicroTexture(): DataTexture {
+  if (microTexture) return microTexture;
+  const size = 256;
+  const data = new Uint8Array(size * size * 4);
+  // Periodic value noise: lattice values wrap at `period` so the texture tiles.
+  const lattice = (period: number, seed: number) => {
+    const values = new Float32Array(period * period);
+    let a = seed >>> 0;
+    for (let i = 0; i < values.length; i++) {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      values[i] = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    return (x: number, y: number) => {
+      const fx = (x / size) * period, fy = (y / size) * period;
+      const ix = Math.floor(fx), iy = Math.floor(fy);
+      const tx = fx - ix, ty = fy - iy;
+      const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+      const at = (i: number, j: number) => values[((j % period) + period) % period * period + (((i % period) + period) % period)]!;
+      const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * sx;
+      const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * sx;
+      return top + (bottom - top) * sy;
+    };
+  };
+  const t1 = lattice(16, 11), t2 = lattice(32, 23), f1 = lattice(96, 37), f2 = lattice(128, 41), nap = lattice(8, 53);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const tuft = t1(x, y) * 0.6 + t2(x, y) * 0.4;
+      // Fibres: a little stretched along one axis so the pile reads as strands, not grain.
+      const fibre = f1(x, y) * 0.55 + f2(x * 0.5, y) * 0.45;
+      const i = (y * size + x) * 4;
+      data[i] = Math.round(tuft * 255);
+      data[i + 1] = Math.round(fibre * 255);
+      data[i + 2] = Math.round(nap(x, y) * 255);
+      data[i + 3] = 255;
+    }
+  }
+  const texture = new DataTexture(data, size, size);
+  texture.wrapS = texture.wrapT = RepeatWrapping;
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.colorSpace = NoColorSpace;
+  texture.name = 'plush-fabric-micro';
+  texture.needsUpdate = true;
+  microTexture = texture;
+  return texture;
 }
 
 /** Copies the asset's paint regions into a uniform set. */
@@ -92,8 +191,15 @@ export function applyPaint(uniforms: PlushUniforms, asset: PlushAsset, scale = 1
 /* ------------------------------------------------------------------- GLSL */
 
 const DEFORM_PARS = /* glsl */ `
-attribute vec4 _mask;
-attribute vec4 _surf;
+#ifndef PLUSH_TEXTURED
+  attribute vec4 _mask;
+  attribute vec4 _surf;
+  varying vec4 vMask;
+  varying vec4 vSurf;
+#else
+  // Textured model: _aux = softness, fur length, sheen, baked ambient occlusion.
+  varying vec3 vRestNormal;
+#endif
 attribute vec4 _aux;
 #ifdef PLUSH_SHELL
   attribute float aShell;
@@ -112,8 +218,6 @@ uniform float uDroop;
 uniform vec3 uSway;
 uniform float uPuff;
 varying vec3 vRest;
-varying vec4 vMask;
-varying vec4 vSurf;
 varying vec4 vAux;
 
 // Soft-body look for a rigidly simulated toy. Everything is a function of the rest position, so
@@ -149,8 +253,14 @@ vec3 plushDeform( vec3 p, vec3 n, float soft ) {
 
 const DEFORM_MAIN = /* glsl */ `
   vRest = position;
-  vMask = _mask;
-  vSurf = _surf;
+  #ifdef PLUSH_TEXTURED
+    vRestNormal = objectNormal;
+    float plushFur = _aux.y;
+  #else
+    vMask = _mask;
+    vSurf = _surf;
+    float plushFur = _surf.w;
+  #endif
   vAux = _aux;
   float plushSoft = _aux.x;
   vec3 plushPos = plushDeform( position, objectNormal, plushSoft );
@@ -170,7 +280,7 @@ const DEFORM_MAIN = /* glsl */ `
   #ifdef PLUSH_SHELL
     vShell = aShell;
     // Strands lean a little with gravity and motion towards their tips.
-    plushPos += ( objectNormal + ( uGravity * 0.25 + uSway * 6.0 ) * aShell ) * ( uShellLength * aShell * _surf.w );
+    plushPos += ( objectNormal + ( uGravity * 0.25 + uSway * 6.0 ) * aShell ) * ( uShellLength * aShell * plushFur );
   #endif
 `;
 
@@ -187,9 +297,18 @@ uniform float uFiber;
 uniform float uSheen;
 uniform float uShellDensity;
 varying vec3 vRest;
-varying vec4 vMask;
-varying vec4 vSurf;
 varying vec4 vAux;
+#ifdef PLUSH_TEXTURED
+  varying vec3 vRestNormal;
+  uniform sampler2D uMicroTex;
+  uniform float uMicro;
+  uniform float uMicroScale;
+  uniform float uFabricRough;
+  float plushTexRough = 1.0;
+#else
+  varying vec4 vMask;
+  varying vec4 vSurf;
+#endif
 #ifdef PLUSH_SHELL
   varying float vShell;
 #endif
@@ -291,6 +410,64 @@ const FRAGMENT_COLOR = /* glsl */ `
   diffuseColor.rgb *= plushBase;
 `;
 
+/**
+ * Textured models: the base colour comes from the map (already applied by map_fragment); this adds
+ * the plush layer on top — shell fur cut-out, fabric micro relief and nap from the generated
+ * tileable texture (triplanar in rest space), and the baked contact occlusion.
+ */
+const FRAGMENT_COLOR_TEXTURED = /* glsl */ `
+  vec3 plushBase = vec3( 1.0 );
+  plushAO = vAux.w;
+  float furAmount = vAux.y;
+  float pixel = max( length( fwidth( vRest ) ), 1e-6 );
+
+  #ifdef PLUSH_SHELL
+    float strand = plushNoise( vRest * uShellDensity );
+    if ( furAmount < 0.03 || strand < mix( 0.28, 0.9, vShell ) ) discard;
+  #endif
+
+  vec3 tw = pow( abs( normalize( vRestNormal ) ), vec3( 4.0 ) );
+  tw /= tw.x + tw.y + tw.z + 1e-5;
+  vec3 mp = vRest * uMicroScale;
+  vec3 micro = texture2D( uMicroTex, mp.zy ).rgb * tw.x + texture2D( uMicroTex, mp.xz ).rgb * tw.y + texture2D( uMicroTex, mp.xy ).rgb * tw.z;
+  // Detail fades out before it is smaller than a pixel (no shimmering).
+  float tuftFade = ( 1.0 - smoothstep( 0.0005, 0.0016, pixel ) ) * uFiber * uMicro;
+  float fibreFade = ( 1.0 - smoothstep( 0.00012, 0.0004, pixel ) ) * uFiber * uMicro;
+  float nap = plushNoise( vRest * 38.0 );
+  plushBase *= 1.0 + furAmount * ( ( micro.r - 0.5 ) * 0.08 * tuftFade + ( micro.g - 0.5 ) * 0.09 * fibreFade + ( nap - 0.5 ) * 0.05 + ( micro.b - 0.5 ) * 0.03 * tuftFade );
+  // Smooth (non-fur) fabric such as felt or satin keeps a faint weave.
+  plushHeight = furAmount * ( micro.r * tuftFade * 0.0003 + micro.g * fibreFade * 0.00012 ) + ( 1.0 - furAmount ) * micro.g * fibreFade * 0.00004;
+  plushBumpAmount = 1.0;
+
+  #ifdef PLUSH_SHELL
+    plushBase *= mix( 0.62, 1.06, vShell );
+    plushAO *= mix( 0.75, 1.0, vShell );
+  #endif
+  diffuseColor.rgb *= plushBase;
+`;
+
+const FRAGMENT_ROUGHNESS_TEXTURED = /* glsl */ `
+  #ifdef USE_ROUGHNESSMAP
+    plushTexRough = texture2D( roughnessMap, vRoughnessMapUv ).g;
+  #endif
+  // Fabric texels are pushed towards a dull, sheen-dominated response; glossy texels (eyes, beads)
+  // keep the roughness the texture gives them.
+  float roughnessFactor = mix( plushTexRough, max( plushTexRough, uFabricRough ), smoothstep( 0.3, 0.5, plushTexRough ) );
+`;
+
+const FRAGMENT_MATERIAL_TEXTURED = /* glsl */ `
+  #ifdef USE_SHEEN
+    // Minky pile: soft back-scatter tinted by the fabric colour.
+    material.sheenColor = mix( diffuseColor.rgb, vec3( 1.0 ), 0.22 ) * ( vAux.z * uSheen * 0.6 );
+    material.sheenRoughness = 0.42;
+  #endif
+  #ifdef USE_CLEARCOAT
+    // Bead eyes and other glossy parts get a crisp clear coat on top of their low roughness.
+    material.clearcoat = 1.0 - smoothstep( 0.16, 0.36, plushTexRough );
+    material.clearcoatRoughness = 0.06;
+  #endif
+`;
+
 const FRAGMENT_NORMAL = /* glsl */ `
   if ( plushBumpAmount > 0.0 ) normal = plushBump( - vViewPosition, normal, plushHeight, 1.0 );
 `;
@@ -327,6 +504,12 @@ export interface PlushMaterialOptions {
   deformNormals?: boolean;
   /** Compile the shell-fur variant (used with an instanced mesh and the `aShell` attribute). */
   shell?: boolean;
+  /**
+   * Draw a textured model (`model.textured` in the manifest): base colour, normal and roughness
+   * from these textures instead of vertex colours and paint masks. The geometry then carries
+   * POSITION, NORMAL, uv and `_aux` (softness, fur, sheen, AO).
+   */
+  textures?: PlushTextureSet | null;
 }
 
 /**
@@ -334,15 +517,21 @@ export interface PlushMaterialOptions {
  * embroidered stitches, seams, pile detail, sheen, glossy bead eyes and the
  * soft-body vertex deformation. One instance per toy (uniforms are per toy,
  * the compiled program is shared).
+ *
+ * With `options.textures` the same material draws a textured model: PBR maps (metalness forced to
+ * 0), minky sheen, a generated fabric micro relief for close-ups, clear coat on glossy texels and
+ * exactly the same deformation, shell fur (coloured by the base-colour map) and shadows.
  */
 export class PlushMaterial extends MeshPhysicalMaterial {
   readonly plush: PlushUniforms;
   readonly isPlushMaterial = true;
+  readonly textured: boolean;
 
   constructor(uniforms: PlushUniforms = createPlushUniforms(), options: PlushMaterialOptions = {}) {
+    const textures = options.textures ?? null;
     super({
       color: 0xffffff,
-      vertexColors: true,
+      vertexColors: !textures,
       roughness: 1,
       metalness: 0,
       sheen: 1,
@@ -352,37 +541,61 @@ export class PlushMaterial extends MeshPhysicalMaterial {
       envMapIntensity: 1,
     });
     this.plush = uniforms;
+    this.textured = !!textures;
     this.defines = {
       ...this.defines,
       PLUSH_DENTS: Math.max(1, Math.min(MAX_DENTS, options.dents ?? MAX_DENTS)),
     };
     if (options.deformNormals ?? true) this.defines.PLUSH_DEFORM_NORMALS = '';
     if (options.shell) this.defines.PLUSH_SHELL = '';
+    if (textures) {
+      this.defines.PLUSH_TEXTURED = '';
+      if (!uniforms.uMicroTex.value) uniforms.uMicroTex.value = fabricMicroTexture();
+      this.setTextures(textures);
+    }
+  }
+
+  /**
+   * Swaps the textures of a textured material (e.g. another resolution). Only the texture objects
+   * change, so the compiled program is reused; a material created without textures ignores this.
+   */
+  setTextures(textures: PlushTextureSet): void {
+    if (!this.textured) return;
+    const recompile = !!this.normalMap !== !!textures.normalMap || !!this.roughnessMap !== !!textures.roughnessMap;
+    this.map = textures.map;
+    this.normalMap = textures.normalMap;
+    this.normalScale.copy(textures.normalScale);
+    this.roughnessMap = textures.roughnessMap;
+    if (recompile) this.needsUpdate = true;
   }
 
   override onBeforeCompile(shader: WebGLProgramParametersWithUniforms): void {
     Object.assign(shader.uniforms, this.plush);
     patchVertex(shader);
+    const textured = this.textured;
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
-      .replace('#include <color_fragment>', FRAGMENT_COLOR)
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vSurf.x;')
-      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vAux.z;')
+      .replace('#include <color_fragment>', textured ? FRAGMENT_COLOR_TEXTURED : FRAGMENT_COLOR)
+      .replace('#include <roughnessmap_fragment>', textured ? FRAGMENT_ROUGHNESS_TEXTURED : 'float roughnessFactor = vSurf.x;')
+      .replace('#include <metalnessmap_fragment>', textured ? 'float metalnessFactor = 0.0;' : 'float metalnessFactor = vAux.z;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${FRAGMENT_NORMAL}`)
-      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${FRAGMENT_MATERIAL}`)
+      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${textured ? FRAGMENT_MATERIAL_TEXTURED : FRAGMENT_MATERIAL}`)
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${FRAGMENT_AO}`);
   }
 
   override customProgramCacheKey(): string {
-    return 'plush-v1';
+    return this.textured ? 'plush-textured-v1' : 'plush-v1';
   }
 }
 
 /** Depth material that applies the same deformation, so shadows follow dents, sag and squash. */
 export class PlushDepthMaterial extends MeshDepthMaterial {
-  constructor(readonly plush: PlushUniforms) {
+  constructor(
+    readonly plush: PlushUniforms,
+    options: { textured?: boolean } = {},
+  ) {
     super({ depthPacking: RGBADepthPacking });
-    this.defines = { ...this.defines, PLUSH_DENTS: MAX_DENTS };
+    this.defines = { ...this.defines, PLUSH_DENTS: MAX_DENTS, ...(options.textured ? { PLUSH_TEXTURED: '' } : {}) };
   }
 
   override onBeforeCompile(shader: WebGLProgramParametersWithUniforms): void {
@@ -394,7 +607,7 @@ export class PlushDepthMaterial extends MeshDepthMaterial {
   }
 
   override customProgramCacheKey(): string {
-    return 'plush-depth-v1';
+    return this.defines?.PLUSH_TEXTURED !== undefined ? 'plush-depth-textured-v1' : 'plush-depth-v1';
   }
 }
 

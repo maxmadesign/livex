@@ -31,7 +31,8 @@ beforeAll(() => {
     for (let i = 0; i < m.length; i++) m[i] = 0.5 * (r.loop.l[i]! + r.loop.r[i]!);
     monos[theme] = m;
   }
-}, 240_000);
+  // Five full tracks are rendered here; on a loaded shared machine this can take several minutes.
+}, 600_000);
 
 /* --------------------------------------------------------------- analysis */
 
@@ -133,6 +134,7 @@ const SCALES: Partial<Record<ThemeId, number[]>> = {
   storybook: [7, 9, 11, 0, 2, 4, 6], // G major
   ocean: [2, 4, 6, 7, 9, 11, 1], // D major
   cosmic: [9, 11, 1, 2, 4, 6, 8], // A major / F# minor
+  gpu: [4, 6, 8, 9, 11, 1, 3], // E major / C# minor
 };
 
 /* ------------------------------------------------------------------ tests */

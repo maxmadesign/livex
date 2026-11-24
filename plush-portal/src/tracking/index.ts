@@ -16,5 +16,9 @@ export type {
   TrackerDiagnostics,
 } from './FaceTracker';
 export type { CalibrationValues } from './calibration';
+export { AutoCalibrationPolicy, type AutoCalibrationAction, type AutoCalibrationInput } from './autoCalibration';
+export { baselineWrites, clearHeadBaselineWrites, headBiasFor } from './baseline';
+export { ROTATED, WAITING_CAMERA, type CountdownFailure } from './countdown';
+export { effectiveCapture, readDeviceInfo, type DeviceInfo, type EffectiveCapture } from './devicePolicy';
 export type { BackendKind, ProbeAttempt } from './inference/backends';
 export { REFERENCE_FRAME_WIDTH, REFERENCE_IPD_M } from './landmarks';

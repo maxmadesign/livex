@@ -11,6 +11,9 @@ import { cors } from 'hono/cors';
 import {
   AI_LIMITS,
   SPEECH_HEADERS,
+  type CredentialResponseBody,
+  type CredentialStatus,
+  type KeyCheckResult,
   type ModelsResponseBody,
   type StatusResponseBody,
   type TestResponseBody,
@@ -18,16 +21,19 @@ import {
 import { classifyModel, textCapability, type LearnedOverride } from './capabilities';
 import type { ServerConfig } from './config';
 import { ApiFailure, mapUpstreamError } from './errors';
+import { createKeyManager, isLocalRequest, maskKey, validateKeyFormat, type KeyManager } from './keys';
 import { createLogger, type Logger } from './log';
 import { createRateLimiter } from './rateLimit';
 import { LineRequestSchema, SpeechRequestSchema, TestRequestSchema, describeIssue, type LineRequest } from './schemas';
 import {
+  SpeechCache,
   createRealtimeSpeechProvider,
   createSpeechApiProvider,
   createSpeechService,
   type RealtimeConnect,
   type ServerSpeechProvider,
   type SpeechApiClient,
+  type SpeechService,
 } from './speech';
 import { createStaticHandler } from './static';
 import { generateLine, type ResponsesClient } from './text';
@@ -39,12 +45,30 @@ export interface ModelsClient {
 /** Everything the app needs from the OpenAI SDK client. The real client satisfies it; tests inject a fake. */
 export type OpenAILike = ResponsesClient & SpeechApiClient & ModelsClient;
 
+/** The clients built for one key. */
+export interface ClientBundle {
+  client: OpenAILike;
+  /** Opens Realtime sessions; null when not available. */
+  realtimeConnect: RealtimeConnect | null;
+}
+
+/** Checks a key against OpenAI without using it for anything else. */
+export type KeyChecker = (key: string, signal: AbortSignal) => Promise<KeyCheckResult>;
+
 export interface AppDeps {
   config: ServerConfig;
-  /** null = no API key configured. */
-  client: OpenAILike | null;
-  /** Opens Realtime sessions; omit / null when there is no key. */
+  /**
+   * Run-time key handling (default key from .env, replacement from Settings).
+   * When omitted, `client` / `realtimeConnect` are used as a fixed key and the
+   * key routes refuse to change it.
+   */
+  keys?: KeyManager<ClientBundle>;
+  /** Fixed client when `keys` is omitted; null = no API key configured. */
+  client?: OpenAILike | null;
+  /** Opens Realtime sessions for the fixed client; omit / null when there is no key. */
   realtimeConnect?: RealtimeConnect | null;
+  /** Checks new keys (default: GET {base}/models through the global fetch). */
+  checkKey?: KeyChecker;
   logger?: Logger;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -59,20 +83,69 @@ function sameToken(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+/**
+ * Asks OpenAI whether a key works: GET {baseUrl}/models with that key only.
+ * 401 = rejected; 403 = valid but restricted (e.g. a key without the models
+ * permission); 429 = valid but rate limited / out of quota; anything else
+ * (network, timeout, 5xx) = could not be checked right now.
+ */
+export function openAiKeyChecker(baseUrl: string | null, fetchImpl: typeof fetch = (input, init) => fetch(input, init)): KeyChecker {
+  const url = `${(baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '')}/models`;
+  return async (key, signal) => {
+    try {
+      const response = await fetchImpl(url, { headers: { authorization: `Bearer ${key}` }, signal });
+      void response.body?.cancel().catch(() => {});
+      if (response.ok) return 'ok';
+      if (response.status === 401) return 'rejected';
+      if (response.status === 403) return 'restricted';
+      if (response.status === 429) return 'quota';
+      return 'unreachable';
+    } catch {
+      return 'unreachable';
+    }
+  };
+}
+
 export function createApp(deps: AppDeps): Hono {
-  const { config, client } = deps;
+  const { config } = deps;
   const now = deps.now ?? (() => Date.now());
   const logger = deps.logger ?? createLogger(config.logLevel, [config.apiKey, config.adminToken]);
   const limiter = createRateLimiter(config.ratePerMin, now);
   const learned = new Map<string, LearnedOverride>();
 
-  const providers: Partial<Record<'speech' | 'realtime', ServerSpeechProvider>> = {};
-  if (client) providers.speech = createSpeechApiProvider(client);
-  if (deps.realtimeConnect) {
-    providers.realtime = createRealtimeSpeechProvider(deps.realtimeConnect, { reasoningEffort: config.realtimeReasoningEffort });
-  }
-  const speech = createSpeechService({ config, providers, logger });
-  let modelsCache: { at: number; body: ModelsResponseBody } | null = null;
+  // A fixed key (tests, embedders) behaves like a key that can not be replaced.
+  const fixedClient = deps.client ?? null;
+  const keys: KeyManager<ClientBundle> =
+    deps.keys ??
+    createKeyManager<ClientBundle>({
+      envKey: fixedClient ? (config.apiKey ?? 'fixed-client') : null,
+      store: null,
+      createClients: () => ({ client: fixedClient!, realtimeConnect: deps.realtimeConnect ?? null }),
+    });
+  const keyManagement = deps.keys ? config.keyManagement : 'off';
+  const checkKey = deps.checkKey ?? openAiKeyChecker(config.baseUrl);
+  const activeKey = keys.active().key;
+  if (activeKey) logger.addSecret?.(activeKey);
+
+  // Speech providers belong to one key: rebuilt when the key changes. The audio cache is shared.
+  const speechCache = new SpeechCache();
+  let speechState: { generation: number; service: SpeechService } | null = null;
+  const speechService = (): SpeechService => {
+    const active = keys.active();
+    if (!speechState || speechState.generation !== active.generation) {
+      const providers: Partial<Record<'speech' | 'realtime', ServerSpeechProvider>> = {};
+      if (active.clients) {
+        providers.speech = createSpeechApiProvider(active.clients.client);
+        if (active.clients.realtimeConnect) {
+          providers.realtime = createRealtimeSpeechProvider(active.clients.realtimeConnect, { reasoningEffort: config.realtimeReasoningEffort });
+        }
+      }
+      speechState = { generation: active.generation, service: createSpeechService({ config, providers, logger, cache: speechCache }) };
+    }
+    return speechState.service;
+  };
+  const activeClient = (): OpenAILike | null => keys.active().clients?.client ?? null;
+  let modelsCache: { at: number; generation: number; body: ModelsResponseBody } | null = null;
 
   const app = new Hono();
 
@@ -122,7 +195,7 @@ export function createApp(deps: AppDeps): Hono {
     '/api/*',
     cors({
       origin: (origin, c) => (origin && originAllowed(c, origin) ? origin : null),
-      allowMethods: ['GET', 'POST', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
       exposeHeaders: Object.values(SPEECH_HEADERS),
       maxAge: 600,
@@ -153,13 +226,91 @@ export function createApp(deps: AppDeps): Hono {
       throw new ApiFailure(429, 'rate_limited', 'Too many requests. Please slow down.', { 'retry-after': String(result.retryAfterSec) });
     }
   };
-  const isAdmin = (c: Context): boolean => {
-    if (!config.adminToken) return true;
+  const hasAdminToken = (c: Context): boolean => {
+    if (!config.adminToken) return false;
     const match = /^Bearer\s+(\S+)$/i.exec(c.req.header('authorization') ?? '');
     return !!match && sameToken(match[1]!, config.adminToken);
   };
+  const isAdmin = (c: Context): boolean => !config.adminToken || hasAdminToken(c);
   /** Client prompt / persona need PLUSH_ALLOW_CLIENT_PROMPT; model overrides additionally need the admin token when one is set. */
   const modelOverrideAllowed = (c: Context): boolean => config.allowClientPrompt && isAdmin(c);
+
+  /** Socket peer of the request (undefined in in-process tests without a socket). */
+  const socketAddress = (c: Context): string | null => {
+    try {
+      return getConnInfo(c).remote.address ?? null;
+    } catch {
+      return null;
+    }
+  };
+  /**
+   * Who may replace / test / restore the key: with PLUSH_KEY_MANAGEMENT=local
+   * (default) a request made on this machine, or anyone with the admin token;
+   * with "token" only the admin token; with "off" nobody.
+   */
+  const canManageKey = (c: Context): boolean => {
+    if (keyManagement === 'off') return false;
+    if (hasAdminToken(c)) return true;
+    if (keyManagement === 'token') return false;
+    return isLocalRequest({
+      socketAddress: socketAddress(c),
+      host: c.req.header('host') ?? null,
+      origin: c.req.header('origin') ?? null,
+      forwarded: [c.req.header('x-forwarded-for'), c.req.header('forwarded'), c.req.header('x-real-ip')],
+    });
+  };
+  const requireKeyManagement = (c: Context): void => {
+    if (keyManagement === 'off') {
+      throw new ApiFailure(403, 'key_management_off', 'Replacing the key is switched off on this server; it only reads OPENAI_API_KEY.');
+    }
+    if (!canManageKey(c)) {
+      throw new ApiFailure(
+        403,
+        'forbidden',
+        keyManagement === 'token'
+          ? 'Changing the OpenAI key needs the admin token (Authorization: Bearer …).'
+          : 'The OpenAI key can only be changed on the server machine itself (localhost) or with the admin token.',
+      );
+    }
+  };
+  const credentialStatus = (c: Context): CredentialStatus => {
+    const active = keys.active();
+    return {
+      source: active.source,
+      fingerprint: maskKey(active.key),
+      envDefault: keys.hasEnvDefault(),
+      savedAt: active.savedAt,
+      management: keyManagement,
+      canManage: canManageKey(c),
+    };
+  };
+  const runKeyCheck = async (c: Context, key: string): Promise<{ result: KeyCheckResult; latencyMs: number }> => {
+    const started = now();
+    const signal = AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(config.keyCheckTimeoutMs)]);
+    const result = await checkKey(key, signal);
+    return { result, latencyMs: Math.round(now() - started) };
+  };
+  const readKeyField = async (c: Context, required: boolean): Promise<string | null> => {
+    const text = await c.req.text();
+    if (!text.trim()) {
+      if (required) throw new ApiFailure(400, 'bad_request', 'Send the key as JSON: { "key": "…" }.');
+      return null;
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      throw new ApiFailure(400, 'bad_request', 'The request body must be JSON.');
+    }
+    const value = raw && typeof raw === 'object' ? (raw as { key?: unknown }).key : undefined;
+    if (value === undefined || value === null || value === '') {
+      if (required) throw new ApiFailure(400, 'bad_request', 'Send the key as JSON: { "key": "…" }.');
+      return null;
+    }
+    const format = validateKeyFormat(value, config.baseUrl === null);
+    if (!format.ok) throw new ApiFailure(400, 'invalid_key', format.reason);
+    return format.key;
+  };
 
   const readJson = async (c: Context): Promise<unknown> => {
     try {
@@ -169,6 +320,7 @@ export function createApp(deps: AppDeps): Hono {
     }
   };
   const requireKey = (): OpenAILike => {
+    const client = activeClient();
     if (!client) {
       throw new ApiFailure(503, 'no_key', 'No OpenAI API key is configured on the server. The game uses its local lines.');
     }
@@ -181,7 +333,7 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get('/api/ai/status', (c) => {
     const body: StatusResponseBody = {
-      configured: client !== null,
+      configured: activeClient() !== null,
       provider: 'openai',
       textModel: config.textModel,
       speechModel: config.speechModel,
@@ -199,7 +351,78 @@ export function createApp(deps: AppDeps): Hono {
         speechTimeoutMs: config.speechTimeoutMs,
       },
       version: config.version,
+      credential: credentialStatus(c),
     };
+    return c.json(body);
+  });
+
+  /* ------------------------------------------------------- the OpenAI key */
+
+  // Status only: source and the last four characters, never the key itself.
+  app.get('/api/ai/key', (c) => {
+    const body: CredentialResponseBody = { ok: true, credential: credentialStatus(c) };
+    return c.json(body);
+  });
+
+  // Replaces the key: format check, optional check with OpenAI, then stored server-side and used at once.
+  app.post('/api/ai/key', async (c) => {
+    rateLimit(c, 2);
+    requireKeyManagement(c);
+    const key = (await readKeyField(c, true))!;
+    let check: { result: KeyCheckResult; latencyMs: number } = { result: 'skipped', latencyMs: 0 };
+    if (config.keyCheck) {
+      check = await runKeyCheck(c, key);
+      if (check.result === 'rejected') {
+        logger.info('openai key replacement refused', { reason: 'rejected by OpenAI', fingerprint: maskKey(key) });
+        throw new ApiFailure(400, 'key_rejected', 'OpenAI did not accept this key (401). Nothing was saved.');
+      }
+    }
+    try {
+      keys.replace(key);
+    } catch {
+      logger.error('openai key could not be stored', { dir: config.dataDir });
+      throw new ApiFailure(500, 'key_storage', 'The key could not be saved on the server (data folder not writable).');
+    }
+    logger.addSecret?.(key);
+    modelsCache = null;
+    logger.info('openai key replaced in settings', { fingerprint: maskKey(key), check: check.result });
+    const body: CredentialResponseBody = { ok: true, credential: credentialStatus(c), check };
+    return c.json(body);
+  });
+
+  // Checks a candidate key (not stored) or, without a body, the key in use.
+  app.post('/api/ai/key/test', async (c) => {
+    rateLimit(c, 2);
+    requireKeyManagement(c);
+    const candidate = await readKeyField(c, false);
+    const key = candidate ?? keys.active().key;
+    if (!key) {
+      const body: CredentialResponseBody = {
+        ok: false,
+        credential: credentialStatus(c),
+        code: 'no_key',
+        message: 'No OpenAI API key is configured on the server.',
+      };
+      return c.json(body);
+    }
+    const check = await runKeyCheck(c, key);
+    const ok = check.result === 'ok' || check.result === 'restricted' || check.result === 'quota';
+    const body: CredentialResponseBody = { ok, credential: credentialStatus(c), check };
+    return c.json(body);
+  });
+
+  // Back to OPENAI_API_KEY from .env (or to no key at all).
+  app.delete('/api/ai/key', (c) => {
+    rateLimit(c);
+    requireKeyManagement(c);
+    try {
+      keys.restoreDefault();
+    } catch {
+      throw new ApiFailure(500, 'key_storage', 'The stored key could not be removed from the server.');
+    }
+    modelsCache = null;
+    logger.info('openai key restored to the default', { source: keys.active().source });
+    const body: CredentialResponseBody = { ok: true, credential: credentialStatus(c) };
     return c.json(body);
   });
 
@@ -232,7 +455,7 @@ export function createApp(deps: AppDeps): Hono {
     if (!parsed.success) throw new ApiFailure(400, 'bad_request', describeIssue(parsed.error));
     requireKey();
     const request = parsed.data;
-    const result = await speech.synthesize({
+    const result = await speechService().synthesize({
       text: request.text,
       lang: request.lang,
       voice: request.voice,
@@ -270,6 +493,7 @@ export function createApp(deps: AppDeps): Hono {
     }
     const parsed = TestRequestSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiFailure(400, 'bad_request', describeIssue(parsed.error));
+    const client = activeClient();
     if (!client) {
       const body: TestResponseBody = {
         ok: false,
@@ -304,7 +528,7 @@ export function createApp(deps: AppDeps): Hono {
       const speechStarted = now();
       const sample = lang === 'zh' ? '你好，我是Momo！' : lang === 'ja' ? 'こんにちは、モモだよ！' : "Hi, I'm Momo!";
       try {
-        const audio = await speech.synthesize({ text: sample, lang, signal: c.req.raw.signal });
+        const audio = await speechService().synthesize({ text: sample, lang, signal: c.req.raw.signal });
         body.speech = {
           ok: true,
           model: audio.model,
@@ -331,11 +555,13 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get('/api/ai/models', async (c) => {
     rateLimit(c);
+    const client = activeClient();
     if (!client) {
       const empty: ModelsResponseBody = { configured: false, text: [], speech: [] };
       return c.json(empty);
     }
-    if (modelsCache && now() - modelsCache.at < MODELS_CACHE_MS) return c.json(modelsCache.body);
+    const generation = keys.active().generation;
+    if (modelsCache && modelsCache.generation === generation && now() - modelsCache.at < MODELS_CACHE_MS) return c.json(modelsCache.body);
     const body: ModelsResponseBody = { configured: true, text: [], speech: [] };
     try {
       let seen = 0;
@@ -361,7 +587,7 @@ export function createApp(deps: AppDeps): Hono {
     }
     body.text.sort((a, b) => a.id.localeCompare(b.id));
     body.speech.sort((a, b) => a.id.localeCompare(b.id));
-    modelsCache = { at: now(), body };
+    modelsCache = { at: now(), generation, body };
     return c.json(body);
   });
 

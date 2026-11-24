@@ -5,7 +5,7 @@
  * Window space is screen space translated to the centre of the effective game
  * window:  window = screen − (offsetX, offsetY, 0).
  *
- *   viewpoint = eye_ref + gain ∘ (measured_window − neutral)
+ *   viewpoint = eye_ref + gain ∘ (measured_window − neutral [+ head-turn offset])
  *
  * `eye_ref` is the reference eye (`view.eye`). `neutral` is the measured
  * window-space position that should map onto the reference eye:
@@ -61,11 +61,24 @@ export function screenToWindow(ps: Readonly<Vec3>, window: PhysicalWindow, out: 
   return out;
 }
 
-/** Applies neutral, gains and limits to a measured window-space eye position. */
-export function mapToViewpoint(measuredWindow: Readonly<Vec3>, view: ViewMappingSettings, out: Vec3 = [0, 0, 0]): Vec3 {
+/**
+ * Applies neutral, gains and limits to a measured window-space eye position.
+ *
+ * `head` is the optional head-turn offset (metres, x / y, see headPose.ts `headOffset`): it is
+ * added to the measured movement before the gains and the soft limits, so a gain of 0 switches an
+ * axis off completely and the viewpoint never leaves `maxOffset`, whatever the head does.
+ */
+export function mapToViewpoint(
+  measuredWindow: Readonly<Vec3>,
+  view: ViewMappingSettings,
+  out: Vec3 = [0, 0, 0],
+  head?: Readonly<[number, number]> | null,
+): Vec3 {
   const n = neutralPoint(view);
-  const dx = softClamp((measuredWindow[0] - n[0]) * view.gainX, view.maxOffset[0]);
-  const dy = softClamp((measuredWindow[1] - n[1]) * view.gainY, view.maxOffset[1]);
+  const hx = head ? head[0] : 0;
+  const hy = head ? head[1] : 0;
+  const dx = softClamp((measuredWindow[0] - n[0] + hx) * view.gainX, view.maxOffset[0]);
+  const dy = softClamp((measuredWindow[1] - n[1] + hy) * view.gainY, view.maxOffset[1]);
   const dz = softClamp((measuredWindow[2] - n[2]) * view.gainZ, view.maxOffset[2]);
   out[0] = view.eye[0] + dx;
   out[1] = view.eye[1] + dy;

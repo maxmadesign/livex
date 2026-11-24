@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PLUSH PORTAL - GPU Party theme emblem (logo slot).
+  Original artwork made for this project: a stylised chip with the word "GPU".
+  It is not, and does not imitate, any company's logo.
+  To use an official logo, replace this one file (same path and name, square artwork,
+  transparent background recommended) - provided you have permission to use that logo.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="die" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2a14"/>
+      <stop offset="1" stop-color="#080b06"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9efe2"/>
+      <stop offset="1" stop-color="#9aa592"/>
+    </linearGradient>
+  </defs>
+  <!-- Pins -->
+  <g fill="url(#pin)">
+    <rect x="118" y="26" width="18" height="52" rx="4"/><rect x="172" y="26" width="18" height="52" rx="4"/>
+    <rect x="226" y="26" width="18" height="52" rx="4"/><rect x="268" y="26" width="18" height="52" rx="4"/>
+    <rect x="322" y="26" width="18" height="52" rx="4"/><rect x="376" y="26" width="18" height="52" rx="4"/>
+    <rect x="118" y="434" width="18" height="52" rx="4"/><rect x="172" y="434" width="18" height="52" rx="4"/>
+    <rect x="226" y="434" width="18" height="52" rx="4"/><rect x="268" y="434" width="18" height="52" rx="4"/>
+    <rect x="322" y="434" width="18" height="52" rx="4"/><rect x="376" y="434" width="18" height="52" rx="4"/>
+    <rect x="26" y="118" width="52" height="18" rx="4"/><rect x="26" y="172" width="52" height="18" rx="4"/>
+    <rect x="26" y="226" width="52" height="18" rx="4"/><rect x="26" y="268" width="52" height="18" rx="4"/>
+    <rect x="26" y="322" width="52" height="18" rx="4"/><rect x="26" y="376" width="52" height="18" rx="4"/>
+    <rect x="434" y="118" width="52" height="18" rx="4"/><rect x="434" y="172" width="52" height="18" rx="4"/>
+    <rect x="434" y="226" width="52" height="18" rx="4"/><rect x="434" y="268" width="52" height="18" rx="4"/>
+    <rect x="434" y="322" width="52" height="18" rx="4"/><rect x="434" y="376" width="52" height="18" rx="4"/>
+  </g>
+  <!-- Package -->
+  <rect x="70" y="70" width="372" height="372" rx="40" fill="#0d110a"/>
+  <rect x="70" y="70" width="372" height="372" rx="40" fill="none" stroke="#76b900" stroke-width="10"/>
+  <circle cx="108" cy="108" r="11" fill="#76b900"/>
+  <!-- Traces from the die to the pins -->
+  <g fill="none" stroke="#3f6310" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M181 150 L181 96"/><path d="M235 150 L235 96"/><path d="M277 150 L277 96"/><path d="M331 150 L331 96"/>
+    <path d="M181 362 L181 416"/><path d="M235 362 L235 416"/><path d="M277 362 L277 416"/><path d="M331 362 L331 416"/>
+    <path d="M150 181 L96 181"/><path d="M150 331 L96 331"/><path d="M362 181 L416 181"/><path d="M362 331 L416 331"/>
+  </g>
+  <!-- Die -->
+  <rect x="132" y="150" width="248" height="212" rx="18" fill="url(#die)" stroke="#9be33a" stroke-width="4"/>
+  <!-- Soft glow behind the lettering -->
+  <g fill="#76b900" opacity="0.22">
+    <rect x="128" y="188" width="256" height="136" rx="20"/>
+  </g>
+  <!-- "GPU" block letters (same outlines as the 3D letters on the cabinet wall) -->
+  <g fill="#b6ff5c" fill-rule="evenodd">
+    <path d="M144.4 316 L199.6 316 L208 307.6 L208 258.4 L173.2 258.4 L173.2 278.8 L186.4 278.8 L186.4 294.4 L157.6 294.4 L157.6 217.6 L208 217.6 L208 204.4 L199.6 196 L144.4 196 L136 204.4 L136 307.6 Z"/>
+    <path d="M220 316 L241.6 316 L241.6 270.4 L283.6 270.4 L292 262 L292 204.4 L283.6 196 L220 196 Z M241.6 248.8 L270.4 248.8 L270.4 217.6 L241.6 217.6 Z"/>
+    <path d="M312.4 316 L367.6 316 L376 307.6 L376 196 L354.4 196 L354.4 294.4 L325.6 294.4 L325.6 196 L304 196 L304 307.6 Z"/>
+  </g>
+  <rect x="136" y="332" width="240" height="8" rx="4" fill="#76b900"/>
+  <g fill="#e8ffd0" opacity="0.7">
+    <circle cx="152" cy="172" r="4"/><circle cx="168" cy="172" r="4"/><circle cx="184" cy="172" r="4"/>
+  </g>
+</svg>

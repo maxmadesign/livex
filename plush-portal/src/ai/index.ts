@@ -8,6 +8,10 @@ export {
   GUIDE_PRIORITY,
   GUIDE_COOLDOWN_MS,
   FREQUENCY_SCALE,
+  STATUS_FIRST_TIMEOUT_MS,
+  STATUS_TIMEOUT_MS,
+  STATUS_RETRY_DELAYS_MS,
+  guideLanguage,
   type GuideConfig,
   type GuideDeps,
   type GuideStats,
@@ -31,4 +35,6 @@ export { LineCache, LINE_CACHE_STORAGE_KEY, lineCacheKey, factsCacheKey, type Ca
 export { planBabble, renderBabble, synthesizeBabble } from './speech/babbleSynth';
 export { SpeechRouter } from './speech/router';
 export type { SpeechPath, SpeechPlayback, SpeechProvider, SpeechRequest } from './speech/types';
+export { fetchKeyStatus, saveKey, testKey, restoreDefaultKey, type KeyCallResult, type KeyClientOptions } from './keyClient';
+export { migrateGuideLanguage } from './settingsMigration';
 export * from './protocol';

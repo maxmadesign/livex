@@ -2,13 +2,11 @@ import {
   ACESFilmicToneMapping,
   AdditiveBlending,
   AgXToneMapping,
-  BoxGeometry,
   Color,
   DirectionalLight,
   HalfFloatType,
   HemisphereLight,
   Mesh,
-  MeshBasicMaterial,
   NeutralToneMapping,
   PCFShadowMap,
   PMREMGenerator,
@@ -17,11 +15,11 @@ import {
   Scene,
   ShaderMaterial,
   SRGBColorSpace,
+  VSMShadowMap,
   Vector2,
   Vector3,
   WebGLRenderTarget,
   WebGLRenderer,
-  BackSide,
   type Object3D,
   type Texture,
 } from 'three';
@@ -36,9 +34,12 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OffAxisCamera } from '../perspective/OffAxisCamera';
 import type { WindowLayout } from '../perspective/windowGeometry';
-import { FIELD } from '../physics/fieldSpec';
+import { CHUTE, FIELD } from '../physics/fieldSpec';
 import type { GraphicsSettings } from '../settings/spec';
 import type { ThemeDef } from '../themes/themes';
+import { ContactShadows } from './contactShadows';
+import { buildStudioScene, captureSize, environmentBlur, studioEnvironmentSize } from './environment';
+import { makeScratchTexture, setMaxAnisotropy } from './textures';
 
 /** What is really being rendered right now (may differ from the selected preset). */
 export interface EffectiveGraphics {
@@ -59,7 +60,33 @@ export interface EffectiveGraphics {
   autoScale: number;
 }
 
-const SHADOW_SIZE: Record<GraphicsSettings['shadows'], number> = { off: 0, low: 1024, medium: 2048, high: 4096 };
+/** Shadow map edge length per shadow quality. */
+export const SHADOW_SIZE: Record<GraphicsSettings['shadows'], number> = { off: 0, low: 1024, medium: 2048, high: 4096 };
+
+/**
+ * How the key light's shadow is filtered per shadow quality. Low / Medium use hardware PCF
+ * (five rotated taps); High uses variance shadow maps blurred over a wide radius, which gives the
+ * broad, noise-free penumbra of a cabinet lit by a large ceiling diffuser.
+ */
+export const SHADOW_FILTER: Record<Exclude<GraphicsSettings['shadows'], 'off'>, { type: 'pcf' | 'vsm'; radius: number; blurSamples: number }> = {
+  low: { type: 'pcf', radius: 2, blurSamples: 0 },
+  medium: { type: 'pcf', radius: 3.5, blurSamples: 0 },
+  high: { type: 'vsm', radius: 14, blurSamples: 16 },
+};
+
+/** Contact-shadow map size and update interval (frames) per shadow quality; 0 = off. */
+export const CONTACT_SHADOWS: Record<GraphicsSettings['shadows'], { size: number; every: number }> = {
+  off: { size: 0, every: 0 },
+  low: { size: 0, every: 0 },
+  medium: { size: 256, every: 2 },
+  high: { size: 512, every: 1 },
+};
+
+/** Largest device pixel ratio honoured: the setting when present, otherwise unlimited. */
+function dprCap(g: GraphicsSettings): number {
+  const value = (g as { maxDpr?: number }).maxDpr;
+  return typeof value === 'number' && value > 0 ? value : Infinity;
+}
 
 /**
  * Renderer, camera, lights, environment and post-processing. The 3D view is
@@ -83,10 +110,18 @@ export class Stage {
   private readonly hemi: HemisphereLight;
   private readonly ledLights: PointLight[];
   private readonly binLight: PointLight;
-  private readonly pmrem: PMREMGenerator;
-  private envTarget: WebGLRenderTarget | null = null;
+  private pmrem: PMREMGenerator;
+  /** Prefiltered procedural studio (always kept: it also lights the cabinet captures). */
+  private studioTarget: WebGLRenderTarget | null = null;
+  private studioSize = 0;
+  /** Prefiltered capture of the real cabinet interior ('refresh' / 'live'). */
+  private captureTarget: WebGLRenderTarget | null = null;
   private readonly frontGlass: Mesh;
   private readonly frontGlassMaterial: ShaderMaterial;
+  /** Micro-scratch map of the front glass, created on first use (not on the phone tier). */
+  private glassScratches: Texture | null = null;
+  private readonly contact: ContactShadows;
+  private contactFrame = 0;
   private graphics: GraphicsSettings;
   private cssW = 1;
   private cssH = 1;
@@ -96,6 +131,7 @@ export class Stage {
   private theme: ThemeDef | null = null;
   private envTimer = 0;
   private envDirty = false;
+  private studioDirty = false;
   private composerDirty = true;
   private sizeDirty = true;
   /** Called when the internal render resolution actually changed. */
@@ -117,6 +153,7 @@ export class Stage {
     this.renderer.shadowMap.autoUpdate = true;
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.info.autoReset = false;
+    setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
     canvas.addEventListener('webglcontextlost', this.handleLost);
     canvas.addEventListener('webglcontextrestored', this.handleRestored);
 
@@ -138,6 +175,8 @@ export class Stage {
     this.key.shadow.bias = -0.0005;
     this.key.shadow.normalBias = 0.006;
     this.key.shadow.radius = 3;
+    // A lit cabinet never has pitch-black shadows: the diffuser and the walls fill them in.
+    this.key.shadow.intensity = 0.88;
     this.scene.add(this.key, this.key.target);
 
     this.rim = new DirectionalLight(0xffffff, 1);
@@ -158,12 +197,21 @@ export class Stage {
     this.scene.add(this.binLight);
 
     // Front glass: a very subtle reflection that slides with the viewpoint and stays off the centre.
+    // Where a reflection streak crosses them, faint micro-scratches and wipe marks catch the light.
     this.frontGlassMaterial = new ShaderMaterial({
       transparent: true,
       depthWrite: false,
       depthTest: false,
       blending: AdditiveBlending,
-      uniforms: { uEye: { value: new Vector2(0, 0) }, uStrength: { value: 0.05 }, uTint: { value: new Color(0xffffff) }, uAspect: { value: 1 } },
+      uniforms: {
+        uEye: { value: new Vector2(0, 0) },
+        uStrength: { value: 0.05 },
+        uTint: { value: new Color(0xffffff) },
+        uAspect: { value: 1 },
+        uScratch: { value: null as Texture | null },
+        uScratchGain: { value: 0 },
+        uScale: { value: new Vector2(1, 1) },
+      },
       vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
       fragmentShader: /* glsl */ `
         varying vec2 vUv;
@@ -171,6 +219,9 @@ export class Stage {
         uniform float uStrength;
         uniform vec3 uTint;
         uniform float uAspect;
+        uniform sampler2D uScratch;
+        uniform float uScratchGain;
+        uniform vec2 uScale;
         void main() {
           vec2 p = vUv - 0.5;
           // Two soft diagonal streaks whose position follows the eye (reflections move with the viewer).
@@ -179,7 +230,9 @@ export class Stage {
           // Keep the middle of the window clear: reflections live near the edges.
           float edge = smoothstep( 0.18, 0.5, max( abs( p.x ), abs( p.y ) ) );
           float fresnel = pow( edge, 2.0 ) * 0.5;
-          float a = ( streak * edge + fresnel ) * uStrength;
+          // Scratches only show where light grazes them: inside the streaks and towards the frame.
+          float scratch = texture2D( uScratch, vUv * uScale ).r * uScratchGain * ( streak * 0.8 + edge * 0.35 );
+          float a = ( streak * edge + fresnel + scratch ) * uStrength;
           gl_FragColor = vec4( uTint * a, 1.0 );
         }`,
     });
@@ -187,6 +240,13 @@ export class Stage {
     this.frontGlass.renderOrder = 50;
     this.frontGlass.frustumCulled = false;
     this.scene.add(this.frontGlass);
+
+    this.contact = new ContactShadows(
+      { minX: -FIELD.halfWidth, maxX: FIELD.halfWidth, minZ: -FIELD.depth, maxZ: 0, floorY: 0 },
+      { minX: CHUTE.xMin, maxX: CHUTE.xMax, minZ: CHUTE.zMin, maxZ: CHUTE.zMax },
+      256,
+    );
+    this.scene.add(this.contact.mesh);
 
     this.effective = {
       width: 1,
@@ -216,6 +276,12 @@ export class Stage {
     this.contextLost = false;
     this.composerDirty = true;
     this.envDirty = true;
+    this.studioDirty = true;
+    // GPU objects of the old context are gone: start from fresh targets.
+    this.pmrem.dispose();
+    this.pmrem = new PMREMGenerator(this.renderer);
+    this.studioTarget = null;
+    this.captureTarget = null;
     this.onContextRestored?.();
   };
 
@@ -322,17 +388,40 @@ export class Stage {
 
     const shadowSize = SHADOW_SIZE[graphics.shadows];
     this.key.castShadow = shadowSize > 0;
-    if (shadowSize > 0 && this.key.shadow.mapSize.x !== shadowSize) {
-      this.key.shadow.mapSize.set(shadowSize, shadowSize);
-      this.key.shadow.map?.dispose();
-      this.key.shadow.map = null;
+    if (graphics.shadows !== 'off') {
+      const filter = SHADOW_FILTER[graphics.shadows];
+      const type = filter.type === 'vsm' ? VSMShadowMap : PCFShadowMap;
+      if (this.renderer.shadowMap.type !== type) this.renderer.shadowMap.type = type;
+      if (this.key.shadow.mapSize.x !== shadowSize) {
+        this.key.shadow.mapSize.set(shadowSize, shadowSize);
+        this.key.shadow.map?.dispose();
+        this.key.shadow.map = null;
+      }
+      this.key.shadow.radius = filter.radius;
+      this.key.shadow.blurSamples = Math.max(1, filter.blurSamples);
+      // VSM compares moments, not depths: it needs no depth bias but a little normal offset.
+      this.key.shadow.bias = filter.type === 'vsm' ? -0.0002 : -0.0005;
     }
-    this.key.shadow.radius = graphics.shadows === 'high' ? 4 : graphics.shadows === 'medium' ? 3 : 2;
+    const contact = CONTACT_SHADOWS[graphics.shadows];
+    this.contact.mesh.visible = contact.size > 0;
+    if (contact.size > 0) this.contact.setResolution(contact.size);
+
+    // Prefiltered environment resolution follows the texture tier (and the capture size while
+    // the cabinet captures replace the studio, see studioEnvironmentSize).
+    const envSize = studioEnvironmentSize(graphics.textures, graphics.reflections);
+    if (envSize !== this.studioSize && this.theme) this.studioDirty = true;
 
     if (needsComposer) this.buildComposer();
     else if (this.bloomPass) this.bloomPass.strength = 0.015 + graphics.bloom * 0.2;
     this.frontGlassMaterial.uniforms.uStrength!.value = graphics.glass === 'low' ? 0 : graphics.glass === 'medium' ? 0.045 : 0.07;
+    const scratches = graphics.textures !== '512';
+    if (scratches && !this.glassScratches) {
+      this.glassScratches = makeScratchTexture(1024, 41);
+      this.frontGlassMaterial.uniforms.uScratch!.value = this.glassScratches;
+    }
+    this.frontGlassMaterial.uniforms.uScratchGain!.value = scratches ? 0.55 : 0;
     this.frontGlass.visible = graphics.glass !== 'low';
+    if (prev.reflections !== graphics.reflections) this.envDirty = true;
     this.applySize();
     this.effective.shadows = graphics.shadows;
     this.effective.ao = graphics.ao;
@@ -357,54 +446,57 @@ export class Stage {
     this.scene.environmentIntensity = L.envIntensity;
     this.renderer.toneMappingExposure = this.graphics.exposure * L.exposure;
     this.frontGlassMaterial.uniforms.uTint!.value.set(theme.backdrop.bokeh[0]!).lerp(new Color(0xffffff), 0.6);
+    // Contact shadows take a deep shade of the mat colour rather than pure black.
+    const dark = theme.cabinet.pattern === 'cosmos' || theme.cabinet.pattern === 'circuit';
+    this.contact.setStyle(new Color(theme.cabinet.mat).multiplyScalar(dark ? 0.08 : 0.22), dark ? 0.78 : 0.62);
     this.buildStudioEnvironment();
   }
 
-  /** Small procedural "light box" room in the theme's colours, prefiltered for image based lighting. */
+  /** The procedural studio for the current theme, prefiltered at the tier's resolution. */
   private buildStudioEnvironment(): void {
     const theme = this.theme;
-    if (!theme) return;
-    const env = new Scene();
-    const [top, wall, floor] = theme.lights.env;
-    const room = new Mesh(new BoxGeometry(6, 4, 6), new MeshBasicMaterial({ color: wall, side: BackSide }));
-    env.add(room);
-    const add = (w: number, h: number, d: number, x: number, y: number, z: number, color: string, gain: number) => {
-      const m = new Mesh(new BoxGeometry(w, h, d), new MeshBasicMaterial({ color: new Color(color).multiplyScalar(gain) }));
-      m.position.set(x, y, z);
-      env.add(m);
-    };
-    add(3.2, 0.05, 2.4, 0, 1.95, 0, top, 5.5); // ceiling soft box
-    add(6, 0.05, 6, 0, -1.98, 0, floor, 0.9);
-    add(0.05, 1.6, 2.2, -2.9, 0.3, 0.4, top, 2.2); // side strip
-    add(0.05, 1.2, 1.4, 2.9, 0.1, -0.6, theme.cabinet.led[0]!, 2.6);
-    add(1.6, 1.0, 0.05, 0.6, 0.4, 2.9, theme.cabinet.led[1 % theme.cabinet.led.length]!, 1.8);
-    add(1.2, 0.5, 0.05, -1.2, 1.0, -2.9, theme.cabinet.led[2 % theme.cabinet.led.length]!, 2.2);
-    const target = this.pmrem.fromScene(env, 0.035);
-    this.setEnvironment(target);
-    env.traverse((o) => {
-      const mesh = o as Mesh;
-      if (mesh.isMesh) {
-        mesh.geometry.dispose();
-        (mesh.material as MeshBasicMaterial).dispose();
-      }
-    });
+    if (!theme || this.contextLost) return;
+    this.studioDirty = false;
+    const size = studioEnvironmentSize(this.graphics.textures, this.graphics.reflections);
+    const studio = buildStudioScene(theme);
+    const target = this.pmrem.fromScene(studio.scene, environmentBlur(size), 0.1, 40, { size });
+    studio.dispose();
+    this.studioTarget?.dispose();
+    this.studioTarget = target;
+    this.studioSize = size;
+    // A large source cube is only needed while prefiltering; free it now (Ultra: ~90 MB).
+    if (size > 512) {
+      this.pmrem.dispose();
+      this.pmrem = new PMREMGenerator(this.renderer);
+    }
+    this.useEnvironment();
   }
 
-  private setEnvironment(target: WebGLRenderTarget): void {
-    this.envTarget?.dispose();
-    this.envTarget = target;
-    this.scene.environment = target.texture as Texture;
+  /** Points the scene at the capture when there is one (and reflections want it), else at the studio. */
+  private useEnvironment(): void {
+    const capture = this.graphics.reflections !== 'static' ? this.captureTarget : null;
+    const target = capture ?? this.studioTarget;
+    this.scene.environment = target ? (target.texture as Texture) : null;
   }
 
   /** Re-captures the reflections from the real cabinet interior ("refresh" / "live" reflection quality). */
   refreshEnvironmentFromScene(): void {
-    if (this.graphics.reflections === 'static' || this.contextLost) return;
+    const mode = this.graphics.reflections;
+    if (mode === 'static' || this.contextLost || !this.studioTarget) return;
     const glassVisible = this.frontGlass.visible;
+    const autoShadow = this.renderer.shadowMap.autoUpdate;
     this.frontGlass.visible = false;
-    // Capture from the middle of the play volume; keep the studio map as the lighting while capturing.
-    const target = this.pmrem.fromScene(this.scene, 0.02, 0.05, 20, { size: 128, position: this.captureOrigin });
+    // Light the capture with the studio (never with the previous capture: no feedback), and reuse
+    // this frame's shadow map instead of re-rendering it for each of the six faces.
+    this.scene.environment = this.studioTarget.texture as Texture;
+    this.renderer.shadowMap.autoUpdate = false;
+    const size = captureSize(this.graphics.textures, mode);
+    const target = this.pmrem.fromScene(this.scene, 0.02, 0.05, 20, { size, position: this.captureOrigin });
+    this.renderer.shadowMap.autoUpdate = autoShadow;
     this.frontGlass.visible = glassVisible;
-    this.setEnvironment(target);
+    this.captureTarget?.dispose();
+    this.captureTarget = target;
+    this.useEnvironment();
   }
   private readonly captureOrigin = new Vector3(0, 0.42, -FIELD.depth / 2);
 
@@ -417,6 +509,8 @@ export class Stage {
     this.frontGlass.position.set(0, layout.centerY, -0.0006);
     this.frontGlass.scale.set(layout.width, layout.height, 1);
     this.frontGlassMaterial.uniforms.uAspect!.value = layout.aspect;
+    // Scratch texture at a constant physical size (one tile ≈ 0.45 m).
+    (this.frontGlassMaterial.uniforms.uScale!.value as Vector2).set(layout.width / 0.45, layout.height / 0.45);
     this.binLight.position.set(-0.3, layout.binFloorY + 0.32, -0.14);
     // The shadow camera covers the play field plus the nearer part of the side bays.
     const reach = Math.min(1.25, 0.6 + layout.sideBay);
@@ -464,7 +558,8 @@ export class Stage {
   private flushSize(): void {
     this.sizeDirty = false;
     const g = this.graphics;
-    let ratio = this.dpr * g.renderScale * this.autoScale;
+    // Device pixel ratio cap (phones report 3 and more), then render scale and optimiser scale.
+    let ratio = Math.min(this.dpr, dprCap(g)) * g.renderScale * this.autoScale;
     // Pixel budget: clamp the internal resolution without touching the canvas' CSS size.
     const pixels = this.cssW * this.cssH * ratio * ratio;
     const budget = g.maxPixels * 1e6;
@@ -492,10 +587,13 @@ export class Stage {
 
   /* --------------------------------------------------------------- render */
 
+  private readonly contactRoots: Object3D[] = [];
+
   render(dt: number): void {
     if (this.contextLost) return;
     if (this.composerDirty) this.buildComposer();
     if (this.sizeDirty) this.flushSize();
+    if (this.studioDirty) this.buildStudioEnvironment();
     if (this.graphics.reflections !== 'static') {
       this.envTimer += dt;
       const interval = this.graphics.reflections === 'live' ? 0.75 : Infinity;
@@ -506,9 +604,19 @@ export class Stage {
       }
     } else if (this.envDirty) {
       this.envDirty = false;
-      this.buildStudioEnvironment();
+      // Back to the studio: drop the capture.
+      this.captureTarget?.dispose();
+      this.captureTarget = null;
+      this.useEnvironment();
     }
     this.renderer.info.reset();
+    const contact = CONTACT_SHADOWS[this.graphics.shadows];
+    if (contact.size > 0 && this.contact.mesh.visible && ++this.contactFrame >= contact.every) {
+      this.contactFrame = 0;
+      this.contactRoots.length = 0;
+      for (const child of this.scene.children) if (child.name === 'toys' || child.name === 'claw') this.contactRoots.push(child);
+      this.contact.update(this.renderer, this.scene, this.contactRoots);
+    }
     this.composer.render(dt);
   }
 
@@ -525,14 +633,29 @@ export class Stage {
     return this.msaa;
   }
 
+  /** Diagnostic snapshot of the lighting configuration (debug API, performance notes). */
+  lightingInfo(): { environment: number; capture: number; shadowMap: number; shadowFilter: string; contact: number } {
+    const s = this.graphics.shadows;
+    return {
+      environment: this.studioSize,
+      capture: this.captureTarget ? this.captureTarget.width : 0,
+      shadowMap: SHADOW_SIZE[s],
+      shadowFilter: s === 'off' ? 'off' : SHADOW_FILTER[s].type,
+      contact: CONTACT_SHADOWS[s].size,
+    };
+  }
+
   dispose(): void {
     this.canvas.removeEventListener('webglcontextlost', this.handleLost);
     this.canvas.removeEventListener('webglcontextrestored', this.handleRestored);
     this.composer.dispose();
     this.aoPass?.dispose();
     this.bloomPass?.dispose();
-    this.envTarget?.dispose();
+    this.studioTarget?.dispose();
+    this.captureTarget?.dispose();
     this.pmrem.dispose();
+    this.contact.dispose();
+    this.glassScratches?.dispose();
     this.frontGlass.geometry.dispose();
     this.frontGlassMaterial.dispose();
     this.renderer.dispose();

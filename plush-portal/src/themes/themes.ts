@@ -1,7 +1,8 @@
 import type { ThemeId } from '../core/types';
 
 export type ParticleKind = 'petals' | 'confetti' | 'bubbles' | 'stars';
-export type PatternKind = 'sakura' | 'storybook' | 'waves' | 'cosmos';
+/** Wallpaper / mat motif / 3D wall decor kit of a theme ('circuit' = printed circuit board, GPU Party). */
+export type PatternKind = 'sakura' | 'storybook' | 'waves' | 'cosmos' | 'circuit';
 export type LedMode = 'breathe' | 'chase' | 'wave' | 'twinkle';
 
 /**
@@ -235,9 +236,10 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     backdrop: { top: '#2a2058', bottom: '#191233', bokeh: ['#57e0f0', '#ff9ec0', '#a98bff', '#ffe3a8'] },
     particles: { kind: 'stars', colors: ['#57e0f0', '#ff9ec0', '#ffe9a8', '#ffffff', '#b79cff'] },
   },
-  // GPU Party: plush merchandise from a graphics-card / AI-computing world. Placeholder:
-  // the Cosmic Arcade definition retinted to black with a vivid green accent (same backdrop
-  // pattern, LED mode and particle kind); the real look comes with the theme's own content.
+  // GPU Party: plush merchandise from a graphics-card / AI-computing fan shop. A matte black
+  // lacquered cabinet with a vivid lime accent stripe, lime LEDs chasing like data on a bus,
+  // a cool white key light with a green rim, and green "data bit" confetti for wins.
+  // UI text (ink) on paper / panel: 17.5:1 / 15.4:1; primary 7.7:1, accent 11.9:1 on paper.
   gpu: {
     id: 'gpu',
     ui: {
@@ -251,36 +253,39 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
       glow: '#b6ff5c',
     },
     cabinet: {
-      frame: '#141810',
+      frame: '#0d0e0f',
       frameAccent: '#76b900',
-      metalTint: '#e6eee0',
+      metalTint: '#dde3e8',
       clawCap: '#76b900',
       backboard: '#0e120b',
       backboardInk: '#3f6310',
-      pattern: 'cosmos',
+      // Backdrop / decor kit (owned by the environment workstream): PCB wallpaper, chips,
+      // fans, "GPU" block letters and the replaceable emblem (public/assets/themes/gpu/logo.svg).
+      pattern: 'circuit',
       mat: '#171d12',
       matInk: '#33500f',
-      fascia: '#12160f',
-      velvet: '#2e4a0c',
+      fascia: '#0b0c0d',
+      velvet: '#1e3209',
       acrylicEdge: '#8fd61a',
-      led: ['#76b900', '#b6ff5c', '#ffffff', '#9be33a'],
-      ledMode: 'twinkle',
+      led: ['#76b900', '#9be33a', '#b6ff5c', '#76b900', '#e8ffd0'],
+      ledMode: 'chase',
     },
     lights: {
-      key: '#f3ffe8',
+      key: '#eef4ff',
       keyIntensity: 3.0,
-      sky: '#c9f29e',
-      ground: '#1e2c10',
+      sky: '#d4e2f6',
+      ground: '#141c0d',
       hemiIntensity: 0.55,
-      rim: '#76b900',
-      rimIntensity: 1.5,
+      rim: '#7fd400',
+      rimIntensity: 1.8,
       envIntensity: 0.55,
-      env: ['#e8f6da', '#3f6a12', '#12180c'],
+      env: ['#e6edf6', '#2c4a12', '#0b0e09'],
       exposure: 1.08,
       caustics: false,
     },
-    backdrop: { top: '#151d0f', bottom: '#080a06', bokeh: ['#76b900', '#b6ff5c', '#9be33a', '#ffffff'] },
-    particles: { kind: 'stars', colors: ['#76b900', '#b6ff5c', '#9be33a', '#ffffff', '#eaffd0'] },
+    backdrop: { top: '#10160c', bottom: '#050705', bokeh: ['#76b900', '#b6ff5c', '#9be33a', '#e8ffd0', '#4fd1ff'] },
+    // Flipping square "data bits" (the confetti shape) in the green family.
+    particles: { kind: 'confetti', colors: ['#76b900', '#b6ff5c', '#9be33a', '#e8ffd0', '#ffffff'] },
   },
 };
 

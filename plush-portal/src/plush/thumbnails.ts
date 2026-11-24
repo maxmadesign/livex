@@ -51,7 +51,8 @@ export async function renderThumbnails(library: PlushLibrary, assets: readonly P
       const loaded = await library.load(asset);
       const uniforms = createPlushUniforms();
       applyPaint(uniforms, asset);
-      const material = new PlushMaterial(uniforms, { dents: 1, deformNormals: false });
+      // Textured (generated) models keep their textures; procedural ones get the vertex-colour plush.
+      const material = new PlushMaterial(uniforms, { dents: 1, deformNormals: false, textures: loaded.textured?.textures ?? null });
       const mesh = loaded.custom ? loaded.custom.clone(true) : new Mesh(loaded.lods[0]!, material);
       mesh.rotation.y = -0.38;
       scene.add(mesh);

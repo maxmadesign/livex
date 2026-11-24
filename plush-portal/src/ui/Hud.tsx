@@ -5,6 +5,13 @@ import type { HudLayout } from '../layout/solve';
 import { useApp, useCollection, useSettings, useT, useUi } from './context';
 import { IconAgain, IconArrow, IconCamera, IconClaw, IconHeart, IconHelp, IconInfo, IconPalette, IconPlay, IconSparkle, LogoMark, Momo } from './Icons';
 import { useModals } from './modals';
+import { ScoreBreakdown, scoreHudRect, winCardRect } from './ScoreHud';
+// Control panel (phone layout, immersive mode, release fallback).
+import type { CSSProperties } from 'react';
+import { labelEm } from '../layout/labelFit';
+import { requestImmersive } from '../layout/phone';
+import { hasCoarsePointer, type Rect } from '../layout/solve';
+import { usePhoneGuards, usePhoneSetup } from './useHudLayout';
 
 type Direction = 'left' | 'right' | 'back' | 'front';
 
@@ -42,6 +49,37 @@ function DirButton({ dir, arrow, cls, disabled }: { dir: Direction; arrow: 'up' 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled]);
+  // Fallback while held: pointer capture can be refused or lost (finger slides off, system gesture,
+  // app switch), so a release of this pointer anywhere, the last finger leaving the screen, a window
+  // blur or the page being hidden also stops the claw. The claw can never keep moving on its own.
+  useEffect(() => {
+    if (!pressed) return;
+    const onPointerEnd = (e: PointerEvent) => {
+      if (pointer.current === null || e.pointerId === pointer.current) release();
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) release();
+    };
+    const onBlur = () => release();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') release();
+    };
+    window.addEventListener('pointerup', onPointerEnd, true);
+    window.addEventListener('pointercancel', onPointerEnd, true);
+    window.addEventListener('touchend', onTouchEnd, true);
+    window.addEventListener('touchcancel', onTouchEnd, true);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pointerup', onPointerEnd, true);
+      window.removeEventListener('pointercancel', onPointerEnd, true);
+      window.removeEventListener('touchend', onTouchEnd, true);
+      window.removeEventListener('touchcancel', onTouchEnd, true);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pressed]);
   return (
     <button
       type="button"
@@ -83,27 +121,38 @@ function ActionButton() {
   const demo = useUi((s) => s.demo);
   const paused = useUi((s) => s.paused);
   const result = useUi((s) => s.result);
+  const profile = useUi((s) => s.profile);
+  const start = () => {
+    // Phones: the first START tap also asks for full screen and a landscape lock (best effort).
+    if (profile === 'mobile' && hasCoarsePointer()) requestImmersive();
+    app.game.pressStart();
+  };
+  // The label shrinks (hud.css) rather than splitting a word at large font scales / long words.
+  const fit = (text: string) => ({ '--label-em': labelEm(text) }) as CSSProperties;
   if (phase === 'ATTRACT' || demo) {
+    const label = t('hud.start');
     return (
-      <button type="button" className="pp-btn pp-grab start" data-testid="start" onClick={() => app.game.pressStart()} disabled={paused}>
+      <button type="button" className="pp-btn pp-grab start" data-testid="start" onClick={start} disabled={paused} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
         <IconPlay />
-        <span>{t('hud.start')}</span>
+        <span>{label}</span>
       </button>
     );
   }
   if (phase === 'RESULT' && result?.outcome === 'won') {
+    const label = t('hud.again');
     return (
-      <button type="button" className="pp-btn pp-grab accent again" data-testid="again" onClick={() => app.game.playAgain()} disabled={paused}>
+      <button type="button" className="pp-btn pp-grab accent again" data-testid="again" onClick={() => app.game.playAgain()} disabled={paused} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
         <IconAgain />
-        <span>{t('hud.again')}</span>
+        <span>{label}</span>
       </button>
     );
   }
   const busy = BUSY.has(phase) || phase === 'RESULT';
+  const label = t('hud.grab');
   return (
-    <button type="button" className="pp-btn pp-grab" data-testid="grab" data-busy={busy} onClick={() => app.game.grab()} disabled={paused || busy}>
+    <button type="button" className="pp-btn pp-grab" data-testid="grab" data-busy={busy} onClick={() => app.game.grab()} disabled={paused || busy} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
       <IconClaw />
-      <span>{t('hud.grab')}</span>
+      <span>{label}</span>
     </button>
   );
 }
@@ -154,12 +203,76 @@ function PanelMenu({ compact }: { compact: boolean }) {
   );
 }
 
+/** Upright phone: a one-time hint that sideways is the intended way (the upright layout stays playable). */
+let rotateHintShown = false;
+
+function RotateHint({ layout }: { layout: HudLayout }) {
+  const t = useT();
+  const [show, setShow] = useState(!rotateHintShown);
+  useEffect(() => {
+    if (!show) return;
+    rotateHintShown = true;
+    const timer = setTimeout(() => setShow(false), 7000);
+    return () => clearTimeout(timer);
+  }, [show]);
+  if (!show) return null;
+  return (
+    <button type="button" className="pp-rotate" style={{ top: layout.topBar.y + layout.topBar.h + 8 }} onClick={() => setShow(false)} data-testid="rotate-hint" aria-label={t('mobile.rotate.dismiss')}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="7" y="2.5" width="10" height="17" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M3 15.5a9 9 0 0 0 6.5 6.2M21 8.5a9 9 0 0 0-6.5-6.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M8.6 22.6l1-1.3-1.6-.7M15.4 1.4l-1 1.3 1.6.7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span>{t('mobile.rotate')}</span>
+    </button>
+  );
+}
+
+/** Phone panel: every part at the rectangle the solver computed (relative to the panel's corner). */
+function PhonePanel({ layout, padDisabled }: { layout: HudLayout; padDisabled: boolean }) {
+  const p = layout.panel;
+  const c = layout.controls!;
+  const rel = (r: Rect): CSSProperties => ({ left: r.x - p.x, top: r.y - p.y, width: r.w, height: r.h });
+  return (
+    <>
+      <div
+        className={`pp-panel phone ${layout.panelStyle}`}
+        data-orient={layout.orientation}
+        data-handed={layout.handed}
+        // How much of Momo's block fits (hud.css limits the bubble / hides the block from these).
+        data-guide-lines={layout.guide.lines}
+        data-guide-hidden={layout.guide.hidden ? 'true' : undefined}
+        data-testid="panel"
+        style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <div className="pp-slot pad" style={rel(c.dpad)} data-testid="slot-dpad">
+          <DPad disabled={padDisabled} />
+        </div>
+        <div className="pp-slot status" style={rel(c.status)}>
+          <StatusLine />
+        </div>
+        <div className="pp-slot menu" style={rel(c.menu)}>
+          <PanelMenu compact />
+        </div>
+        <div className="pp-slot action" style={rel(c.action)} data-testid="slot-action">
+          <ActionButton />
+        </div>
+      </div>
+      {layout.orientation === 'portrait' ? <RotateHint layout={layout} /> : null}
+    </>
+  );
+}
+
 function ControlPanel({ layout }: { layout: HudLayout }) {
   const phase = useUi((s) => s.phase);
   const demo = useUi((s) => s.demo);
   const paused = useUi((s) => s.paused);
   const padDisabled = paused || demo || !(phase === 'READY' || phase === 'AIMING');
   const p = layout.panel;
+  usePhoneSetup();
+  usePhoneGuards(layout.profile === 'mobile');
+  if (layout.controls) return <PhonePanel layout={layout} padDisabled={padDisabled} />;
   if (layout.panelStyle === 'split') {
     return (
       <div className="pp-panel split" data-handed={layout.handed} data-testid="panel" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}>
@@ -203,16 +316,42 @@ const CAMERA_TONE: Record<TrackerState, 'live' | 'warn' | 'off' | 'idle'> = {
   lost: 'idle',
 };
 
-function CameraChip({ withText }: { withText: boolean }) {
+/** Tracker states in which the camera is running (a calibration can be taken). */
+const CAMERA_RUNNING: ReadonlySet<TrackerState> = new Set(['searching', 'tracking', 'lost']);
+
+function CameraChip({ withText, reachable }: { withText: boolean; reachable: boolean }) {
+  const app = useApp();
   const t = useT();
   const enabled = useSettings((s) => s.camera.enabled);
   const state = useUi((s) => s.tracker.state);
+  const calibrating = useUi((s) => s.tracker.calibration.phase === 'countdown' || s.tracker.calibration.phase === 'capturing');
   const shown: TrackerState = enabled ? state : 'off';
-  return (
+  const chip = (
     <span className="pp-chip" data-testid="camera-chip" data-state={shown} title={t(`camera.short.${shown}`)}>
       <i className="dot" data-tone={CAMERA_TONE[shown]} />
       <IconCamera style={{ width: '1.1em', height: '1.1em' }} />
       {withText ? <span>{t(`camera.short.${shown}`)}</span> : null}
+    </span>
+  );
+  // With the camera on, the chip offers a quick recalibration (countdown, then the current head
+  // position becomes the neutral view). Only where it can be reached (not above the 86" safe zone).
+  if (!enabled || !CAMERA_RUNNING.has(state) || !reachable) return chip;
+  return (
+    <span className="pp-camgroup">
+      {chip}
+      <button
+        type="button"
+        className="pp-chip pp-recal"
+        data-testid="camera-recalibrate"
+        data-busy={calibrating}
+        disabled={calibrating}
+        title={t('camera.calibrate')}
+        aria-label={t('camera.calibrate')}
+        onClick={() => app.tracker.startCalibration(app.settings.getState().settings.camera.calibrationSeconds)}
+      >
+        <IconAgain style={{ width: '1.05em', height: '1.05em' }} />
+        {withText ? <span>{t('sec.camera.calibrate')}</span> : null}
+      </button>
     </span>
   );
 }
@@ -250,7 +389,7 @@ function TopBar({ layout }: { layout: HudLayout }) {
         ) : null}
         <span className="pp-spacer" />
         {layout.density === 'rich' && wins > 0 ? <span className="pp-chip">{t('hud.wins', { count: wins })}</span> : null}
-        <CameraChip withText={layout.density === 'rich' && layout.vw > 900} />
+        <CameraChip withText={layout.density === 'rich' && layout.vw > 900} reachable={reachable} />
       </div>
       {/* The round "i" in the top-right corner always opens the full settings dialog. */}
       <button
@@ -303,7 +442,13 @@ function ResultLayer({ layout }: { layout: HudLayout }) {
   const prize = useUi((s) => s.prize);
   const thumbs = useUi((s) => s.thumbnails);
   const lang = useSettings((s) => s.system.language);
+  const scoreEnabled = useUi((s) => s.score.enabled);
+  const last = useUi((s) => s.score.last);
   if (phase !== 'RESULT' || !result) return null;
+  // Demo rounds celebrate with effects and DEMO score popups; the middle of the screen belongs to
+  // the attract call to action, so no result card is drawn over it.
+  if (result.demo) return null;
+  const award = scoreEnabled && last && last.roundId === result.roundId && !last.demo ? last : null;
   const zoneMid = (layout.safeTop + layout.safeBottom) / 2;
   if (result.outcome !== 'won') {
     const main = result.outcome === 'slipped' ? t('result.slipped') : t(result.contact === 'none' ? 'result.empty.none' : 'result.empty.touched');
@@ -317,19 +462,27 @@ function ResultLayer({ layout }: { layout: HudLayout }) {
   }
   const asset = app.game.library.assets().find((a) => a.id === result.targetTypeId);
   const name = asset ? asset.name[lang] : '';
-  const width = Math.min(layout.vw - 2 * layout.marginX - 20, 560 * layout.unit);
   // Centre of the card: middle of the safe zone, kept clear of the control panel when possible.
-  const estimated = 600 * layout.unit;
-  let top = zoneMid - estimated / 2;
-  if (layout.panelStyle === 'bar') top = Math.max(layout.safeTop + 6, Math.min(top, layout.panel.y - estimated - 10));
-  top = Math.max(layout.safeTop + 6, top);
+  const card = winCardRect(layout, !!award);
   return (
-    <div className="pp-result" data-testid="result-win" role="status" style={{ left: (layout.vw - width) / 2, width, top, boxSizing: 'border-box' }}>
+    <div
+      className="pp-result"
+      data-testid="result-win"
+      data-points={award ? award.total : undefined}
+      role="status"
+      style={{ left: card.x, width: card.w, top: card.y, boxSizing: 'border-box', ...(card.scale < 1 ? ({ '--u': `${layout.unit * card.scale}px` } as CSSProperties) : {}) }}
+    >
+      {award?.newBest ? (
+        <span className="pp-newbest" data-testid="new-best">
+          {t('score.newBest')}
+        </span>
+      ) : null}
       <h2>{result.demo ? t('result.demo.title') : t('result.won.title')}</h2>
-      <div className="portrait">
+      <div className="portrait" data-compact={!!award}>
         {asset && thumbs[asset.id] ? <img src={thumbs[asset.id]} alt={name} /> : null}
         {prize?.isNew && !result.demo ? <span className="pp-badge-new">{t('result.won.new')}</span> : null}
       </div>
+      {award ? <ScoreBreakdown award={award} /> : null}
       <p>{result.demo ? t('result.demo.subtitle') : t('result.won.subtitle', { name })}</p>
       {!result.demo && prize && prize.count > 1 ? <p style={{ opacity: 0.7, fontSize: '0.82em' }}>{t('result.won.count', { count: prize.count })}</p> : null}
       {!result.demo ? (
@@ -411,12 +564,19 @@ export function Hud({ layout }: { layout: HudLayout }) {
   const themeBusy = useUi((s) => s.themeBusy);
   const webglLost = useUi((s) => s.webglLost);
   const perfPanel = useSettings((s) => s.graphics.perfPanel);
+  const scoring = useUi((s) => s.score.enabled);
+  // The DEMO badge sits under the top bar, or under the score when that is there too.
+  const score = scoring ? scoreHudRect(layout) : null;
+  const badgeTop = score?.place === 'belowTop' ? score.y + score.h + 12 * layout.unit : Math.max(layout.safeTop + 10, layout.topBar.y + layout.topBar.h + 14);
+  // Small phones: under the top bar there is room for the score (which carries its own DEMO tag)
+  // or the badge, not both above the call to action (src/ui/AttractOverlay.tsx ctaGeometry).
+  const badge = demo && phase !== 'ATTRACT' && !(layout.controls && score?.place === 'belowTop');
   return (
     <div className="pp-hud" data-testid="hud">
       {layout.showGuides ? <SafeGuides layout={layout} /> : null}
       <TopBar layout={layout} />
-      {demo && phase !== 'ATTRACT' ? (
-        <div className="pp-demo" data-testid="demo-badge" style={{ top: Math.max(layout.safeTop + 10, layout.topBar.y + layout.topBar.h + 14) }}>
+      {badge ? (
+        <div className="pp-demo" data-testid="demo-badge" style={{ top: badgeTop }}>
           {t('hud.demo')}
         </div>
       ) : null}

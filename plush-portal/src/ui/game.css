@@ -1,1 +1,193 @@
-/* Points system (ScoreHud) and attract mode call to action (AttractOverlay). Owned by those features. */
+/* Points system (ScoreHud, score popups, win card breakdown) and the attract mode call to action
+   (AttractOverlay). Imported after hud.css. Lengths in design units (--u), like the rest of the HUD. */
+
+/* ------------------------------------------------------------------- score */
+.pp-score {
+  position: absolute; box-sizing: border-box; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 16);
+  padding: calc(var(--u) * 8) calc(var(--u) * 26);
+  border-radius: calc(var(--u) * 999);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c-paper) 94%, transparent), color-mix(in srgb, var(--c-panel) 90%, transparent));
+  box-shadow: 0 calc(var(--u) * 6) 0 color-mix(in srgb, var(--c-primary) 50%, transparent), 0 calc(var(--u) * 14) calc(var(--u) * 26) rgba(50, 15, 40, 0.24), inset 0 calc(var(--u) * 3) 0 rgba(255, 255, 255, 0.85);
+  font-family: var(--font-display); color: #3a2e44; white-space: nowrap;
+  backdrop-filter: blur(calc(var(--u) * 6)); -webkit-backdrop-filter: blur(calc(var(--u) * 6));
+}
+.pp-score .main { display: flex; flex-direction: column; align-items: center; line-height: 1; min-width: 0; }
+.pp-score .label { display: inline-flex; align-items: center; gap: calc(var(--u) * 8); font-size: calc(var(--u) * 18 * var(--fs)); font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: color-mix(in srgb, var(--c-primary-deep) 80%, #3a2e44); }
+.pp-score .value { font-size: calc(var(--u) * 48 * var(--fs)); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c-primary-deep); text-shadow: 0 calc(var(--u) * 2) 0 #fff; animation: pp-score-bump 420ms cubic-bezier(0.3, 1.8, 0.5, 1); }
+.pp-score .best { font-size: calc(var(--u) * 18 * var(--fs)); font-weight: 600; opacity: 0.72; letter-spacing: 0.04em; }
+.pp-score .tag, .pp-score-pop .tag {
+  display: inline-block; padding: calc(var(--u) * 2) calc(var(--u) * 10); border-radius: calc(var(--u) * 999);
+  background: #2b2233; color: #ffe27a; font-size: calc(var(--u) * 15); letter-spacing: 0.2em; font-weight: 700;
+}
+.pp-score[data-stacked="true"] { flex-direction: column; gap: calc(var(--u) * 8); border-radius: calc(var(--u) * 40); padding: calc(var(--u) * 16) calc(var(--u) * 14); }
+.pp-score[data-stacked="true"] .value { font-size: calc(var(--u) * 56 * var(--fs)); }
+.pp-score[data-demo="true"] { background: linear-gradient(180deg, color-mix(in srgb, var(--c-paper) 80%, transparent), color-mix(in srgb, var(--c-panel) 72%, transparent)); }
+.pp-root[data-theme="gpu"] .pp-score .value { color: #3f6400; }
+
+/* Combo badge: a little flame that grows hotter with the multiplier. */
+.pp-combo {
+  position: relative; display: inline-flex; align-items: center; gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 6) calc(var(--u) * 16) calc(var(--u) * 6) calc(var(--u) * 12); border-radius: calc(var(--u) * 999);
+  background: linear-gradient(180deg, #ffd65c, #ff8a2b 55%, #e8344e);
+  color: #fff; font-weight: 700; font-size: calc(var(--u) * 30 * var(--fs)); text-shadow: 0 calc(var(--u) * 2) 0 rgba(120, 20, 0, 0.45);
+  box-shadow: 0 0 calc(var(--u) * 16) rgba(255, 120, 40, 0.65), inset 0 calc(var(--u) * 2) 0 rgba(255, 255, 255, 0.6);
+  animation: pp-combo-in 380ms cubic-bezier(0.3, 1.8, 0.5, 1), pp-combo-glow 1.1s ease-in-out infinite alternate;
+}
+.pp-combo[data-level="2"] { box-shadow: 0 0 calc(var(--u) * 24) rgba(255, 90, 30, 0.8), inset 0 calc(var(--u) * 2) 0 rgba(255, 255, 255, 0.6); }
+.pp-combo[data-level="3"] { background: linear-gradient(180deg, #fff17a, #ff6a1a 50%, #c3125a); box-shadow: 0 0 calc(var(--u) * 34) rgba(255, 70, 20, 0.95), inset 0 calc(var(--u) * 2) 0 rgba(255, 255, 255, 0.7); font-size: calc(var(--u) * 34 * var(--fs)); }
+.pp-combo .flame {
+  width: calc(var(--u) * 22); height: calc(var(--u) * 30); flex: none;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: radial-gradient(circle at 50% 78%, #fffbe0 0 18%, #ffd34a 36%, #ff7a1f 62%, rgba(232, 52, 78, 0) 74%);
+  transform-origin: 50% 100%; animation: pp-flame 0.42s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 calc(var(--u) * 6) rgba(255, 180, 60, 0.9));
+}
+
+/* Floating points at the prize's position. */
+.pp-score-pop {
+  position: absolute; pointer-events: none; transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 2);
+  font-family: var(--font-display); font-weight: 700; white-space: nowrap;
+  animation: pp-pop-rise 1.9s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.pp-score-pop b {
+  font-size: calc(var(--u) * 72 * var(--fs)); line-height: 1; color: #fff;
+  -webkit-text-stroke: calc(var(--u) * 3) var(--c-primary-deep); paint-order: stroke fill;
+  text-shadow: 0 calc(var(--u) * 6) 0 color-mix(in srgb, var(--c-primary-deep) 70%, #000), 0 0 calc(var(--u) * 26) rgba(255, 255, 255, 0.8);
+}
+.pp-score-pop .tier { padding: calc(var(--u) * 3) calc(var(--u) * 14); border-radius: calc(var(--u) * 999); background: rgba(43, 34, 51, 0.82); color: #fff; font-size: calc(var(--u) * 24 * var(--fs)); letter-spacing: 0.08em; text-transform: uppercase; }
+.pp-score-pop .combo { font-size: calc(var(--u) * 30 * var(--fs)); color: #ffd65c; text-shadow: 0 calc(var(--u) * 3) 0 #c3125a; }
+.pp-score-pop[data-kind="slip"] b { font-size: calc(var(--u) * 46 * var(--fs)); }
+.pp-score-pop[data-tier="rare"] b { color: #bff0ff; -webkit-text-stroke-color: #1f7fb8; }
+.pp-score-pop[data-tier="rare"] .tier { background: #1f7fb8; }
+.pp-score-pop[data-tier="epic"] b { color: #ecd6ff; -webkit-text-stroke-color: #7a3fd0; }
+.pp-score-pop[data-tier="epic"] .tier { background: #7a3fd0; }
+.pp-score-pop[data-tier="legendary"] b { color: #fff3b0; -webkit-text-stroke-color: #c07a00; font-size: calc(var(--u) * 90 * var(--fs)); text-shadow: 0 calc(var(--u) * 6) 0 #8a4f00, 0 0 calc(var(--u) * 40) rgba(255, 215, 80, 0.95); }
+.pp-score-pop[data-tier="legendary"] .tier { background: linear-gradient(90deg, #c07a00, #ffcf3a, #c07a00); color: #3b2300; }
+
+/* Win card: NEW BEST ribbon, smaller portrait and the points breakdown. */
+.pp-result .portrait[data-compact="true"] { width: calc(var(--u) * 210); height: calc(var(--u) * 210); }
+.pp-newbest {
+  position: absolute; top: calc(var(--u) * -26); left: 50%; transform: translateX(-50%) rotate(-3deg);
+  padding: calc(var(--u) * 8) calc(var(--u) * 34); border-radius: calc(var(--u) * 14);
+  background: linear-gradient(90deg, #ff5f8f, #ffb347, #ffe066, #7fe0a6, #6fc7ff, #b78bff);
+  color: #fff; font-family: var(--font-display); font-weight: 700; font-size: calc(var(--u) * 32 * var(--fs)); letter-spacing: 0.08em; white-space: nowrap;
+  text-shadow: 0 calc(var(--u) * 2) 0 rgba(60, 20, 60, 0.45); box-shadow: 0 calc(var(--u) * 8) calc(var(--u) * 18) rgba(60, 20, 60, 0.35);
+  animation: pp-ribbon 1.6s ease-in-out infinite alternate;
+}
+/* Phone held sideways: the win card is a grid with the picture beside the text (src/ui/hud.css), so
+   the ribbon is placed in the picture column (its containing block) instead of over the title. */
+@media (orientation: landscape) {
+  .pp-root[data-profile="mobile"] .pp-result > .pp-newbest { grid-column: 1 / 2; top: calc(var(--u) * -20); padding: calc(var(--u) * 6) calc(var(--u) * 22); font-size: calc(var(--u) * 26 * var(--fs)); }
+}
+.pp-breakdown { width: 100%; display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 6); color: #3a2e44; }
+.pp-breakdown dl { margin: 0; width: 100%; display: grid; gap: calc(var(--u) * 2); font-size: calc(var(--u) * 22 * var(--fs)); }
+.pp-breakdown dl > div { display: flex; justify-content: space-between; gap: calc(var(--u) * 16); padding: calc(var(--u) * 2) calc(var(--u) * 8); }
+.pp-breakdown dt { font-weight: 600; text-align: left; }
+.pp-breakdown dt small { font-weight: 600; opacity: 0.6; font-size: 0.85em; }
+.pp-breakdown dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pp-breakdown .total { border-top: calc(var(--u) * 2) dashed color-mix(in srgb, var(--c-primary) 50%, transparent); margin-top: calc(var(--u) * 4); padding-top: calc(var(--u) * 6); font-family: var(--font-display); font-size: 1.25em; color: var(--c-primary-deep); }
+.pp-tier { padding: calc(var(--u) * 3) calc(var(--u) * 16); border-radius: calc(var(--u) * 999); background: #6b6075; color: #fff; font-family: var(--font-display); font-weight: 700; font-size: calc(var(--u) * 20 * var(--fs)); letter-spacing: 0.12em; text-transform: uppercase; }
+.pp-tier[data-tier="rare"] { background: #1f7fb8; }
+.pp-tier[data-tier="epic"] { background: #7a3fd0; }
+.pp-tier[data-tier="legendary"] { background: linear-gradient(90deg, #c07a00, #ffcf3a, #c07a00); color: #3b2300; }
+
+/* Camera chip: quick recalibration next to it. */
+.pp-camgroup { display: inline-flex; align-items: center; gap: calc(var(--u) * 6); pointer-events: auto; }
+.pp-recal[data-busy="true"] svg { animation: pp-spin 1s linear infinite; }
+.pp-recal:disabled { opacity: 0.7; cursor: default; }
+
+/* ----------------------------------------------------------------- attract */
+.pp-attract { position: absolute; inset: 0; pointer-events: none; }
+/* Stacking follows document order (src/ui/App.tsx): HUD, score, call to action, then dialogs. No z-index here,
+   so nothing of this ever paints over a dialog. */
+.pp-score[data-hidden="true"] { opacity: 0; transition: opacity 200ms ease; }
+.pp-attract-glow {
+  position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--c-glow) 55%, transparent), color-mix(in srgb, var(--c-glow) 18%, transparent) 55%, transparent 100%);
+  animation: pp-attract-breathe 2.6s ease-in-out infinite;
+}
+.pp-cta-wrap { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 14); pointer-events: none; }
+.pp-cta {
+  --face-a: var(--c-primary); --face-b: var(--c-accent); --face-c: var(--c-accent2);
+  position: relative; width: 100%; box-sizing: border-box; pointer-events: auto; cursor: pointer; overflow: visible;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 26) calc(var(--u) * 44) calc(var(--u) * 30);
+  border: calc(var(--u) * 5) solid rgba(255, 255, 255, 0.9); border-radius: calc(var(--u) * 999);
+  background: linear-gradient(115deg, var(--face-a), var(--face-b) 30%, var(--face-c) 50%, var(--face-b) 70%, var(--face-a)) 0 0 / 300% 100%;
+  color: #fff; font-family: var(--font-display); text-align: center;
+  box-shadow:
+    0 calc(var(--u) * 14) 0 color-mix(in srgb, var(--c-primary-deep) 85%, #000),
+    0 calc(var(--u) * 30) calc(var(--u) * 60) rgba(40, 10, 40, 0.45),
+    0 0 calc(var(--u) * 60) color-mix(in srgb, var(--c-glow) 85%, transparent),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.55);
+  animation: pp-cta-shimmer 3.2s linear infinite, pp-cta-pulse 1.4s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+}
+.pp-cta:active { transform: translateY(calc(var(--u) * 8)) scale(0.98); box-shadow: 0 calc(var(--u) * 6) 0 color-mix(in srgb, var(--c-primary-deep) 85%, #000), 0 0 calc(var(--u) * 50) color-mix(in srgb, var(--c-glow) 85%, transparent); }
+.pp-cta:disabled { cursor: default; filter: saturate(0.6); }
+.pp-cta:focus-visible { outline: calc(var(--u) * 6) solid #fff; outline-offset: calc(var(--u) * 8); }
+.pp-cta .title {
+  position: relative; font-size: min(max(26px, calc(var(--u) * 84 * var(--fs))), var(--cta-fit, 9999px)); font-weight: 700; line-height: 1; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+  text-shadow: 0 calc(var(--u) * 5) 0 color-mix(in srgb, var(--c-primary-deep) 80%, #000), 0 0 calc(var(--u) * 24) rgba(255, 255, 255, 0.7);
+}
+.pp-root[data-lang="ja"] .pp-cta .title { font-size: min(max(24px, calc(var(--u) * 64 * var(--fs))), var(--cta-fit, 9999px)); letter-spacing: 0.02em; }
+.pp-cta .sub { position: relative; font-size: max(13px, calc(var(--u) * 28 * var(--fs))); font-weight: 600; letter-spacing: 0.04em; opacity: 0.96; text-shadow: 0 calc(var(--u) * 2) 0 rgba(40, 10, 40, 0.4); white-space: normal; }
+.pp-cta .shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.pp-cta .shine::before {
+  content: ""; position: absolute; top: -20%; bottom: -20%; left: -40%; width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent); transform: skewX(-20deg);
+  animation: pp-cta-sweep 2.8s ease-in-out infinite;
+}
+/* Pulsing glow rings behind the button. */
+.pp-cta-box { position: relative; width: 100%; }
+.pp-cta-ring {
+  position: absolute; inset: 0; border-radius: calc(var(--u) * 999); pointer-events: none;
+  border: calc(var(--u) * 6) solid color-mix(in srgb, var(--c-glow) 90%, #fff);
+  box-shadow: 0 0 calc(var(--u) * 30) color-mix(in srgb, var(--c-glow) 90%, transparent), inset 0 0 calc(var(--u) * 20) color-mix(in srgb, var(--c-glow) 70%, transparent);
+  animation: pp-cta-ring 2s ease-out infinite;
+}
+.pp-cta-ring.late { animation-delay: 1s; }
+/* Sparkles around the button. */
+.pp-cta .spark { position: absolute; width: calc(var(--u) * 40); height: calc(var(--u) * 40); pointer-events: none;
+  background: radial-gradient(circle, #fff 0 12%, transparent 13%), conic-gradient(from 45deg, transparent 0 20deg, #fff 22deg 23deg, transparent 25deg 110deg, #fff 112deg 113deg, transparent 115deg 200deg, #fff 202deg 203deg, transparent 205deg 290deg, #fff 292deg 293deg, transparent 295deg);
+  -webkit-mask: radial-gradient(circle, #000 0 45%, transparent 70%); mask: radial-gradient(circle, #000 0 45%, transparent 70%);
+  filter: drop-shadow(0 0 calc(var(--u) * 6) var(--c-accent2)); animation: pp-twinkle 1.8s ease-in-out infinite; }
+.pp-cta .spark.a { top: calc(var(--u) * -18); left: 12%; }
+.pp-cta .spark.b { top: 18%; right: calc(var(--u) * -20); animation-delay: 0.45s; width: calc(var(--u) * 30); height: calc(var(--u) * 30); }
+.pp-cta .spark.c { bottom: calc(var(--u) * -16); left: 38%; animation-delay: 0.9s; }
+.pp-cta .spark.d { top: 30%; left: calc(var(--u) * -22); animation-delay: 1.3s; width: calc(var(--u) * 28); height: calc(var(--u) * 28); }
+/* The tapping hand, at the lower right of the button. */
+.pp-cta-hand { position: absolute; right: 6%; bottom: calc(var(--u) * -54); width: calc(var(--u) * 92); height: calc(var(--u) * 92); pointer-events: none; }
+.pp-cta-hand svg { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 40% 10%; filter: drop-shadow(0 calc(var(--u) * 6) calc(var(--u) * 6) rgba(40, 10, 40, 0.35)); animation: pp-tap 1.2s ease-in-out infinite; }
+.pp-cta-hand .ripple { position: absolute; left: 22%; top: -6%; width: calc(var(--u) * 46); height: calc(var(--u) * 46); margin: calc(var(--u) * -23) 0 0 calc(var(--u) * -10); border-radius: 50%; border: calc(var(--u) * 4) solid #fff; opacity: 0; animation: pp-tap-ripple 1.2s ease-out infinite; }
+.pp-cta-keys { padding: calc(var(--u) * 6) calc(var(--u) * 18); border-radius: calc(var(--u) * 999); background: rgba(43, 34, 51, 0.72); color: #fff; font-weight: 600; font-size: max(12px, calc(var(--u) * 22 * var(--fs))); margin-top: calc(var(--u) * 40); }
+
+/* Reduced motion: everything stands still, the rings stay as a calm halo. */
+.pp-root[data-reduced="true"] .pp-attract *, .pp-root[data-reduced="true"] .pp-attract *::before, .pp-root[data-reduced="true"] .pp-attract *::after,
+.pp-root[data-reduced="true"] .pp-attract-glow, .pp-root[data-reduced="true"] .pp-score *, .pp-root[data-reduced="true"] .pp-score-pop, .pp-root[data-reduced="true"] .pp-newbest { animation: none !important; }
+.pp-root[data-reduced="true"] .pp-cta-ring { opacity: 0.55; transform: scale(1.06); }
+.pp-root[data-reduced="true"] .pp-cta-ring.late, .pp-root[data-reduced="true"] .pp-cta-hand .ripple, .pp-root[data-reduced="true"] .pp-cta .shine { display: none; }
+.pp-root[data-reduced="true"] .pp-cta { background-position: 50% 0; }
+
+@keyframes pp-score-bump { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes pp-combo-in { from { transform: scale(0.4) rotate(-12deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes pp-combo-glow { from { filter: brightness(1); } to { filter: brightness(1.18); } }
+@keyframes pp-flame { from { transform: scaleY(0.9) skewX(-4deg); } to { transform: scaleY(1.12) skewX(5deg); } }
+@keyframes pp-pop-rise {
+  0% { opacity: 0; transform: translate(-50%, -60%) scale(0.5); }
+  12% { opacity: 1; transform: translate(-50%, -100%) scale(1.15); }
+  24% { transform: translate(-50%, -105%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(-100% - var(--u) * 170)) scale(0.95); }
+}
+@keyframes pp-ribbon { from { transform: translateX(-50%) rotate(-3deg) scale(1); } to { transform: translateX(-50%) rotate(2deg) scale(1.06); } }
+@keyframes pp-attract-breathe { 0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.96); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); } }
+@keyframes pp-cta-shimmer { from { background-position: 0% 0; } to { background-position: 300% 0; } }
+@keyframes pp-cta-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.045; } }
+@keyframes pp-cta-sweep { 0% { left: -40%; } 55%, 100% { left: 130%; } }
+@keyframes pp-cta-ring { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.22, 1.6); opacity: 0; } }
+@keyframes pp-twinkle { 0%, 100% { transform: scale(0.3) rotate(0deg); opacity: 0; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes pp-tap { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 40% { transform: translate(calc(var(--u) * -6), calc(var(--u) * -16)) rotate(-8deg); } 55% { transform: translate(0, calc(var(--u) * 4)) rotate(2deg) scale(0.96); } }
+@keyframes pp-tap-ripple { 0%, 50% { transform: scale(0.3); opacity: 0; } 58% { opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }

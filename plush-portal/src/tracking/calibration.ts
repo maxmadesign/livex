@@ -23,6 +23,13 @@ export interface CalibrationValues {
   /** Measured eye position in window space that corresponds to the neutral pose, metres. */
   calNeutral: Vec3;
   calibrated: true;
+  /**
+   * Head-direction baseline in degrees (yaw + = turned to the player's right, pitch + = up),
+   * relative to facing the centre of the game window. Only the countdown calibration measures it;
+   * persist it as `camera.headBaseline.<profile>` (see baseline.ts).
+   */
+  headYaw?: number;
+  headPitch?: number;
 }
 
 export interface AveragedMeasurement {

@@ -40,6 +40,10 @@ export type ApiErrorCode =
   | 'bad_output' // model output failed schema / length validation
   | 'model_mismatch' // speech model does not belong to the configured speech API
   | 'speech_unavailable'
+  | 'invalid_key' // POST /api/ai/key: not shaped like an API key
+  | 'key_rejected' // OpenAI answered 401 for the new key: nothing was stored
+  | 'key_storage' // the key could not be written to the server's data folder
+  | 'key_management_off' // PLUSH_KEY_MANAGEMENT=off: the key only comes from .env
   | 'not_found'
   | 'internal';
 
@@ -75,6 +79,51 @@ export interface StatusResponseBody {
     speechTimeoutMs: number;
   };
   version: string;
+  /** Where the key comes from (never the key). Optional: older servers do not send it. */
+  credential?: CredentialStatus;
+}
+
+/* ------------------------------------------------------------ credential */
+
+/** 'env' = OPENAI_API_KEY from .env / environment, 'settings' = replaced in Settings, 'none' = no key. */
+export type CredentialSource = 'env' | 'settings' | 'none';
+/** PLUSH_KEY_MANAGEMENT: 'local' = from this machine or with the admin token, 'token' = admin token only, 'off'. */
+export type KeyManagementMode = 'local' | 'token' | 'off';
+
+/** Everything the browser may know about the server's OpenAI key. The key itself is never sent. */
+export interface CredentialStatus {
+  source: CredentialSource;
+  /** "…wxyz" (the last four characters) or null without a key. */
+  fingerprint: string | null;
+  /** True when OPENAI_API_KEY is set on the server ("Restore default" goes back to it). */
+  envDefault: boolean;
+  /** When the replacement was saved (ISO); null for the .env default. */
+  savedAt: string | null;
+  management: KeyManagementMode;
+  /** Whether the request that asked may replace, test or restore the key. */
+  canManage: boolean;
+}
+
+/** Result of checking a key against OpenAI (GET /v1/models). */
+export type KeyCheckResult = 'ok' | 'rejected' | 'restricted' | 'quota' | 'unreachable' | 'skipped';
+
+/** POST /api/ai/key. Sent once; the server stores it and never returns it. */
+export interface CredentialSaveBody {
+  key: string;
+}
+
+/** POST /api/ai/key/test: checks the given key without storing it, or the active key when omitted. */
+export interface CredentialTestBody {
+  key?: string;
+}
+
+/** Answer of GET / POST / DELETE /api/ai/key and POST /api/ai/key/test. */
+export interface CredentialResponseBody {
+  ok: boolean;
+  credential: CredentialStatus;
+  check?: { result: KeyCheckResult; latencyMs: number };
+  code?: ApiErrorCode;
+  message?: string;
 }
 
 /* ------------------------------------------------------------------- line */

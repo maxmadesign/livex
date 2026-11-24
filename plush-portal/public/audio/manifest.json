@@ -197,23 +197,23 @@
       "bytes": 1254942
     },
     "gpu": {
-      "file": "music/cosmic.mp3",
-      "title": "Neon Orbit",
-      "bpm": 126,
+      "file": "music/gpu.mp3",
+      "title": "Overclock Party",
+      "bpm": 120,
       "beatsPerBar": 4,
       "bars": 32,
-      "key": "F# minor / A major",
-      "feel": "four-on-the-floor, 16th arpeggios, side-chain pump",
+      "key": "E major / C# minor",
+      "feel": "driving eighths, 16th chip arpeggios, side-chain pumped supersaw",
       "instruments": [
-        "pulse lead",
-        "arcade arpeggio",
-        "detuned saw pad",
-        "synth bass",
-        "FM bells",
-        "pop kick",
-        "arcade snare and clap",
-        "hats",
-        "blips, zaps and arcade toms"
+        "square-wave chip lead",
+        "chiptune 16th arpeggio",
+        "glassy supersaw pad",
+        "octave-bounce bass",
+        "FM sparkle keys",
+        "electro kick",
+        "gated snare and clap",
+        "noise hi-hats",
+        "data blips and risers"
       ],
       "sections": [
         {
@@ -225,7 +225,7 @@
           "bars": 8
         },
         {
-          "name": "verse'",
+          "name": "bridge",
           "bars": 8
         },
         {
@@ -233,16 +233,16 @@
           "bars": 8
         }
       ],
-      "duration": 62.693673,
+      "duration": 65.75,
       "loopStart": 0.25,
-      "loopEnd": 61.193673469387754,
+      "loopEnd": 64.25,
       "loopStartSample": 11025,
-      "loopEndSample": 2698641,
+      "loopEndSample": 2833425,
       "lufs": -16,
-      "peakDb": -2.95,
-      "rmsDb": -18.92,
+      "peakDb": -2.06,
+      "rmsDb": -19.35,
       "credits": "original, synthesised by tools/audio",
-      "bytes": 1254942
+      "bytes": 1316069
     }
   },
   "sfx": {
@@ -499,7 +499,7 @@
           "sfx/win_cosmic.wav"
         ],
         "gpu": [
-          "sfx/win_cosmic.wav"
+          "sfx/win_gpu.wav"
         ]
       },
       "rmsDb": -17.47
@@ -550,7 +550,7 @@
           "sfx/theme_sting_cosmic.wav"
         ],
         "gpu": [
-          "sfx/theme_sting_cosmic.wav"
+          "sfx/theme_sting_gpu.wav"
         ]
       },
       "rmsDb": -15.56

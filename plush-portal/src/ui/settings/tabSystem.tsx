@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { clearLog, formatLog } from '../../diagnostics/log';
 import { FIXED_DT } from '../../physics/fieldSpec';
-import { useApp, useLogEntries, useT, useUi } from '../context';
+import { useApp, useLang, useLogEntries, useT, useUi } from '../context';
 import { Field, Row, Section } from './Field';
 
 /* ---------------------------------------------------------------- System */
@@ -35,6 +35,11 @@ export function SystemTab() {
   const app = useApp();
   const t = useT();
   const warnings = useUi((s) => s.warnings);
+  const scoreBest = useUi((s) => s.score.best);
+  const scoreLifetime = useUi((s) => s.score.lifetime);
+  // Numbers follow the UI language, not the browser's locale.
+  const lang = useLang();
+  const points = (n: number) => n.toLocaleString(lang === 'zh' ? 'zh-CN' : lang === 'ja' ? 'ja-JP' : 'en-US');
   const log = useLogEntries();
   const fileInput = useRef<HTMLInputElement>(null);
   const exportConfig = () => {
@@ -61,9 +66,8 @@ export function SystemTab() {
     <>
       <Section title={t('sec.system.general')} />
       <Field path="system.language" />
-      <Field path="system.attractDemo" />
-      <Field path="system.attractIdleSec" />
       <Field path="system.idleSeconds" />
+      <Field path="system.attractDemo" />
       <Field path="system.reducedMotion" />
       <div className="pp-actions">
         <button type="button" className="pp-btn small soft" onClick={fullscreen} disabled={!document.fullscreenEnabled} data-testid="btn-fullscreen">
@@ -93,11 +97,25 @@ export function SystemTab() {
           }}
           testId="btn-clear-collection"
         />
+        <ConfirmButton
+          label={t('score.reset')}
+          confirm={t('system.confirm')}
+          onConfirm={() => {
+            app.game.resetScores();
+            app.game.toast('score.reset.done');
+          }}
+          testId="btn-reset-scores"
+        />
       </div>
       <p className="pp-note">
         {t('system.resetAll.confirm')}
         <br />
         {t('system.clearCollection.confirm')}
+        <br />
+        {t('score.reset.confirm')}
+      </p>
+      <p className="pp-note" data-testid="score-stats">
+        {t('score.stats', { best: points(scoreBest), lifetime: points(scoreLifetime) })}
       </p>
       <Section title={t('sec.system.lock')} />
       <Field path="system.lockSettings" />

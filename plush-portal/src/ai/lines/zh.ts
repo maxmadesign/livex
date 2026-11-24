@@ -37,6 +37,10 @@ export const zh: LangBank = {
         ['欢迎登上宇宙街机！操纵爪子抓一颗小星星吧。', 'happy'],
         ['三、二、一，发射！太空娃娃飘过来啦。', 'cheer'],
       ],
+      gpu: [
+        ['欢迎来到显卡派对！风扇转起来了，娃娃们已经准备好上场。', 'happy'],
+        ['开机完成！从服务器机柜里挑一只娃娃，派对开始啦。', 'cheer'],
+      ],
     },
     first_play: {
       all: [
@@ -49,6 +53,7 @@ export const zh: LangBank = {
       storybook: [['第一章：把爪子移到伙伴上方，按下抓取吧。', 'calm']],
       ocean: [['第一次下潜！让爪子漂到海洋朋友上方再抓。', 'happy']],
       cosmic: [['首次任务！飞到目标上方，按抓取准备降落。', 'happy']],
+      gpu: [['第一次跑分！把爪子对准一只娃娃，再按抓取。', 'happy']],
     },
     idle: {
       all: [
@@ -62,6 +67,7 @@ export const zh: LangBank = {
       storybook: [['每个故事都需要主角，你想先救哪位伙伴？', 'think']],
       ocean: [['现在海面很平静，正适合慢慢瞄准。', 'calm']],
       cosmic: [['星星飘得很慢，船长，准备好了再锁定目标。', 'calm']],
+      gpu: [['风扇在轻轻转着。慢慢挑选下一个目标，这里不卡顿。', 'calm']],
     },
     'idle.tracking': {
       all: [
@@ -82,6 +88,7 @@ export const zh: LangBank = {
       storybook: [['稳住哦小英雄，把爪子对准伙伴的肚子。', 'think']],
       ocean: [['让爪子像泡泡一样，飘到最圆的地方上方。', 'think']],
       cosmic: [['锁定目标！让光圈落在娃娃身上再下降。', 'think']],
+      gpu: [['校准中！把目标圈对准娃娃的正中间，像素级精准再下爪。', 'think']],
     },
     grab: {
       all: [
@@ -95,6 +102,7 @@ export const zh: LangBank = {
       storybook: [['爪子俯冲啦！小英雄能救到伙伴吗？', 'cheer']],
       ocean: [['下潜开始！从海底捞一位朋友上来吧。', 'cheer']],
       cosmic: [['开始降落！起落架放下，稳住、稳住……', 'cheer']],
+      gpu: [['执行抓取！爪子全速运算中，抓紧抓紧！', 'cheer']],
     },
     'empty.dir': {
       all: [
@@ -194,6 +202,10 @@ export const zh: LangBank = {
         ['着陆成功！{toy}安全抵达你的收藏。', 'cheer'],
         ['闪亮的一抓！{toy}加入了你的小队。', 'cheer'],
       ],
+      gpu: [
+        ['渲染完成！{toy}已经送进你的收藏啦。', 'cheer'],
+        ['满帧抓取！{toy}要跟你回家啦。', 'cheer'],
+      ],
     },
     'win.new': {
       all: [
@@ -206,6 +218,7 @@ export const zh: LangBank = {
       storybook: [['故事里来了新角色，欢迎你，{toy}！', 'cheer']],
       ocean: [['一位新的海洋朋友浮出水面，欢迎{toy}！', 'cheer']],
       cosmic: [['发现新星！{toy}已经记在你的星图上。', 'cheer']],
+      gpu: [['解锁新硬件！{toy}第一次加入你的收藏。', 'cheer']],
     },
     'win.demo': {
       all: [
@@ -245,6 +258,11 @@ export const zh: LangBank = {
         ['发射升空！一整片银河的娃娃探险家飘过来了。', 'cheer'],
         ['欢迎进入轨道，趁星星没飘走抓一颗吧。', 'happy'],
       ],
+      gpu: [
+        ['显卡派对！绿色灯光、呼呼的风扇，还有最可爱的芯片。', 'cheer'],
+        ['发布会舞台亮灯啦。显卡、机器人和像素方块都在等你！', 'happy'],
+        ['欢迎来到毛绒科技展，每一台风扇都在为你转动。', 'happy'],
+      ],
     },
     retry: {
       all: [
@@ -257,6 +275,7 @@ export const zh: LangBank = {
       storybook: [['要不要翻到下一页，再来一局试试看？', 'happy']],
       ocean: [['潮水还会再来，要再放一次爪子吗？', 'calm']],
       cosmic: [['准备再绕一圈吗？想出发时随时发射，船长。', 'happy']],
+      gpu: [['再跑一轮吗？想重启爪子就随时开始，不用着急。', 'happy']],
     },
     'retry.streak': {
       all: [
@@ -279,6 +298,10 @@ export const zh: LangBank = {
       storybook: [['小英雄都瞄准肚子，那里爪子抱得最牢。', 'think']],
       ocean: [['圆圆的海洋朋友最好抓，触手和鳍容易滑。', 'think']],
       cosmic: [['锁定圆圆的身体，船长，天线和耳朵都很滑。', 'think']],
+      gpu: [
+        ['方块和芯片这样的厚实形状很好抓，瞄准中间就好。', 'think'],
+        ['风扇叶片和线缆容易滑走，抓结实的身体更稳。', 'think'],
+      ],
     },
     'tip.tracking': {
       all: [

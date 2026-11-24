@@ -79,8 +79,19 @@ const PENDING_TTL_MS = 5000;
 /** The line stays a moment after its audio ended. */
 const AFTER_SPEECH_MS = 650;
 const RECENT_LINES = 6;
-const STATUS_TIMEOUT_MS = 4000;
+/**
+ * Status probe. The very first one runs while the page boots (shader
+ * compilation, model loading, software rendering), when the main thread can be
+ * blocked for many seconds; it gets a generous limit. A failed probe is
+ * retried quickly with backoff before Momo settles on "local lines", and the
+ * page asks again when it becomes visible or the network comes back.
+ */
+export const STATUS_FIRST_TIMEOUT_MS = 12_000;
+export const STATUS_TIMEOUT_MS = 6_000;
+export const STATUS_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000];
 const REPROBE_AFTER_MS = 60_000;
+/** Visibility / online events re-probe at most this often. */
+const WAKE_REPROBE_GAP_MS = 5_000;
 /** Chatter is served from the cache once this many GPT variants exist for the situation. */
 const CACHE_VARIANTS_FOR_CHATTER = 3;
 /** After this many failed GPT requests in a row, lines come from the local bank for a while. */
@@ -117,6 +128,27 @@ export interface GuideDeps {
   baseUrl?: string;
   /** Replace individual speech paths (tests). */
   speech?: Partial<SpeechProviders>;
+  /**
+   * Calls the listener when the page becomes visible again or the network
+   * comes back (default: document "visibilitychange" + window "online").
+   * Pass null to disable (tests).
+   */
+  onWake?: ((listener: () => void) => Unsubscribe) | null;
+}
+
+/** Default wake source of the browser: tab visible again, network back online. */
+function browserWake(listener: () => void): Unsubscribe {
+  const doc = typeof document !== 'undefined' ? document : null;
+  const win = typeof window !== 'undefined' ? window : null;
+  const onVisible = () => {
+    if (!doc || doc.visibilityState === 'visible') listener();
+  };
+  doc?.addEventListener('visibilitychange', onVisible);
+  win?.addEventListener('online', listener);
+  return () => {
+    doc?.removeEventListener('visibilitychange', onVisible);
+    win?.removeEventListener('online', listener);
+  };
 }
 
 export interface GuideStats {
@@ -155,7 +187,15 @@ interface ServerInfo {
   at: number;
 }
 
-const resolveLang = (cfg: GuideConfig): Lang => (cfg.settings.language === 'ui' ? cfg.uiLang : cfg.settings.language);
+/**
+ * Momo's language. Default ('en'): she speaks and writes English whatever the
+ * interface language; 'ui' follows the interface. Local lines, GPT lines and
+ * the voice all use this language; the rest of the UI keeps its own.
+ */
+export function guideLanguage(settings: Pick<AiSettings, 'voiceLanguage'>, uiLang: Lang): Lang {
+  return settings.voiceLanguage === 'ui' ? uiLang : 'en';
+}
+const resolveLang = (cfg: GuideConfig): Lang => guideLanguage(cfg.settings, cfg.uiLang);
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
 
 /* ---------------------------------------------------------------- director */
@@ -177,6 +217,16 @@ export class GuideDirector implements GuidePort {
   private recent: string[] = [];
   private server: ServerInfo = { state: 'unknown', status: null, at: Number.NEGATIVE_INFINITY };
   private probePromise: Promise<StatusResponseBody | null> | null = null;
+  /** Identifies the newest probe: answers of older ones no longer change the state. */
+  private probeSeq = 0;
+  /** Failed probes in the current series (0 = next probe starts a new series). */
+  private probeAttempt = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAt: number | null = null;
+  /** True once the status endpoint answered at least once. */
+  private serverAnswered = false;
+  private lastWakeProbeAt = Number.NEGATIVE_INFINITY;
+  private readonly offWake: Unsubscribe | null;
   private connection: GuideConnection = 'off';
   private detail = 'Guide not configured yet';
   private lastLatencyMs: number | null = null;
@@ -238,6 +288,8 @@ export class GuideDirector implements GuidePort {
       },
       this.now,
     );
+    const wake = deps.onWake === undefined ? browserWake : deps.onWake;
+    this.offWake = wake ? wake(() => this.onWake()) : null;
   }
 
   /* ------------------------------------------------------- configuration */
@@ -398,6 +450,18 @@ export class GuideDirector implements GuidePort {
     return this.server.status;
   }
 
+  /**
+   * Asks the server again right away, e.g. after the OpenAI key was replaced
+   * or restored in Settings. Never throws.
+   */
+  refreshServerStatus(): Promise<StatusResponseBody | null> {
+    if (this.disposed) return Promise.resolve(null);
+    this.gptVerified = false;
+    this.gptFailuresInRow = 0;
+    this.gptPausedUntil = Number.NEGATIVE_INFINITY;
+    return this.probe(true);
+  }
+
   /* ------------------------------------------------------- connection test */
 
   async testConnection(): Promise<{ ok: boolean; detail: string; latencyMs: number | null; sample?: string }> {
@@ -477,6 +541,8 @@ export class GuideDirector implements GuidePort {
   dispose(): void {
     if (this.disposed) return;
     this.silence();
+    this.clearRetry();
+    this.offWake?.();
     this.disposed = true;
     this.listeners.clear();
   }
@@ -899,47 +965,100 @@ export class GuideDirector implements GuidePort {
     }
   }
 
-  /** Asks the server whether a key is configured. Never throws. */
-  private probe(force = false): Promise<StatusResponseBody | null> {
+  /**
+   * Asks the server whether a key is configured. Never throws.
+   * `force` starts a new probe even while one is in flight; `continueSeries`
+   * is used by the retry timer (otherwise the retry count starts from zero).
+   */
+  private probe(force = false, continueSeries = false): Promise<StatusResponseBody | null> {
     if (!this.fetchImpl) return Promise.resolve(null);
     if (this.probePromise && !force) return this.probePromise;
+    this.clearRetry();
+    if (!continueSeries) this.probeAttempt = 0;
     const cfg = this.cfg;
     if (cfg?.settings.enabled && cfg.settings.provider === 'openai' && this.connection !== 'gpt') {
       this.setConnection('checking', 'Asking the server whether GPT is configured');
     }
     this.server.state = 'probing';
-    const run = async (): Promise<StatusResponseBody | null> => {
+    const seq = ++this.probeSeq;
+    const attempt = this.probeAttempt;
+    const timeoutMs = !this.serverAnswered && attempt === 0 ? STATUS_FIRST_TIMEOUT_MS : STATUS_TIMEOUT_MS;
+    const run = async (): Promise<{ status: StatusResponseBody | null; retry: boolean }> => {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await this.fetchImpl!(`${this.baseUrl}/api/ai/status`, { signal: controller.signal });
+        // 404: there is no API server behind this page at all (static hosting): no point in retrying.
+        if (response.status === 404) return { status: null, retry: false };
         const body = (await response.json()) as StatusResponseBody;
-        if (!response.ok || typeof body?.configured !== 'boolean') throw new Error('unexpected status payload');
-        if (this.server.status?.configured !== body.configured || this.server.status?.textModel !== body.textModel) {
-          this.gptVerified = false;
-        }
-        this.server = { state: 'ok', status: body, at: this.now() };
-        return body;
+        if (!response.ok || typeof body?.configured !== 'boolean') return { status: null, retry: true };
+        return { status: body, retry: false };
       } catch {
-        this.server = { state: 'unreachable', status: null, at: this.now() };
-        this.gptVerified = false;
-        return null;
+        return { status: null, retry: true };
       } finally {
         clearTimeout(timer);
       }
     };
-    const promise = run().then((status) => {
+    const promise = run().then(({ status, retry }) => {
       if (this.probePromise === promise) this.probePromise = null;
-      if (!this.disposed) this.applyServerState();
+      // A newer probe owns the state now.
+      if (seq !== this.probeSeq || this.disposed) return status;
+      if (status) {
+        const previous = this.server.status;
+        const keyChanged =
+          previous?.credential?.fingerprint !== status.credential?.fingerprint || previous?.credential?.source !== status.credential?.source;
+        if (previous?.configured !== status.configured || previous?.textModel !== status.textModel || keyChanged) this.gptVerified = false;
+        this.server = { state: 'ok', status, at: this.now() };
+        this.serverAnswered = true;
+        this.probeAttempt = 0;
+      } else {
+        this.server = { state: 'unreachable', status: null, at: this.now() };
+        this.gptVerified = false;
+        if (retry && attempt < STATUS_RETRY_DELAYS_MS.length && this.wantsServer()) {
+          const delay = STATUS_RETRY_DELAYS_MS[attempt]!;
+          this.probeAttempt = attempt + 1;
+          this.retryAt = this.now() + delay;
+          this.retryTimer = setTimeout(() => {
+            this.retryTimer = null;
+            this.retryAt = null;
+            void this.probe(true, true);
+          }, delay);
+        } else {
+          this.probeAttempt = 0;
+        }
+      }
+      this.applyServerState();
       return status;
     });
     this.probePromise = promise;
     return promise;
   }
 
+  private clearRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.retryAt = null;
+  }
+
+  /** True when the settings ask for GPT, so the server's answer matters. */
+  private wantsServer(): boolean {
+    const cfg = this.cfg;
+    return !!cfg && cfg.settings.enabled && cfg.settings.provider === 'openai' && !!this.fetchImpl && !this.disposed;
+  }
+
+  /** Tab visible again / network back: ask again if the last answer is missing or old. */
+  private onWake(): void {
+    if (!this.wantsServer() || this.probePromise) return;
+    const now = this.now();
+    if (now - this.lastWakeProbeAt < WAKE_REPROBE_GAP_MS) return;
+    if (this.server.state === 'ok' && now - this.server.at < REPROBE_AFTER_MS) return;
+    this.lastWakeProbeAt = now;
+    void this.probe(true);
+  }
+
   private maybeReprobe(): void {
     const cfg = this.cfg;
-    if (!cfg || cfg.settings.provider !== 'openai' || !this.fetchImpl || this.probePromise) return;
+    if (!cfg || cfg.settings.provider !== 'openai' || !this.fetchImpl || this.probePromise || this.retryTimer) return;
     if (this.now() - this.server.at >= REPROBE_AFTER_MS) void this.probe();
   }
 
@@ -961,6 +1080,12 @@ export class GuideDirector implements GuidePort {
       return;
     }
     if (state === 'unreachable' || !status) {
+      if (this.retryAt !== null) {
+        // Not settled yet: the page or the server may just have been busy (boot, sleep, network change).
+        const seconds = Math.max(1, Math.round((this.retryAt - this.now()) / 1000));
+        this.setConnection('checking', `AI server did not answer yet; asking again in ${seconds} s (local lines meanwhile)`);
+        return;
+      }
       this.setConnection('local', 'AI server not reachable: local lines');
       return;
     }

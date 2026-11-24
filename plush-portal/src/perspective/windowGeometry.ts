@@ -8,17 +8,42 @@ export const MIN_WINDOW_WIDTH = FIELD.halfWidth * 2 + 0.06;
 export const MIN_WINDOW_HEIGHT = 1.3;
 /** The gantry must stay inside the window, so the floor line may not be closer to the top than this. */
 export const MIN_TOP = 0.89;
+/** At least this much of the prize bin (world metres) stays below the floor line. */
+export const MIN_BIN_VIEW = 0.3;
+
+/**
+ * Phones: physical size of one CSS pixel (metres). Measured from published panel sizes:
+ * iPhone 15 Pro 0.166 mm, iPhone 13 mini 0.153 mm, Pixel 7 0.160 mm, Galaxy S24 0.183 mm,
+ * Galaxy A55 0.147 mm. A browser cannot read the real value; this is a typical one.
+ */
+export const PHONE_CSS_PX_M = 0.000163;
+/** Older / smaller phones with a pixel ratio of 2 (326 ppi iPhones, 320 ppi Android): 0.156 mm. */
+export const PHONE_CSS_PX_M_DPR2 = 0.000157;
+/**
+ * The phone preset's default screen size (a 6.1" 19.5:9 phone held sideways, active area). While a
+ * profile's screen size is left at exactly this value, window mode estimates the real size of the
+ * device from its CSS pixels instead (see `estimateHandheldScreen`).
+ */
+export const PHONE_NOMINAL_SCREEN = { w: 0.141, h: 0.065 } as const;
+/** Typical distance between the eyes and a phone held in the hands, metres. */
+export const PHONE_VIEW_DISTANCE = 0.35;
+/** Distance of the front camera's lens from the short edge of the active area (notch / punch hole), metres. */
+export const PHONE_CAMERA_INSET = 0.008;
 
 export interface WindowEnvironment {
   /** Canvas size in CSS pixels. */
   viewportW: number;
   viewportH: number;
-  /** `screen.width/height` in CSS pixels. */
+  /** `screen.width/height` in CSS pixels, in the same orientation as the viewport. */
   screenW: number;
   screenH: number;
   /** Position of the centre of the canvas on the screen in CSS pixels (best effort). */
   canvasCenterX: number;
   canvasCenterY: number;
+  /** Device pixel ratio (optional; refines the phone estimate). */
+  dpr?: number;
+  /** Screen rotation in degrees (0, 90, 180, 270) as reported by the browser, if known. */
+  orientationAngle?: number;
 }
 
 export interface WindowLayout {
@@ -43,6 +68,69 @@ export interface WindowLayout {
   physOffsetY: number;
   /** World units per physical metre. */
   scale: number;
+  /** True when the physical size was estimated from CSS pixels (phone preset left at its nominal screen size). */
+  estimated: boolean;
+}
+
+/** Size of the virtual window (metres) for a canvas aspect ratio (width / height). */
+export function virtualWindowSize(aspect: number): { width: number; height: number } {
+  const a = Math.max(0.2, aspect);
+  const width = Math.max(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT * a);
+  return { width, height: width / a };
+}
+
+/** Range of the normalised floor line that keeps the gantry and part of the bin in view. */
+export function floorLimits(vw: number, vh: number): { min: number; max: number } {
+  const { height } = virtualWindowSize(vw / Math.max(1, vh));
+  const min = MIN_TOP / height;
+  return { min, max: Math.max(min, 1 - MIN_BIN_VIEW / height) };
+}
+
+/**
+ * Horizontal span of the cabinet (play field plus its front frame) on screen, in CSS pixels. On
+ * landscape screens the rest of the width is the display bays on either side, where controls can
+ * sit without covering a toy.
+ */
+export function machineSpan(vw: number, vh: number): { left: number; right: number } {
+  const { width } = virtualWindowSize(vw / Math.max(1, vh));
+  const w = (MIN_WINDOW_WIDTH / width) * vw;
+  return { left: (vw - w) / 2, right: (vw + w) / 2 };
+}
+
+/** True when a view's screen size is the phone preset's untouched default. */
+export function isNominalPhoneScreen(view: Pick<ViewSettings, 'screenW' | 'screenH'>): boolean {
+  const near = (a: number, b: number) => Math.abs(a - b) < 5e-4;
+  return (
+    (near(view.screenW, PHONE_NOMINAL_SCREEN.w) && near(view.screenH, PHONE_NOMINAL_SCREEN.h)) ||
+    (near(view.screenW, PHONE_NOMINAL_SCREEN.h) && near(view.screenH, PHONE_NOMINAL_SCREEN.w))
+  );
+}
+
+/** Metres per CSS pixel on a handheld device. */
+export function handheldPitch(dpr: number | undefined): number {
+  return dpr !== undefined && dpr > 0 && dpr <= 2.2 ? PHONE_CSS_PX_M_DPR2 : PHONE_CSS_PX_M;
+}
+
+/**
+ * Physical size of a phone's screen estimated from its CSS size (any orientation) and pixel ratio.
+ * Typical error ±12 %; enter the real size under Camera & Parallax for an exact result.
+ */
+export function estimateHandheldScreen(screenCssW: number, screenCssH: number, dpr?: number): { widthM: number; heightM: number; pitchM: number } {
+  const pitchM = handheldPitch(dpr);
+  return { widthM: Math.max(1, screenCssW) * pitchM, heightM: Math.max(1, screenCssH) * pitchM, pitchM };
+}
+
+/**
+ * Estimated position of a phone's front camera relative to the centre of its screen (metres; x right,
+ * y up, z towards the viewer) for a screen rotation angle: 0 = upright (camera at the top), 90 = turned
+ * so the top is on the left (camera on the left), 180 = upside down, 270 = top on the right.
+ */
+export function phoneCameraPosition(angle: number, widthM: number, heightM: number): Vec3 {
+  const a = (((Math.round(angle / 90) * 90) % 360) + 360) % 360;
+  if (a === 90) return [-(widthM / 2 - PHONE_CAMERA_INSET), 0, 0];
+  if (a === 270) return [widthM / 2 - PHONE_CAMERA_INSET, 0, 0];
+  if (a === 180) return [0, -(heightM / 2 - PHONE_CAMERA_INSET), 0];
+  return [0, heightM / 2 - PHONE_CAMERA_INSET, 0];
 }
 
 /**
@@ -52,11 +140,10 @@ export interface WindowLayout {
  */
 export function computeWindowLayout(env: WindowEnvironment, view: ViewSettings, floorYNorm: number): WindowLayout {
   const aspect = Math.max(0.2, env.viewportW / Math.max(1, env.viewportH));
-  const width = Math.max(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT * aspect);
-  const height = width / aspect;
+  const { width, height } = virtualWindowSize(aspect);
   // Keep the gantry in view and leave room for the prize bin below the floor.
   const minFloor = MIN_TOP / height;
-  const maxFloor = 1 - 0.3 / height;
+  const maxFloor = 1 - MIN_BIN_VIEW / height;
   const floorY = Math.min(Math.max(floorYNorm, minFloor), Math.max(minFloor, maxFloor));
   const top = floorY * height;
   const bottom = top - height;
@@ -65,13 +152,16 @@ export function computeWindowLayout(env: WindowEnvironment, view: ViewSettings, 
   let physHeight: number;
   let offX = 0;
   let offY = 0;
+  let estimated = false;
   if (view.windowMode === 'fullscreen' || env.screenW <= 0) {
     // The canvas is the whole physical screen (kiosk). Height follows the real canvas aspect.
     physWidth = aspect >= 1 ? Math.max(view.screenW, view.screenH) : Math.min(view.screenW, view.screenH);
     physHeight = physWidth / aspect;
   } else {
-    // A browser window on a larger screen: derive the physical size from CSS pixels.
-    const pitch = Math.max(view.screenW, view.screenH) / Math.max(env.screenW, env.screenH);
+    // A browser window on a larger screen: derive the physical size from CSS pixels. A phone preset
+    // left at its nominal size uses the typical size of a phone's CSS pixel instead.
+    estimated = isNominalPhoneScreen(view);
+    const pitch = estimated ? handheldPitch(env.dpr) : Math.max(view.screenW, view.screenH) / Math.max(env.screenW, env.screenH);
     physWidth = env.viewportW * pitch;
     physHeight = env.viewportH * pitch;
     offX = (env.canvasCenterX - env.screenW / 2) * pitch;
@@ -94,6 +184,7 @@ export function computeWindowLayout(env: WindowEnvironment, view: ViewSettings, 
     physOffsetX: offX,
     physOffsetY: offY,
     scale: width / physWidth,
+    estimated,
   };
 }
 
@@ -105,17 +196,48 @@ export function eyeToWorld(layout: WindowLayout, eye: Vec3, out: Vec3): Vec3 {
   return out;
 }
 
+/**
+ * Puts `screen.width/height` into the viewport's orientation. iOS always reports the portrait size,
+ * so a phone held sideways would otherwise look like a canvas far off the screen centre. A portrait
+ * browser window on a landscape monitor still fits the unrotated screen and is left alone.
+ */
+export function orientScreen(viewportW: number, viewportH: number, screenW: number, screenH: number, angle?: number): { screenW: number; screenH: number } {
+  if (screenW <= 0 || screenH <= 0) return { screenW, screenH };
+  const viewLandscape = viewportW > viewportH;
+  if (viewLandscape === screenW > screenH || screenW === screenH) return { screenW, screenH };
+  const fits = viewportW <= screenW + 1 && viewportH <= screenH + 1;
+  const fitsSwapped = viewportW <= screenH + 1 && viewportH <= screenW + 1;
+  const rotated = angle !== undefined && Math.round(angle / 90) % 2 !== 0;
+  if ((!fits && fitsSwapped) || (rotated && fitsSwapped && screenW < screenH)) return { screenW: screenH, screenH: screenW };
+  return { screenW, screenH };
+}
+
+function readOrientationAngle(): number | undefined {
+  try {
+    const angle = globalThis.screen?.orientation?.angle;
+    if (typeof angle === 'number') return angle;
+    const legacy = (globalThis as unknown as { orientation?: unknown }).orientation;
+    return typeof legacy === 'number' ? (legacy + 360) % 360 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Best-effort measurement of where the canvas sits on the physical screen. */
 export function readWindowEnvironment(canvas: HTMLElement): WindowEnvironment {
   const rect = canvas.getBoundingClientRect();
   const chromeX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
   const chromeTop = Math.max(0, window.outerHeight - window.innerHeight - chromeX);
+  const angle = readOrientationAngle();
+  const screen = orientScreen(rect.width, rect.height, window.screen?.width ?? rect.width, window.screen?.height ?? rect.height, angle);
   return {
     viewportW: rect.width,
     viewportH: rect.height,
-    screenW: window.screen?.width ?? rect.width,
-    screenH: window.screen?.height ?? rect.height,
+    screenW: screen.screenW,
+    screenH: screen.screenH,
     canvasCenterX: (window.screenX || 0) + chromeX + rect.left + rect.width / 2,
     canvasCenterY: (window.screenY || 0) + chromeTop + rect.top + rect.height / 2,
+    dpr: window.devicePixelRatio || 1,
+    orientationAngle: angle,
   };
 }

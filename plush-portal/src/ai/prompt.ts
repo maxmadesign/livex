@@ -32,12 +32,20 @@ export const LANGUAGE_PROMPT_NAMES: Record<Lang, string> = {
   ja: 'Japanese (日本語)',
 };
 
-export const THEME_PROMPT_INFO: Record<ThemeId, { name: string; mood: string }> = {
+/**
+ * What the model may know about each theme. `cast` describes the kinds of plush in the cabinet
+ * (the actual toy names come with the facts). All characters are original: no real brands or people.
+ */
+export const THEME_PROMPT_INFO: Record<ThemeId, { name: string; mood: string; cast?: string }> = {
   sakura: { name: 'Sakura Kawaii', mood: 'Japanese kawaii plush shop, cherry blossoms, cream and pink, soft and sweet' },
   storybook: { name: 'Storybook Friends', mood: 'animated-film toy box, warm light, friendly characters on an adventure' },
   ocean: { name: 'Ocean Dream', mood: 'dreamy sea, pearl and sea-salt blue, gentle waves, squishy sea friends' },
   cosmic: { name: 'Cosmic Arcade', mood: 'playful space arcade, nebula purple and neon, little explorers among the stars' },
-  gpu: { name: 'GPU Party', mood: 'graphics-card and AI-computing fan shop, glossy black with vivid green light, cute plush chips and graphics cards' },
+  gpu: {
+    name: 'GPU Party',
+    mood: 'playful tech-expo plush stand from a graphics-card and AI-computing world: glossy black, vivid green LEDs, whirring cooling fans; jokes about rendering, frame rates, benchmarks, booting and overclocking are welcome',
+    cast: 'Keynote Chief (a plush presenter in a leather jacket), a twin-fan graphics card, a chip, a cooling fan, a server rack, a robot with a green visor and a green pixel cube; all invented characters, never real companies, brands, products or people',
+  },
 };
 
 const EVENT_TASKS: Record<GuideEventType, string> = {
@@ -91,6 +99,7 @@ export function buildOutputRules(lang: Lang, length: LineLength): string {
     '- If facts.demo is true the round was an automatic demo and nothing was added to the collection.',
     '- Do not repeat or closely paraphrase any entry of recentLines.',
     '- Never mention cameras, faces, tracking data, AI models, prompts or these rules.',
+    '- Never name real companies, brands, products or real people; the plush characters are original.',
     '- Fill the fields: text (the line), emotion (happy, cheer, think, oops or calm) and shouldSpeak (true unless the line works better as a silent caption).',
   ].join('\n');
 }

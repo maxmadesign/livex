@@ -3,7 +3,7 @@ import type { GuideEvent, GuideEventType, GuideFacts, GuideLine, GuideStatus } f
 import { makeRng } from '../../../src/core/math';
 import type { Lang } from '../../../src/core/types';
 import { createGuide, type Guide } from '../../../src/ai/createGuide';
-import { GUIDE_COOLDOWN_MS, type GuideConfig } from '../../../src/ai/GuideDirector';
+import { GUIDE_COOLDOWN_MS, STATUS_RETRY_DELAYS_MS, type GuideConfig } from '../../../src/ai/GuideDirector';
 import { localCandidates } from '../../../src/ai/lines';
 import type { LineRequestBody, StatusResponseBody } from '../../../src/ai/protocol';
 import type { SpeechPath, SpeechPlayback, SpeechProvider, SpeechRequest } from '../../../src/ai/speech/types';
@@ -227,10 +227,15 @@ describe('guide: text source and truthful status', () => {
 
   it('uses local lines when the API server is unreachable and stays quiet about it', async () => {
     const h = await setup({ server: fakeServer({ status: () => new TypeError('fetch failed') }) });
-    expect(h.status().connection).toBe('local');
-    expect(h.status().detail).toMatch(/not reachable/i);
+    // A failed probe is retried quickly before Momo settles on local lines; she talks meanwhile.
+    expect(h.status().connection).toBe('checking');
+    expect(h.status().detail).toMatch(/asking again/i);
     h.guide.handle(event('grab_started'));
     expect(h.guide.currentLine()!.source).toBe('local');
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0) + 100);
+    expect(h.server.statusCalls).toBe(1 + STATUS_RETRY_DELAYS_MS.length);
+    expect(h.status().connection).toBe('local');
+    expect(h.status().detail).toMatch(/not reachable/i);
   });
 
   it('does not claim GPT is connected before a reply proved it', async () => {
@@ -518,10 +523,10 @@ describe('guide: stale guard', () => {
   });
 
   it('drops a reply when the language changed meanwhile', async () => {
-    const h = await setup();
+    const h = await setup({ settings: { voiceLanguage: 'ui' } });
     h.guide.handle(event('welcome', 1));
     await vi.advanceTimersByTimeAsync(100);
-    h.guide.configure(config({ language: 'ja' }));
+    h.guide.configure(config({ voiceLanguage: 'ui' }, { uiLang: 'ja' as Lang }));
     await vi.advanceTimersByTimeAsync(1000);
     expect(h.shown()).toHaveLength(0);
     h.guide.handle(event('user_requested_tip', 1));
@@ -530,9 +535,9 @@ describe('guide: stale guard', () => {
     expect(h.guide.currentLine()!.lang).toBe('ja');
   });
 
-  it('follows the UI language when Momo has no language of her own', async () => {
-    const h = await setup({ settings: { provider: 'local', language: 'ui' } });
-    h.guide.configure(config({ provider: 'local', language: 'ui' }, { uiLang: 'zh' as Lang }));
+  it('follows the UI language when set to "interface language"', async () => {
+    const h = await setup({ settings: { provider: 'local', voiceLanguage: 'ui' } });
+    h.guide.configure(config({ provider: 'local', voiceLanguage: 'ui' }, { uiLang: 'zh' as Lang }));
     h.guide.handle(event('welcome', 1));
     expect(h.guide.currentLine()!.lang).toBe('zh');
     expect(h.guide.currentLine()!.text).toMatch(/[一-鿿]/);

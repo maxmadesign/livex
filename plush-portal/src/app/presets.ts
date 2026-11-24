@@ -8,10 +8,11 @@ type GraphicsValues = Omit<GraphicsSettings, 'preset' | 'autoOptimize' | 'perfPa
  * what a given machine really sustains.
  */
 export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custom'>, GraphicsValues> = {
-  // Performance floor: stable 30 fps target on weak integrated graphics.
+  // Phone tier and performance floor: 30 fps target, device pixel ratio capped at 1.25 and at most
+  // 0.7 MP of 3D pixels, no fur shells, simple materials (512 textures), no contact shadows.
   safe: {
-    renderScale: 0.75,
-    maxPixels: 0.9,
+    renderScale: 1,
+    maxPixels: 0.7,
     targetFps: '30',
     lod: 'low',
     textures: '512',
@@ -24,10 +25,12 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'fxaa',
     bloom: 0,
     particles: 20,
-    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    // Effects intensity, light show and pixel-ratio cap (src/settings/spec.ts, also used to upgrade older stored data).
     ...GRAPHICS_PRESET_ADDITIONS.safe,
   },
   // Default: ~1080p-equivalent internal pixels, aimed at 60 fps on a Ryzen 7 7840HS / Radeon 780M class iGPU.
+  // 1K textures, clearcoat lacquer and brushed metal, PCF shadows 2048 plus 256² contact shadows
+  // refreshed every other frame, 256 studio environment, FXAA.
   medium: {
     renderScale: 1,
     maxPixels: 2.1,
@@ -43,9 +46,11 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'fxaa',
     bloom: 0.25,
     particles: 60,
-    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    // Effects intensity, light show and pixel-ratio cap (src/settings/spec.ts, also used to upgrade older stored data).
     ...GRAPHICS_PRESET_ADDITIONS.medium,
   },
+  // Discrete GPUs: 2K textures with metallic flake, braided cable and full claw / cabinet detail,
+  // soft VSM shadows 4096 plus 512² contact shadows, 512 environment, GTAO, SMAA.
   high: {
     renderScale: 1,
     maxPixels: 4,
@@ -61,9 +66,11 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'smaa',
     bloom: 0.3,
     particles: 150,
-    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    // Effects intensity, light show and pixel-ratio cap (src/settings/spec.ts, also used to upgrade older stored data).
     ...GRAPHICS_PRESET_ADDITIONS.high,
   },
+  // High-end GPUs and 4K kiosks: 4K back wall, 1024 studio environment, live cabinet reflections,
+  // transmission glass, MSAA 4×.
   ultra: {
     renderScale: 1,
     maxPixels: 8.3,
@@ -79,7 +86,7 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'msaa4',
     bloom: 0.3,
     particles: 300,
-    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    // Effects intensity, light show and pixel-ratio cap (src/settings/spec.ts, also used to upgrade older stored data).
     ...GRAPHICS_PRESET_ADDITIONS.ultra,
   },
 };

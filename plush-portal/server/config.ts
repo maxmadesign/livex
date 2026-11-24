@@ -5,7 +5,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import type { SpeechApi } from '../src/ai/protocol';
+import type { KeyManagementMode, SpeechApi } from '../src/ai/protocol';
 import {
   DEFAULT_REALTIME_SPEECH_MODEL,
   DEFAULT_SPEECH_API_MODEL,
@@ -46,6 +46,22 @@ export interface ServerConfig {
   distDir: string;
   logLevel: LogLevel;
   version: string;
+  /** Git-ignored folder for server-side state: a replaced key (secrets.json), the generated TLS pair. */
+  dataDir: string;
+  /** Who may replace the key at run time (PLUSH_KEY_MANAGEMENT). */
+  keyManagement: KeyManagementMode;
+  /** Check a new key against OpenAI (GET /v1/models) before storing it. */
+  keyCheck: boolean;
+  keyCheckTimeoutMs: number;
+  /** Opt-in HTTPS listener for phones on the LAN (next to the plain HTTP one). */
+  https: {
+    enabled: boolean;
+    port: number;
+    host: string;
+    /** User supplied PEM files; null = self-signed pair in `<dataDir>/tls`. */
+    certFile: string | null;
+    keyFile: string | null;
+  };
 }
 
 type Env = Record<string, string | undefined>;
@@ -122,6 +138,20 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
   const logRaw = clean(env.PLUSH_LOG_LEVEL).toLowerCase();
   const logLevel: LogLevel = logRaw === 'silent' || logRaw === 'error' || logRaw === 'debug' ? logRaw : 'info';
   const here = path.dirname(fileURLToPath(import.meta.url));
+  const projectRoot = path.resolve(here, '..');
+
+  const managementRaw = clean(env.PLUSH_KEY_MANAGEMENT).toLowerCase();
+  let keyManagement: KeyManagementMode = 'local';
+  if (managementRaw === 'token' || managementRaw === 'off' || managementRaw === 'local') keyManagement = managementRaw;
+  else if (managementRaw !== '') warnings.push(`PLUSH_KEY_MANAGEMENT "${managementRaw}" is not local, token or off; using local.`);
+  if (keyManagement === 'token' && !clean(env.PLUSH_ADMIN_TOKEN)) {
+    warnings.push('PLUSH_KEY_MANAGEMENT=token needs PLUSH_ADMIN_TOKEN; nobody can replace the key until one is set.');
+  }
+
+  const certFile = clean(env.PLUSH_TLS_CERT) || null;
+  const keyFile = clean(env.PLUSH_TLS_KEY) || null;
+  if ((certFile === null) !== (keyFile === null)) warnings.push('PLUSH_TLS_CERT and PLUSH_TLS_KEY must be set together; using a self-signed certificate.');
+  const pairComplete = certFile !== null && keyFile !== null;
 
   return {
     port: int(env.PLUSH_API_PORT, 8787, 1, 65535),
@@ -149,5 +179,17 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
     distDir: path.resolve(here, '..', clean(env.PLUSH_DIST_DIR) || 'dist'),
     logLevel,
     version,
+    dataDir: path.resolve(projectRoot, clean(env.PLUSH_DATA_DIR) || '.data'),
+    keyManagement,
+    keyCheck: bool(env.PLUSH_KEY_CHECK, true),
+    keyCheckTimeoutMs: int(env.PLUSH_KEY_CHECK_TIMEOUT_MS, 6000, 1000, 30000),
+    https: {
+      enabled: argv.includes('--https') || bool(env.PLUSH_HTTPS, false),
+      port: int(env.PLUSH_HTTPS_PORT, 8443, 1, 65535),
+      // HTTPS exists for phones on the LAN, so it listens on every interface unless told otherwise.
+      host: clean(env.PLUSH_HTTPS_HOST) || '0.0.0.0',
+      certFile: pairComplete ? path.resolve(projectRoot, certFile) : null,
+      keyFile: pairComplete ? path.resolve(projectRoot, keyFile) : null,
+    },
   };
 }

@@ -4,6 +4,7 @@ import { attractStrings } from './strings/attract';
 import { audioStrings } from './strings/audio';
 import { calibrationStrings } from './strings/calibration';
 import { fxStrings } from './strings/fx';
+import { graphicsStrings } from './strings/graphics';
 import { gpuStrings } from './strings/gpu';
 import { mobileStrings } from './strings/mobile';
 import { scoreStrings } from './strings/score';
@@ -37,6 +38,7 @@ export function registerAllStrings(): void {
   registerStrings(calibrationStrings);
   registerStrings(gpuStrings);
   registerStrings(fxStrings);
+  registerStrings(graphicsStrings);
 }
 
 /** Every feature namespace registered above, by name (used by the i18n tests). */

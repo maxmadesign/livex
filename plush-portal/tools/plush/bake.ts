@@ -6,21 +6,21 @@
  *   npm run assets:plush -- sakura    # one theme
  *   npm run assets:plush -- bunny     # one character (the manifest keeps the others)
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MANIFEST_VERSION, PLUSH_ATTRIBUTES, type PlushAsset, type PlushManifest } from '../../src/plush/manifest';
 import { buildAsset } from './build';
 import { ALL_DESIGNS } from './designs/index';
 import { writeGlb } from './glb';
+import { PROJECT_ROOT, carryGenerated, plushOutDir, readManifest, updateManifest } from './manifestFile';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const outDir = join(root, 'public', 'assets', 'plush');
+const root = PROJECT_ROOT;
+const outDir = plushOutDir();
 const manifestPath = join(outDir, 'manifest.json');
 const filters = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const GENERATOR = 'tools/plush (procedural SDF modelling, v1)';
 
-const previous: PlushManifest | null = existsSync(manifestPath) ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as PlushManifest) : null;
+const previous: PlushManifest | null = readManifest(manifestPath);
 const assets = new Map<string, PlushAsset>();
 if (previous && filters.length > 0) for (const a of previous.assets) assets.set(a.id, a);
 
@@ -76,33 +76,29 @@ for (const design of selected) {
   );
 }
 
-// Several bakes may run at once (one per theme while designing): merge into the manifest under a lock.
-const lockDir = join(outDir, '.manifest.lock');
-mkdirSync(outDir, { recursive: true });
-for (let attempt = 0; ; attempt++) {
-  try {
-    mkdirSync(lockDir);
-    break;
-  } catch {
-    if (attempt > 200) {
-      rmSync(lockDir, { recursive: true, force: true }); // stale lock
-      continue;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-}
-if (existsSync(manifestPath) && filters.length > 0) {
-  const latest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PlushManifest;
-  const mine = new Set(selected.map((d) => `${d.theme}.${d.slug}`));
-  for (const a of latest.assets) if (!mine.has(a.id)) assets.set(a.id, a);
-}
+// Several bakes may run at once (one per theme while designing), and `npm run assets:import` adds
+// textured models to entries: merge into the manifest under a lock, keeping what an import added.
+const mine = new Set(selected.map((d) => `${d.theme}.${d.slug}`));
 const order = new Map(ALL_DESIGNS.map((d, i) => [`${d.theme}.${d.slug}`, i]));
-const manifest: PlushManifest = {
-  version: MANIFEST_VERSION,
-  generator: GENERATOR,
-  assets: [...assets.values()].filter((a) => order.has(a.id)).sort((a, b) => order.get(a.id)! - order.get(b.id)!),
-};
-mkdirSync(outDir, { recursive: true });
-writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
-rmSync(lockDir, { recursive: true, force: true });
+let kept = 0;
+const manifest = await updateManifest(manifestPath, (latest) => {
+  const latestById = new Map((latest?.assets ?? []).map((a) => [a.id, a]));
+  if (filters.length > 0) for (const a of latest?.assets ?? []) if (!mine.has(a.id)) assets.set(a.id, a);
+  for (const id of mine) {
+    const before = latestById.get(id);
+    const baked = assets.get(id);
+    if (baked && before?.model.textured) {
+      assets.set(id, carryGenerated(before, baked));
+      kept++;
+    }
+  }
+  return {
+    version: MANIFEST_VERSION,
+    generator: GENERATOR,
+    assets: [...assets.values()].filter((a) => order.has(a.id)).sort((a, b) => order.get(a.id)! - order.get(b.id)!),
+  };
+});
 console.log(`\n${selected.length} asset(s), ${(totalBytes / 1024 / 1024).toFixed(2)} MB of GLB; manifest lists ${manifest.assets.length} asset(s).`);
+if (kept > 0) {
+  console.log(`${kept} baked character(s) keep their imported textured model; re-run "npm run assets:import" if the design's shape changed.`);
+}

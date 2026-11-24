@@ -10,6 +10,7 @@ import type { LaunchParams } from './Game';
  *   ?seed=123                                deterministic toy layout
  *   ?debug=1                                 expose window.__plush for tests / tuning
  *   ?camera=off                              never request the camera
+ *   ?debug=1&insets=47,0,21,47               pretend the screen has cut-outs (top,right,bottom,left CSS px)
  */
 export function readLaunchParams(search: string = globalThis.location?.search ?? ''): LaunchParams {
   const q = new URLSearchParams(search);
@@ -25,4 +26,20 @@ export function readLaunchParams(search: string = globalThis.location?.search ??
     debug: q.get('debug') === '1',
     noCamera: q.get('camera') === 'off',
   };
+}
+
+/**
+ * Debug only (`?debug=1&insets=top,right,bottom,left`): simulated safe-area insets in CSS pixels, so
+ * the phone layout's handling of notches and home indicators can be checked in a desktop browser or
+ * an emulator that reports none. One value applies to all four sides. Null without both parameters.
+ */
+export function readInsetsParam(search: string): { top: number; right: number; bottom: number; left: number } | null {
+  const q = new URLSearchParams(search);
+  const raw = q.get('insets');
+  if (q.get('debug') !== '1' || !raw) return null;
+  const parts = raw.split(',').map((v) => Number(v.trim()));
+  if (parts.length !== 1 && parts.length !== 4) return null;
+  if (parts.some((n) => !Number.isFinite(n) || n < 0 || n > 200)) return null;
+  const [top, right = top, bottom = top, left = top] = parts as [number, number?, number?, number?];
+  return { top, right, bottom, left };
 }

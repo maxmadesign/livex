@@ -7,6 +7,9 @@ html, body, #root {
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
+/* Phones: no font boosting after rotation, no pull-to-refresh (overscroll above), no long-press callout. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { position: fixed; inset: 0; -webkit-touch-callout: none; }
 
 .pp-root {
   --u: 1px;
@@ -122,11 +125,15 @@ button.pp-chip { cursor: pointer; }
 
 /* ------------------------------------------------------------ control panel */
 .pp-panel { position: absolute; pointer-events: none; display: flex; }
+/* The bar is opaque: a translucent bar let the cabinet's light strips and the 3D "PLUSH PORTAL" badge
+   show through half-covered (round-1 test report). */
 .pp-panel.bar {
   flex-direction: column; justify-content: center; gap: calc(var(--u) * 12);
   padding: calc(var(--u) * 16) calc(var(--u) * 26) calc(var(--u) * 22);
   border-radius: calc(var(--u) * 54);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c-paper) 94%, transparent), color-mix(in srgb, var(--c-panel) 92%, transparent));
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, #fff 34%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--c-paper), color-mix(in srgb, var(--c-panel) 70%, var(--c-paper)));
   box-shadow:
     0 calc(var(--u) * 10) 0 color-mix(in srgb, var(--c-primary) 46%, transparent),
     0 calc(var(--u) * 24) calc(var(--u) * 44) rgba(50, 15, 40, 0.3),
@@ -147,6 +154,16 @@ button.pp-chip { cursor: pointer; }
   backdrop-filter: blur(calc(var(--u) * 6)); -webkit-backdrop-filter: blur(calc(var(--u) * 6));
 }
 .pp-status { font-family: var(--font-display); font-weight: 600; text-align: center; font-size: calc(var(--u) * 25 * var(--fs)); min-height: 1.3em; display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 12); color: var(--c-ink); }
+/* Over the 3D view the status line gets its own backing: on Cosmic its first words were nearly
+   invisible over the bright prize chute (round-1 test report). Inside the opaque bar it needs none. */
+.pp-status {
+  align-self: center; box-sizing: border-box; max-width: 100%;
+  padding: calc(var(--u) * 5) calc(var(--u) * 22); border-radius: calc(var(--u) * 999);
+  background: color-mix(in srgb, var(--c-paper) 93%, transparent);
+  box-shadow: 0 calc(var(--u) * 4) calc(var(--u) * 14) rgba(30, 10, 30, 0.28), inset 0 0 0 calc(var(--u) * 2) color-mix(in srgb, var(--c-primary) 28%, transparent);
+  backdrop-filter: blur(calc(var(--u) * 6)); -webkit-backdrop-filter: blur(calc(var(--u) * 6));
+}
+.pp-panel.bar .pp-status { background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; }
 .pp-status .timer { background: var(--c-accent2); color: #5a4300; padding: 0 calc(var(--u) * 12); border-radius: calc(var(--u) * 999); font-variant-numeric: tabular-nums; }
 
 .pp-dpad { display: grid; grid-template-columns: repeat(3, var(--touch)); grid-template-rows: repeat(3, var(--touch)); gap: calc(var(--u) * 4); }
@@ -161,6 +178,9 @@ button.pp-chip { cursor: pointer; }
 .pp-grab { width: calc(var(--touch) * 2.15); height: calc(var(--touch) * 2.15); border-radius: 50%; padding: 0; font-size: calc(var(--u) * 46 * var(--fs)); --depth: calc(var(--u) * 14); flex-direction: column; gap: 0; line-height: 1.05; }
 .pp-grab svg { width: 40%; height: 40%; }
 .pp-grab span { max-width: 86%; white-space: normal; text-align: center; line-height: 1; overflow-wrap: anywhere; }
+/* Never split a word ("STAR / T", "スター / ト") at large font scales: the label shrinks until its widest
+   word fits (--label-em from src/layout/labelFit.ts; 1.8 = GRAB_LABEL_WIDTH there). */
+.pp-grab span { font-size: min(1em, calc(var(--touch) * 1.8 / var(--label-em, 1))); }
 .pp-grab.again { font-size: calc(var(--u) * 27 * var(--fs)); }
 .pp-grab.again svg { width: 30%; height: 30%; }
 .pp-grab.start { --face: var(--c-accent); --edge: color-mix(in srgb, var(--c-accent) 60%, #135); animation: pp-pulse 1.5s ease-in-out infinite; }
@@ -210,7 +230,7 @@ button.pp-chip { cursor: pointer; }
   position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
   border-radius: calc(var(--u) * 44); background: var(--c-paper); color: var(--c-ink);
   box-shadow: 0 calc(var(--u) * 12) 0 color-mix(in srgb, var(--c-primary) 55%, transparent), 0 calc(var(--u) * 36) calc(var(--u) * 80) rgba(40, 10, 40, 0.5), inset 0 calc(var(--u) * 4) 0 #fff;
-  pointer-events: auto; animation: pp-pop 260ms cubic-bezier(0.3, 1.5, 0.5, 1); font-size: calc(var(--u) * 24 * var(--fs)); touch-action: auto; user-select: text; -webkit-user-select: text;
+  pointer-events: auto; animation: pp-pop 260ms cubic-bezier(0.3, 1.5, 0.5, 1); font-size: calc(var(--u) * 24 * var(--fs)); touch-action: pan-x pan-y; user-select: text; -webkit-user-select: text;
 }
 .pp-modal header { display: flex; align-items: center; gap: calc(var(--u) * 14); padding: calc(var(--u) * 16) calc(var(--u) * 18) calc(var(--u) * 14) calc(var(--u) * 30); background: linear-gradient(180deg, color-mix(in srgb, var(--c-primary) 26%, var(--c-paper)), var(--c-paper)); flex: none; }
 .pp-modal header h1 { margin: 0; flex: 1; font-family: var(--font-display); font-size: calc(var(--u) * 38 * var(--fs)); color: var(--c-primary-deep); font-weight: 700; }
@@ -342,3 +362,155 @@ button.pp-chip { cursor: pointer; }
 .pp-root[data-theme="gpu"] .pp-sec,
 .pp-root[data-theme="gpu"] .pp-modal header h1,
 .pp-root[data-theme="gpu"] .pp-dpad .pp-btn { color: var(--c-glow); }
+
+/* ===================================================================== phones
+   Phone preset (data-profile="mobile"): the solver (src/layout/solve.ts → solvePhone) places every
+   part of the panel; these rules size what it cannot (fonts, dialogs) and keep every touch target at
+   44 CSS px or more. The guide / bubble limits mirror PHONE.momo / bubble / shortHeight in solve.ts. */
+.pp-panel.phone { display: block; }
+.pp-panel.phone .pp-slot { position: absolute; display: flex; align-items: center; justify-content: center; box-sizing: border-box; pointer-events: none; isolation: isolate; }
+.pp-panel.phone .pp-slot.menu .pp-menu { flex-wrap: nowrap; gap: calc(var(--u) * 12); }
+.pp-panel.phone .pp-slot.status .pp-status { font-size: calc(var(--u) * 24 * var(--fs)); max-width: 100%; white-space: nowrap; min-width: 0; padding-top: 0; padding-bottom: 0; height: 100%; }
+.pp-panel.phone .pp-slot.status .pp-status > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pp-panel.phone .pp-slot.status .pp-status .timer { flex: none; }
+.pp-panel.phone.bar .pp-slot.status { justify-content: flex-start; }
+.pp-panel.phone.bar .pp-slot.status .pp-status { white-space: normal; line-height: 1.15; text-align: left; justify-content: flex-start; font-size: calc(var(--u) * 22 * var(--fs)); overflow: hidden; padding: 0 2px 0 4px; }
+/* Upright the status shares a 44 px row with the menu: at most two lines, then an ellipsis (a little
+   inner padding keeps rounded / CJK display glyphs from being shaved by the clip). */
+.pp-panel.phone.bar .pp-slot.status .pp-status > span:first-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; padding: 0 2px; }
+/* Held sideways the pad and the big button float over the display bays: a soft disc behind each
+   keeps them readable on every theme. */
+.pp-panel.phone.split .pp-slot.pad::before, .pp-panel.phone.split .pp-slot.action::before {
+  content: ""; position: absolute; inset: calc(var(--u) * -10); z-index: -1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c-paper) 62%, transparent) 50%, transparent 71%);
+}
+.pp-panel.phone.split .pp-slot.pad::before { border-radius: 34%; background: radial-gradient(circle, color-mix(in srgb, var(--c-paper) 58%, transparent) 58%, transparent 72%); }
+.pp-panel.phone .pp-dpad { gap: calc(var(--u) * 4); }
+.pp-panel.phone .pp-grab { --depth: calc(var(--u) * 12); font-size: calc(var(--u) * 40 * var(--fs)); }
+.pp-panel.phone .pp-grab.again { font-size: calc(var(--u) * 26 * var(--fs)); }
+
+/* Every touch target ≥ 44 CSS px (Apple HIG / WCAG 2.5.5); the solver keeps the main ones at 56+. */
+.pp-root[data-profile="mobile"] .pp-btn.small { min-height: 44px; min-width: 44px; }
+.pp-root[data-profile="mobile"] .pp-btn.round.small { width: max(44px, calc(var(--touch) * 0.62)); height: max(44px, calc(var(--touch) * 0.62)); }
+.pp-root[data-profile="mobile"] .pp-btn.pp-info { min-width: 44px; min-height: 44px; }
+.pp-root[data-profile="mobile"] button.pp-chip { min-height: 44px; min-width: 44px; justify-content: center; box-sizing: border-box; }
+.pp-root[data-profile="mobile"] .pp-seg button { min-width: 44px; }
+.pp-root[data-profile="mobile"] .pp-tab,
+.pp-root[data-profile="mobile"] .pp-seg button,
+.pp-root[data-profile="mobile"] .pp-input,
+.pp-root[data-profile="mobile"] .pp-select { min-height: 44px; }
+.pp-root[data-profile="mobile"] .pp-range { height: 44px; }
+.pp-root[data-profile="mobile"] .pp-toggle { width: 76px; height: 44px; }
+.pp-root[data-profile="mobile"] .pp-toggle::after { top: 4px; left: 4px; width: 36px; height: 36px; }
+.pp-root[data-profile="mobile"] .pp-toggle[aria-checked="true"]::after { transform: translateX(32px); }
+.pp-root[data-profile="mobile"] .pp-card { min-height: 44px; }
+/* iOS zooms into form fields with text under 16 px. */
+.pp-root[data-profile="mobile"] .pp-input, .pp-root[data-profile="mobile"] .pp-select, .pp-root[data-profile="mobile"] .pp-textarea { font-size: max(16px, 0.92em); }
+/* No selection callouts on a phone; form fields keep theirs. */
+.pp-root[data-profile="mobile"] .pp-modal { user-select: none; -webkit-user-select: none; }
+.pp-root[data-profile="mobile"] .pp-input, .pp-root[data-profile="mobile"] .pp-textarea { user-select: text; -webkit-user-select: text; }
+
+/* Compact title row. The theme chip does not fit next to the logo on a phone; the theme is one tap
+   away in the panel menu. */
+.pp-root[data-profile="mobile"] .pp-topbar { gap: calc(var(--u) * 10); }
+.pp-root[data-profile="mobile"] [data-testid="theme-chip"] { display: none; }
+.pp-root[data-profile="mobile"] .pp-logo { font-size: calc(var(--u) * 30); padding: calc(var(--u) * 6) calc(var(--u) * 20) calc(var(--u) * 6) calc(var(--u) * 8); gap: calc(var(--u) * 8); }
+.pp-root[data-profile="mobile"] .pp-logo svg { width: calc(var(--u) * 44); height: calc(var(--u) * 44); }
+.pp-root[data-profile="mobile"] .pp-chip { font-size: calc(var(--u) * 21 * var(--fs)); padding: calc(var(--u) * 8) calc(var(--u) * 14); }
+
+/* Momo: a 44 px+ touch target; bubble limited so the block never grows into a control. */
+.pp-root[data-profile="mobile"] .pp-momo { width: max(44px, calc(var(--u) * 72)); height: max(44px, calc(var(--u) * 72)); }
+.pp-root[data-profile="mobile"] .pp-bubble {
+  box-sizing: border-box; overflow: hidden; margin-bottom: 0; border-radius: calc(var(--u) * 24);
+  /* Bottom spacing as a border, not padding: clipped lines would otherwise peek through the padding. */
+  padding: calc(var(--u) * 8) calc(var(--u) * 16) 0; border-bottom: calc(var(--u) * 8) solid var(--c-paper);
+  font-size: calc(var(--u) * 22 * var(--fs)); line-height: 1.25;
+  /* Whole lines only (an ellipsis instead of a half-cut line); the max-height rules below are the hard cap. */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+}
+.pp-root[data-profile="mobile"] .pp-bubble small { font-size: 0.66em; margin-top: 0; }
+/* The clipped bubble cannot show its tail; a squared corner towards Momo marks the speaker instead. */
+.pp-root[data-profile="mobile"] .pp-bubble::after { display: none; }
+.pp-root[data-profile="mobile"] .pp-guide[data-align="left"] .pp-bubble { border-bottom-left-radius: calc(var(--u) * 6); }
+.pp-root[data-profile="mobile"] .pp-guide[data-align="right"] .pp-bubble { border-bottom-right-radius: calc(var(--u) * 6); }
+
+/* Upright: the panel is the 32" bar scaled down; one-line guide row above it. */
+@media (orientation: portrait) {
+  .pp-root[data-profile="mobile"] .pp-panel.bar { border-radius: calc(var(--u) * 40); padding: 0; }
+  .pp-root[data-profile="mobile"] .pp-bubble { max-height: calc(var(--u) * (62 * var(--fs) + 20)); -webkit-line-clamp: 2; line-clamp: 2; }
+  .pp-root[data-profile="mobile"] .pp-guide { align-items: center; }
+}
+/* Sideways: Momo sits in the display bay above the big button, the bubble stacked above her. */
+@media (orientation: landscape) {
+  .pp-root[data-profile="mobile"] .pp-guide { flex-direction: column-reverse; justify-content: flex-start; align-items: flex-end; gap: calc(var(--u) * 10); }
+  .pp-root[data-profile="mobile"] .pp-guide[data-align="left"] { align-items: flex-start; }
+  .pp-root[data-profile="mobile"] .pp-bubble { max-width: 100%; max-height: calc(var(--u) * 100 * var(--fs)); }
+  /* Win card: picture beside the text so it fits a 340 px tall screen. */
+  .pp-root[data-profile="mobile"] .pp-result {
+    display: grid; grid-template-columns: calc(var(--u) * 190) minmax(0, 1fr); column-gap: calc(var(--u) * 20); row-gap: calc(var(--u) * 8);
+    align-items: center; justify-items: start; text-align: left; padding: calc(var(--u) * 18) calc(var(--u) * 28); border-radius: calc(var(--u) * 40);
+  }
+  .pp-root[data-profile="mobile"] .pp-result .portrait { grid-column: 1; grid-row: 1 / span 5; width: calc(var(--u) * 190); height: calc(var(--u) * 190); }
+  .pp-root[data-profile="mobile"] .pp-result > :not(.portrait) { grid-column: 2; }
+  .pp-root[data-profile="mobile"] .pp-result h2 { font-size: calc(var(--u) * 46 * var(--fs)); }
+  .pp-root[data-profile="mobile"] .pp-result .pp-menu { justify-content: flex-start; }
+}
+/* Short screens (≤ 330 px tall, e.g. a phone in Chrome with its toolbar): Momo beside the bubble. */
+@media (orientation: landscape) and (max-height: 330px) {
+  .pp-root[data-profile="mobile"] .pp-guide { flex-direction: row; align-items: flex-end; justify-content: flex-start; gap: calc(var(--u) * 8); }
+  .pp-root[data-profile="mobile"] .pp-guide[data-align="right"] { flex-direction: row-reverse; }
+  .pp-root[data-profile="mobile"] .pp-momo { width: max(44px, calc(var(--u) * 56)); height: max(44px, calc(var(--u) * 56)); }
+  .pp-root[data-profile="mobile"] .pp-bubble { max-height: calc(var(--u) * 72 * var(--fs)); min-width: 0; -webkit-line-clamp: 2; line-clamp: 2; }
+  .pp-root[data-profile="mobile"] .pp-bubble small { display: none; }
+}
+/* Squeezed layouts (large font scale, panel moved up, very short screens): the solver says how many
+   whole bubble lines fit (guide.lines → data-guide-lines on the phone panel); the bubble shows that
+   many instead of growing into the big button, and with no room for Momo the block is hidden. One line
+   = PHONE.bubbleLine (27.5) units × font scale, plus PHONE.bubblePad (16). Without :has() the caps
+   above still apply. */
+.pp-hud:has(> .pp-panel.phone[data-guide-lines="3"]) .pp-bubble { -webkit-line-clamp: 3; line-clamp: 3; max-height: calc(var(--u) * (82.5 * var(--fs) + 16) + 1px); }
+.pp-hud:has(> .pp-panel.phone[data-guide-lines="2"]) .pp-bubble { -webkit-line-clamp: 2; line-clamp: 2; max-height: calc(var(--u) * (55 * var(--fs) + 16) + 1px); }
+.pp-hud:has(> .pp-panel.phone[data-guide-lines="1"]) .pp-bubble { -webkit-line-clamp: 1; line-clamp: 1; max-height: calc(var(--u) * (27.5 * var(--fs) + 16) + 1px); }
+.pp-hud:has(> .pp-panel.phone[data-guide-lines="0"]) .pp-bubble,
+.pp-hud:has(> .pp-panel.phone[data-guide-hidden="true"]) .pp-guide { display: none; }
+
+/* Dialogs at phone size: thin chrome, content scrolls inside. */
+.pp-root[data-profile="mobile"] .pp-modal { border-radius: 18px; font-size: calc(var(--u) * 26 * var(--fs)); }
+.pp-root[data-profile="mobile"] .pp-modal header { padding: 4px 6px 4px 16px; gap: 8px; }
+.pp-root[data-profile="mobile"] .pp-modal header h1 { font-size: calc(var(--u) * 34 * var(--fs)); line-height: 1.1; }
+.pp-root[data-profile="mobile"] .pp-modal .body { padding: 6px 14px 14px; }
+.pp-root[data-profile="mobile"] .pp-modal footer { padding: 6px 10px; gap: 8px; }
+.pp-root[data-profile="mobile"] .pp-modal footer .pp-btn.small { padding: 0 14px; }
+.pp-root[data-profile="mobile"] .pp-modal footer .note { min-width: 6em; }
+.pp-root[data-profile="mobile"] .pp-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px; }
+.pp-root[data-profile="mobile"] .pp-card { padding: 10px 12px; border-radius: 16px; }
+.pp-root[data-profile="mobile"] .pp-toys { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pp-root[data-profile="mobile"] .pp-toy img, .pp-root[data-profile="mobile"] .pp-toy .ph { width: 76px; height: 76px; }
+.pp-root[data-profile="mobile"] .pp-steps li::before { width: 32px; height: 32px; }
+/* Settings tabs: an icon rail when sideways, a scrolling strip at the top when upright. */
+.pp-root[data-profile="mobile"] .pp-settings .pp-tab { flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding: 5px 3px; text-align: center; border-radius: 12px; font-size: 10.5px; line-height: 1.25; min-height: 56px; }
+/* Never shrink a tab (or its label) to fit the scrolling rail: that clipped the second label line. */
+.pp-root[data-profile="mobile"] .pp-settings .pp-tab, .pp-root[data-profile="mobile"] .pp-settings .pp-tab > * { flex: none; }
+.pp-root[data-profile="mobile"] .pp-settings .pp-tab svg { width: 22px; height: 22px; }
+.pp-root[data-profile="mobile"] .pp-settings .pp-tab span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 100%; overflow-wrap: anywhere; line-height: 1.3; padding-bottom: 2px; }
+@media (orientation: landscape) {
+  .pp-root[data-profile="mobile"] .pp-settings .pp-tabs { width: 74px; padding: 4px 4px 10px 6px; gap: 4px; }
+  .pp-root[data-profile="mobile"] .pp-tabpanel { padding: 2px 14px 14px 8px; }
+}
+@media (orientation: portrait) {
+  .pp-root[data-profile="mobile"] .pp-settings { flex-direction: column; }
+  .pp-root[data-profile="mobile"] .pp-settings .pp-tabs { flex-direction: row; width: auto; flex: none; overflow-x: auto; overflow-y: hidden; padding: 4px 10px 6px; gap: 4px; scrollbar-width: none; touch-action: pan-x; }
+  .pp-root[data-profile="mobile"] .pp-settings .pp-tab { flex: none; width: 70px; }
+  .pp-root[data-profile="mobile"] .pp-tabpanel { padding: 2px 14px 14px; }
+  .pp-root[data-profile="mobile"] .pp-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .pp-root[data-profile="mobile"] .pp-modal footer .note { flex-basis: 100%; }
+}
+
+/* Upright hint (dismissible, hides itself after a few seconds; the upright layout is playable). */
+.pp-rotate {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; display: inline-flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 32px); box-sizing: border-box; min-height: 44px; padding: 6px 16px; border: 0; border-radius: 999px;
+  background: #2f2638; color: #fff; font: 600 calc(var(--u) * 22 * var(--fs)) / 1.2 var(--font-body); text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); pointer-events: auto; cursor: pointer; animation: pp-pop-centered 240ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.pp-rotate svg { width: 22px; height: 22px; flex: none; }

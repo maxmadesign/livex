@@ -2,7 +2,10 @@ import type { StringTable } from '../index';
 
 /**
  * Strings for Head Tracking / Window Perspective (status, calibration,
- * privacy). Keys are prefixed with `tracking.`.
+ * privacy). Keys are prefixed with `tracking.`, except the labels of the
+ * head-tracking settings added with the countdown calibration
+ * (`set.camera.<field>`, `.hint`, `.o.<option>`), which the settings Field
+ * component looks up by path.
  *
  *   tracking.state.<TrackerState>      short status label
  *   tracking.stateHint.<TrackerState>  what it means / what to do
@@ -130,6 +133,17 @@ export const trackingStrings: StringTable = {
     'tracking.hint.returnMs': 'How long the glide back to the centre takes.',
     'tracking.hint.numFaces': 'How many faces are watched so that bystanders can be told apart from the player.',
     'tracking.hint.delegate': 'Auto picks the fastest path that really works on this device.',
+
+    // Labels of the calibration / phone settings of the Camera & Parallax tab (Field: set.<path>).
+    'set.camera.headWeight': 'Head turn effect',
+    'set.camera.headWeight.hint':
+      'Turning your head left, right, up or down (compared with the calibration) also moves the view a little that way, so you can look around without moving much. 0 = off.',
+    'set.camera.lowPower': 'Phone / low-power capture',
+    'set.camera.lowPower.hint':
+      'Uses a smaller camera picture (360p), at most 12 tracking updates per second and one face, to save battery and keep the game smooth. Auto does this on phones and low-power devices.',
+    'set.camera.lowPower.o.auto': 'Auto',
+    'set.camera.lowPower.o.on': 'On',
+    'set.camera.lowPower.o.off': 'Off',
   },
 
   zh: {
@@ -244,6 +258,14 @@ export const trackingStrings: StringTable = {
     'tracking.hint.returnMs': '平滑回到中心所需的时间。',
     'tracking.hint.numFaces': '同时关注的人脸数量，用于区分玩家和旁人。',
     'tracking.hint.delegate': '自动：选择在本设备上实际可用且最快的方式。',
+
+    'set.camera.headWeight': '转头效果',
+    'set.camera.headWeight.hint': '向左、右、上、下转动头部（相对校准时）也会让视角朝该方向稍微移动，不用大幅移动身体也能环顾四周。0 = 关闭。',
+    'set.camera.lowPower': '手机 / 低功耗采集',
+    'set.camera.lowPower.hint': '使用较小的摄像头画面（360p）、每秒最多 12 次追踪更新并只跟随一张人脸，以节省电量并保持游戏流畅。“自动”会在手机和低功耗设备上启用。',
+    'set.camera.lowPower.o.auto': '自动',
+    'set.camera.lowPower.o.on': '开',
+    'set.camera.lowPower.o.off': '关',
   },
 
   ja: {
@@ -358,5 +380,15 @@ export const trackingStrings: StringTable = {
     'tracking.hint.returnMs': '中央へなめらかに戻るのにかかる時間。',
     'tracking.hint.numFaces': '同時に見る顔の数。プレイヤーと周りの人を区別するために使います。',
     'tracking.hint.delegate': '自動：この端末で実際に動く、いちばん速い方法を選びます。',
+
+    'set.camera.headWeight': '頭の向きの効果',
+    'set.camera.headWeight.hint':
+      '頭を左右・上下に向けると（キャリブレーション時と比べて）、視点もその方向に少し動きます。体をあまり動かさなくても見回せます。0 = オフ。',
+    'set.camera.lowPower': 'スマホ / 低消費電力の取り込み',
+    'set.camera.lowPower.hint':
+      'カメラ映像を小さく（360p）し、トラッキングを毎秒最大 12 回・顔 1 人に抑えて、電池を節約しゲームを滑らかに保ちます。「自動」ではスマートフォンや低消費電力の端末で有効になります。',
+    'set.camera.lowPower.o.auto': '自動',
+    'set.camera.lowPower.o.on': 'オン',
+    'set.camera.lowPower.o.off': 'オフ',
   },
 };

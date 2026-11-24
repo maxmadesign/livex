@@ -23,6 +23,7 @@ import {
   subBass,
   synthLead,
   wind,
+  type SoftPluckOptions,
 } from './instruments';
 import { finishOneShot } from './mix';
 import { noteToMidi } from './seq';
@@ -120,6 +121,9 @@ export interface SfxRecipe {
 
 /* ------------------------------------------------------------ themed jingles */
 
+/** GPU Party's narrow-pulse chip voice (the same colour as the arpeggio in its music). */
+const GPU_CHIP: SoftPluckOptions = { duty: 0.125, tri: 0.05, cutoffStart: 7600, cutoffEnd: 1500, filterTau: 0.05, ampTau: 0.14, q: 0.9, release: 0.03 };
+
 function winJingle(theme: ThemeId, rng: Rng): Float32Array {
   const c = new Canvas(1.25);
   switch (theme) {
@@ -153,8 +157,7 @@ function winJingle(theme: ThemeId, rng: Rng): Float32Array {
       c.add(subBass(f('d2'), 0.5, 0.6, { attack: 0.03 }), 0.3, 0.45);
       break;
     }
-    case 'cosmic':
-    case 'gpu': {
+    case 'cosmic': {
       ['a4', 'c#5', 'e5', 'a5', 'c#6', 'e6'].forEach((n, i) => c.add(softPluck(SOFT_PLUCKS.arcade, f(n), 0.09, 0.7 + i * 0.04), i * 0.07, 0.7));
       c.add(sineGlide(420, 1680, 0.4, { glideTau: 0.5, ampTau: 0.3, attackMs: 30 }), 0.05, 0.14);
       ['a5', 'c#6', 'e6'].forEach((n) => c.add(synthLead(f(n), 0.4, 0.8, { cutoff: 2800 }), 0.46, 0.4));
@@ -164,8 +167,35 @@ function winJingle(theme: ThemeId, rng: Rng): Float32Array {
       c.add(zap(rng, { from: 2400, to: 700, seconds: 0.12 }), 0.78, 0.25);
       break;
     }
+    case 'gpu':
+      // Short on purpose (see renderGpuWin): the whole effect budget is shared by five themes.
+      return renderGpuWin(rng);
   }
   return room(c.buf, 0.5, 1.1, 0.35);
+}
+
+/** GPU Party win: a "level up" chip arpeggio through E major into a bright pulse chord. */
+function renderGpuWin(_rng: Rng): Float32Array {
+  const c = new Canvas(0.88);
+  ['e5', 'g#5', 'b5', 'e6', 'g#6', 'b6'].forEach((n, i) => c.add(softPluck(GPU_CHIP, f(n), 0.06, 0.62 + i * 0.05), i * 0.05, 0.72));
+  ['e6', 'g#6', 'b6'].forEach((n, i) => c.add(synthLead(f(n), 0.34, 0.8, { duty: 0.25, detuneCents: 4, cutoff: 3600, attack: 0.004, release: 0.05 }), 0.32 + i * 0.008, 0.36));
+  c.add(synthLead(f('e5'), 0.34, 0.7, { duty: 0.125, detuneCents: 2, cutoff: 3000, attack: 0.004, release: 0.05 }), 0.32, 0.3);
+  c.add(subBass(f('e2'), 0.36, 0.85, { harm2: 0.4, harm3: 0.25 }), 0.32, 0.55);
+  c.add(fmBell(f('e7'), 0.55, { ratio: 2, index: 1.6, decay: 0.45 }), 0.33, 0.24);
+  c.add(fmBell(f('b7'), 0.45, { ratio: 2, index: 1.2, decay: 0.35 }), 0.5, 0.16);
+  return room(c.buf, 0.32, 0.75, 0.22);
+}
+
+/** GPU Party sting: a power-on sweep and a three-note boot chime (B, E, G#). */
+function renderGpuSting(rng: Rng): Float32Array {
+  const c = new Canvas(0.6);
+  c.add(sineGlide(220, 880, 0.2, { glideTau: 0.12, ampTau: 0.09, attackMs: 8 }), 0, 0.22);
+  c.add(noiseBurst(0.14, rng, { type: 'bp', freq: 900, freqEnd: 5200, q: 1.1, attackMs: 30, decayTau: 0.05 }), 0, 0.08);
+  ['b5', 'e6', 'g#6'].forEach((n, i) => c.add(softPluck(GPU_CHIP, f(n), i === 2 ? 0.22 : 0.08, 0.72 + i * 0.06), 0.1 + i * 0.09, 0.7));
+  c.add(synthLead(f('e5'), 0.24, 0.6, { duty: 0.25, detuneCents: 5, cutoff: 2600, attack: 0.004, release: 0.05 }), 0.28, 0.3);
+  c.add(subBass(f('e2'), 0.26, 0.75, { harm2: 0.4, harm3: 0.2 }), 0.28, 0.45);
+  c.add(fmBell(f('g#7'), 0.4, { ratio: 2, index: 1.2, decay: 0.35 }), 0.3, 0.14);
+  return room(c.buf, 0.28, 0.65, 0.18);
 }
 
 function themeSting(theme: ThemeId, rng: Rng): Float32Array {
@@ -202,8 +232,9 @@ function themeSting(theme: ThemeId, rng: Rng): Float32Array {
       c.add(mallet(MALLETS.marimba, f('a3'), 0.5, rng), 0.3, 0.4);
       break;
     }
-    case 'cosmic':
-    case 'gpu': {
+    case 'gpu':
+      return renderGpuSting(rng);
+    case 'cosmic': {
       const step = 0.15;
       ['c#5', 'f#5', 'a5'].forEach((n, i) => c.add(synthLead(f(n), step * (i === 2 ? 1.8 : 0.85), 0.75, { cutoff: 2600 }), i * step, 0.55));
       c.add(synthLead(f('g#5'), step * 0.85, 0.7, { cutoff: 2600 }), step * 4, 0.5);

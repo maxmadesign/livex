@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guessProfile, solveLayout, type HudLayout } from '../../../src/layout/solve';
+import { NO_INSETS, guessProfile, solveLayout, type HudLayout } from '../../../src/layout/solve';
 import { defaultSettings, type LayoutSettings } from '../../../src/settings/spec';
 
 const EPS = 0.5; // half a CSS pixel of rounding slack
@@ -218,20 +218,33 @@ describe('guessProfile', () => {
   });
 });
 
-describe('solveLayout: mobile placeholder', () => {
-  it('lays a phone out exactly like the desktop preset for now', () => {
-    const d = defaultSettings();
-    for (const [vw, vh] of [
-      [844, 390],
-      [932, 430],
-      [1920, 1080],
-      [390, 844],
+describe('layout solver · documented big-screen values (no regression from the phone work)', () => {
+  const d = defaultSettings().profiles;
+  const row = (l: HudLayout) => [l.panel.y / l.vh, (l.panel.y + l.panel.h) / l.vh, l.panel.w / l.vw, l.floorY].map((v) => Number(v.toFixed(3)));
+  it('matches the table in docs/DISPLAYS.md', () => {
+    expect(row(solveLayout('desktop', d.desktop.layout, 1920, 1080, NO_INSETS))).toEqual([0.701, 0.979, 0.93, 0.69]);
+    expect(row(solveLayout('portrait32', d.portrait32.layout, 1080, 1920, NO_INSETS))).toEqual([0.752, 0.978, 0.93, 0.6]);
+    expect(row(solveLayout('portrait86', d.portrait86.layout, 1080, 1920, NO_INSETS))).toEqual([0.528, 0.672, 0.6, 0.48]);
+    for (const [p, vw, vh] of [
+      ['desktop', 1920, 1080],
+      ['portrait32', 1080, 1920],
+      ['portrait86', 2160, 3840],
     ] as const) {
-      const mobile = solveLayout('mobile', d.profiles.mobile.layout, vw, vh);
-      const desktop = solveLayout('desktop', d.profiles.desktop.layout, vw, vh);
-      expect({ ...mobile, profile: 'desktop' }, `${vw}x${vh}`).toEqual(desktop);
-      expect(mobile.profile).toBe('mobile');
-      expectInsideViewport(mobile, `mobile ${vw}x${vh}`);
+      const l = solveLayout(p, d[p].layout, vw, vh, NO_INSETS);
+      expect(l.adjusted, p).toBe(false);
+      expect(l.controls, p).toBeNull();
+      // The default argument (no browser here) measures no insets: same result.
+      expect(solveLayout(p, d[p].layout, vw, vh)).toEqual(l);
     }
+  });
+
+  it('keeps the panel and the title row clear of screen cut-outs when a big screen reports some', () => {
+    const insets = { top: 30, right: 40, bottom: 25, left: 40 };
+    const l = solveLayout('desktop', d.desktop.layout, 1280, 720, insets);
+    expect(l.panel.x).toBeGreaterThanOrEqual(40 - EPS);
+    expect(l.panel.x + l.panel.w).toBeLessThanOrEqual(1280 - 40 + EPS);
+    expect(l.panel.y + l.panel.h).toBeLessThanOrEqual(720 - 25 + EPS);
+    expect(l.topBar.y).toBeGreaterThanOrEqual(30);
+    expect(l.topBar.x).toBeGreaterThanOrEqual(40);
   });
 });

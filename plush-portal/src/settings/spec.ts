@@ -181,6 +181,9 @@ interface ProfileDefaults {
   camPitch: number;
   maxOffset: Vec3;
   minDistance: number;
+  /** Side / top-bottom margin as a fraction of the viewport (default 0.035 / 0.02). */
+  marginX?: number;
+  marginY?: number;
 }
 
 function profileSpec(d: ProfileDefaults) {
@@ -199,8 +202,8 @@ function profileSpec(d: ProfileDefaults) {
       fontScale: num(1, 0.75, 1.6, 0.01),
       /** Minimum touch target in design pixels (1080 px wide portrait / 1920 px wide desktop reference). */
       touchSize: num(d.touchSize, 56, 180, 2, 'live', 'px'),
-      marginX: num(0.035, 0, 0.15, 0.005),
-      marginY: num(0.02, 0, 0.15, 0.005),
+      marginX: num(d.marginX ?? 0.035, 0, 0.15, 0.005),
+      marginY: num(d.marginY ?? 0.02, 0, 0.15, 0.005),
       handedness: en('right', ['right', 'left'] as const),
       hudDensity: en('standard', ['minimal', 'standard', 'rich'] as const),
       showGuides: bool(false),
@@ -208,9 +211,9 @@ function profileSpec(d: ProfileDefaults) {
       floorY: num(d.floorY, 0.3, 0.85, 0.005),
     },
     view: {
-      /** Physical size of the full screen in metres. */
-      screenW: num(d.screenW, 0.1, 4, 0.001, 'live', 'm'),
-      screenH: num(d.screenH, 0.1, 4, 0.001, 'live', 'm'),
+      /** Physical size of the full screen in metres (phones go down to ~0.06 m). */
+      screenW: num(d.screenW, 0.04, 4, 0.001, 'live', 'm'),
+      screenH: num(d.screenH, 0.04, 4, 0.001, 'live', 'm'),
       /** Height of the bottom edge of the screen above the floor (installation note, used for eye-height hints). */
       bottomElevation: num(d.bottomElevation, 0, 2.5, 0.01, 'live', 'm'),
       /**
@@ -310,25 +313,31 @@ const PROFILE_DEFAULTS: Record<DisplayProfileId, ProfileDefaults> = {
     maxOffset: [0.7, 0.5, 0.55],
     minDistance: 0.45,
   },
-  // Phone, mostly held in landscape. Placeholder: a copy of the desktop defaults until the
-  // mobile layout work tunes these (safe zone, panel, touch size, screen size, eye distance).
+  // Phone, mostly held sideways (src/layout/solve.ts → solvePhone). Design units are phone units
+  // (600 on the short side), so touchSize 100 ≈ 56–68 CSS px. Docked at the bottom (anchor 0.86).
   mobile: {
     safeTop: 0,
     safeBottom: 1,
-    anchorY: 0.84,
-    panelWidth: 0.94,
+    anchorY: 0.86,
+    panelWidth: 1,
     uiScale: 1,
-    touchSize: 84,
-    floorY: 0.69,
-    screenW: 0.531,
-    screenH: 0.299,
-    bottomElevation: 0.95,
+    touchSize: 100,
+    floorY: 0.7,
+    marginX: 0.02,
+    marginY: 0.025,
+    // Nominal 6.1" 19.5:9 phone sideways (PHONE_NOMINAL_SCREEN in src/perspective/windowGeometry.ts):
+    // left at exactly this size, the real size is estimated from the phone's CSS pixels.
+    screenW: 0.141,
+    screenH: 0.065,
+    bottomElevation: 1.1,
     windowMode: 'window',
-    eye: [0, 0.14, 0.62],
-    camPos: [0, 0.16, 0],
-    camPitch: 4,
-    maxOffset: [0.3, 0.22, 0.3],
-    minDistance: 0.3,
+    // Held in the hands about 35 cm from the eyes; front camera at the left end when the top of
+    // the phone points left (the usual way to turn it).
+    eye: [0, 0, 0.35],
+    camPos: [-0.065, 0, 0],
+    camPitch: 0,
+    maxOffset: [0.12, 0.09, 0.15],
+    minDistance: 0.18,
   },
 };
 
@@ -339,12 +348,12 @@ export const SETTINGS_VERSION = 1;
 export const settingsSpec = {
   system: {
     language: en('en', LANGS),
-    /** Play a clearly labelled demo round when nobody plays. */
+    /** In attract mode the machine plays clearly labelled demo rounds by itself (nothing is counted). */
     attractDemo: bool(true),
-    attractIdleSec: num(45, 10, 600, 5, 'live', 's'),
     /**
      * Seconds without any player input before the machine fully resets to the self-playing
-     * attract / demo mode (score, open dialogs, round). 0 = never.
+     * attract / demo mode (score, open dialogs, round). 0 = never. Replaces the former
+     * `attractIdleSec` (a customised old value is migrated in src/settings/store.ts).
      */
     idleSeconds: num(60, 0, 600, 5, 'live', 's'),
     reducedMotion: en('system', ['system', 'on', 'off'] as const),
@@ -362,7 +371,7 @@ export const settingsSpec = {
     desktop: profileSpec(PROFILE_DEFAULTS.desktop),
     portrait32: profileSpec(PROFILE_DEFAULTS.portrait32),
     portrait86: profileSpec(PROFILE_DEFAULTS.portrait86),
-    /** Phone (landscape first). Starts as a copy of desktop's layout + view defaults; tuned by the mobile layout work. */
+    /** Phone (landscape first, upright also playable): its own layout and viewing geometry, see docs/DISPLAYS.md. */
     mobile: profileSpec(PROFILE_DEFAULTS.mobile),
   },
   gameplay: {
@@ -418,6 +427,8 @@ export const settingsSpec = {
     renderScale: num(1, 0.35, 1.5, 0.05),
     /** Upper bound for the 3D pixel count, megapixels. */
     maxPixels: num(2.1, 0.4, 8.3, 0.1, 'live', 'MP'),
+    /** Highest device pixel ratio the 3D view uses (phones report 3 or more; Safe caps it at 1.25). */
+    maxDpr: num(2, 0.75, 4, 0.25, 'live', '×'),
     targetFps: en('60', ['30', '60', '120'] as const),
     lod: en('medium', ['low', 'medium', 'high'] as const),
     textures: en('1k', ['512', '1k', '2k', '4k'] as const),
@@ -461,8 +472,10 @@ export const settingsSpec = {
     speechModel: str('', 80),
     voiceName: str('', 40),
     voiceSpeed: num(1, 0.7, 1.3, 0.05),
-    language: en('ui', ['ui', ...LANGS] as const),
-    /** 'en' = the guide always speaks and writes English, whatever the UI language; 'ui' = follow the UI language. */
+    /**
+     * Momo's language (subtitles, GPT lines, local lines and voice): 'en' = always English, whatever
+     * the UI language; 'ui' = follow the UI language. Replaces the older `ai.language` (dropped on load).
+     */
     voiceLanguage: en('en', ['en', 'ui'] as const),
     personality: str('', 400),
     /** Empty = built-in Momo prompt. */
@@ -499,6 +512,22 @@ export const settingsSpec = {
     autoCalibrate: bool(true),
     /** Length of that countdown. */
     calibrationSeconds: num(3, 1, 10, 1, 'live', 's'),
+    /** Head-turn effect: turning the head (relative to the baseline) also shifts the view that way. 0 = off. */
+    headWeight: num(0.4, 0, 1.5, 0.05),
+    /** auto: lower camera resolution / tracking rate / faces on phones and low-power devices; on / off force it. */
+    lowPower: en('auto', ['auto', 'on', 'off'] as const),
+    /**
+     * Head-direction baseline per display preset (degrees), written by the countdown calibration:
+     * how far the player's head was turned (yaw, + = to their right) and tilted (pitch, + = up)
+     * relative to facing the centre of the game window. The eye-position baseline of the same
+     * calibration is `profiles.<id>.view.calNeutral`. Only used while that preset is calibrated.
+     */
+    headBaseline: {
+      desktop: { yaw: num(0, -60, 60, 0.1, 'live', '°'), pitch: num(0, -60, 60, 0.1, 'live', '°') },
+      portrait32: { yaw: num(0, -60, 60, 0.1, 'live', '°'), pitch: num(0, -60, 60, 0.1, 'live', '°') },
+      portrait86: { yaw: num(0, -60, 60, 0.1, 'live', '°'), pitch: num(0, -60, 60, 0.1, 'live', '°') },
+      mobile: { yaw: num(0, -60, 60, 0.1, 'live', '°'), pitch: num(0, -60, 60, 0.1, 'live', '°') },
+    },
   },
 } as const satisfies SpecGroup;
 
@@ -520,10 +549,10 @@ export type CameraSettings = Settings['camera'];
  * highlighted preset stays true). Keys added to the presets later go here as well.
  */
 export const GRAPHICS_PRESET_ADDITIONS = {
-  safe: { fxIntensity: 0.5, lightShow: false },
-  medium: { fxIntensity: 1, lightShow: true },
-  high: { fxIntensity: 1.2, lightShow: true },
-  ultra: { fxIntensity: 1.5, lightShow: true },
+  safe: { fxIntensity: 0.5, lightShow: false, maxDpr: 1.25 },
+  medium: { fxIntensity: 1, lightShow: true, maxDpr: 2 },
+  high: { fxIntensity: 1.2, lightShow: true, maxDpr: 3 },
+  ultra: { fxIntensity: 1.5, lightShow: true, maxDpr: 3 },
 } as const satisfies Record<Exclude<GraphicsSettings['preset'], 'custom'>, Partial<GraphicsSettings>>;
 
 /** Fills preset-owned graphics keys missing from older data with the stored preset's values. */

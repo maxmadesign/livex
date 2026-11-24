@@ -1,0 +1,15 @@
+{
+  "name": "PLUSH PORTAL",
+  "short_name": "Plush Portal",
+  "description": "A 3D claw machine behind your screen.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#17111f",
+  "theme_color": "#ffd9e6",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

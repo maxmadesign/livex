@@ -69,6 +69,19 @@ export class GameCore {
     );
   }
 
+  /**
+   * Lets the field come to rest without rendering, exactly like `populate` does after
+   * filling it. Used when the machine is reset on the spot (a player takes over from the
+   * demo): the reset toys are at rest when the player first sees them.
+   */
+  settle(maxSeconds = 1.5): number {
+    return this.field.settle(
+      maxSeconds,
+      () => this.claw.preStep(FIXED_DT),
+      () => this.claw.postStep(FIXED_DT),
+    );
+  }
+
   dispose(): void {
     this.claw.dispose();
     this.phys.dispose();

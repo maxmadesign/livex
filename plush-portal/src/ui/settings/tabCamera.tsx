@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Vec3 } from '../../core/types';
+import { IDLE_CALIBRATION, type CalibrationStatus } from '../../core/contracts';
+import type { DisplayProfileId, Vec3 } from '../../core/types';
 import { getValueAt } from '../../settings/spec';
-import { useApp, useSettings, useT, useUi } from '../context';
+import { clearHeadBaselineWrites } from '../../tracking/baseline';
+import { ROTATED, WAITING_CAMERA } from '../../tracking/countdown';
+import type { EffectiveCapture } from '../../tracking/devicePolicy';
+import type { FaceTracker } from '../../tracking/FaceTracker';
+import { useApp, useSettings, useT, useUi, type Translate } from '../context';
 import { Field, Row, Section, useSetter } from './Field';
 
 /* ----------------------------------------------------- Camera & Parallax */
@@ -22,6 +27,7 @@ export function CameraTab() {
   const [busy, setBusy] = useState(false);
   const [calText, setCalText] = useState<string | null>(null);
   const view = `profiles.${profile}.view`;
+  const refDistance = useSettings((s) => s.profiles[profile].view.refDistance);
   const running = !['off', 'idle', 'denied', 'no_device', 'in_use', 'insecure', 'model_error'].includes(status.state);
 
   useEffect(() => {
@@ -109,15 +115,21 @@ export function CameraTab() {
       </div>
       <p className="pp-note">{t('camera.preview')}</p>
 
-      <Section title={t('sec.camera.calibrate')} />
+      <Section title={t('calibration.tab.state')} />
+      <p className="pp-note">{t('calibration.tab.intro')}</p>
+      <CalibrationPanel profile={profile} />
+      <Field path="camera.autoCalibrate" />
+      <Field path="camera.calibrationSeconds" />
+      <Field path="camera.headWeight" />
+
+      <Section title={t('calibration.tab.advanced')} />
+      <p className="pp-note">{t('calibration.tab.advancedNote')}</p>
       <ol className="pp-steps" style={{ fontSize: '0.9em' }}>
-        <li>{t('tracking.cal.step1')}</li>
+        <li>{t('tracking.cal.step1', { distance: refDistance.toFixed(2) })}</li>
         <li>{t('tracking.cal.step2')}</li>
         <li>{t('tracking.cal.step3')}</li>
       </ol>
       <Field path={`${view}.refDistance`} />
-      <Field path="camera.autoCalibrate" />
-      <Field path="camera.calibrationSeconds" />
       <div className="pp-actions">
         <button type="button" className="pp-btn small accent" onClick={() => void calibrate()} disabled={busy || status.state !== 'tracking'} data-testid="btn-calibrate">
           {t('camera.calibrate')}
@@ -131,6 +143,7 @@ export function CameraTab() {
           onClick={() => {
             set(`${view}.calibrated`, false);
             set(`${view}.calDepthK`, 0);
+            for (const [path, value] of clearHeadBaselineWrites(profile)) set(path, value);
           }}
           data-testid="btn-cal-reset"
         >
@@ -201,11 +214,102 @@ export function CameraTab() {
       <Field path="camera.returnMs" />
       <Field path="camera.reacquireMs" />
       <Section title={t('sec.camera.inference')} />
+      <Field path="camera.lowPower" />
+      <CaptureInfo />
       <Field path="camera.resolution" />
       <Field path="camera.inferenceHz" />
       <Field path="camera.numFaces" />
       <Field path="camera.delegate" />
     </>
+  );
+}
+
+/** Text of the countdown calibration state, as the tracker reports it. */
+export function calibrationPhaseText(t: Translate, cal: CalibrationStatus): string {
+  if (cal.phase === 'countdown') {
+    return cal.detail === WAITING_CAMERA ? t('calibration.phase.waiting') : t('calibration.phase.countdown', { seconds: cal.remaining });
+  }
+  if (cal.phase === 'failed') {
+    const key = `calibration.fail.${cal.detail}`;
+    const reason = t(key);
+    return t('calibration.phase.failedWith', { reason: reason === key ? cal.detail : reason });
+  }
+  if (cal.phase === 'idle' && cal.detail === ROTATED) return t('calibration.phase.rotated');
+  return t(`calibration.phase.${cal.phase}`);
+}
+
+/**
+ * Countdown calibration ("Calibrate now"): the state the tracker really reports, whether a baseline
+ * exists for this display preset, the captured head direction and the face indicator. The
+ * countdown overlay sits under this dialog, so the progress is shown here as well.
+ */
+function CalibrationPanel({ profile }: { profile: DisplayProfileId }) {
+  const app = useApp();
+  const t = useT();
+  const cal = useUi((s) => s.tracker.calibration) ?? IDLE_CALIBRATION;
+  const state = useUi((s) => s.tracker.state);
+  const enabled = useSettings((s) => s.camera.enabled);
+  const seconds = useSettings((s) => s.camera.calibrationSeconds);
+  const calibrated = useSettings((s) => s.profiles[profile].view.calibrated);
+  const head = useSettings((s) => (s.camera.headBaseline as Partial<Record<DisplayProfileId, { yaw: number; pitch: number }>>)[profile]);
+  const active = cal.phase === 'countdown' || cal.phase === 'capturing';
+  const running = ['requesting', 'loading', 'searching', 'tracking', 'lost'].includes(state);
+  const secure = typeof window === 'undefined' || window.isSecureContext !== false;
+  // Not on an insecure page: the camera cannot be opened there (the note below says why).
+  const blocked = !enabled || !secure || state === 'insecure' || (app.launch.noCamera && !running);
+  const face = !running ? t('calibration.face.none') : state === 'tracking' ? t('calibration.face.found') : t('calibration.face.searching');
+  return (
+    <>
+      <dl className="pp-kv" data-testid="calibration-state" data-phase={cal.phase} data-detail={cal.detail}>
+        <dt>{t('calibration.tab.state')}</dt>
+        <dd data-testid="calibration-phase">{calibrationPhaseText(t, cal)}</dd>
+        <dt>{t('calibration.tab.face')}</dt>
+        <dd data-testid="calibration-face" data-face={state === 'tracking' ? 'found' : running ? 'searching' : 'none'}>
+          {face}
+        </dd>
+        <dt>{t('calibration.tab.baseline')}</dt>
+        <dd data-testid="calibration-baseline" data-calibrated={calibrated}>
+          {calibrated ? t('calibration.tab.baselineSet') : t('calibration.tab.baselineNone')}
+        </dd>
+        {calibrated && head ? (
+          <>
+            <dt>{t('calibration.tab.head')}</dt>
+            <dd>{t('calibration.tab.headValue', { yaw: head.yaw.toFixed(1), pitch: head.pitch.toFixed(1) })}</dd>
+          </>
+        ) : null}
+      </dl>
+      <div className="pp-actions">
+        {active ? (
+          <button type="button" className="pp-btn small soft" onClick={() => app.tracker.cancelCalibration()} data-testid="btn-calibrate-cancel">
+            {t('calibration.cancel')}
+          </button>
+        ) : (
+          <button type="button" className="pp-btn small accent" onClick={() => app.tracker.startCalibration(seconds)} disabled={blocked} data-testid="btn-calibrate-now">
+            {t('calibration.tab.now')}
+          </button>
+        )}
+      </div>
+      {!secure ? <p className="pp-note warn">{t('calibration.tab.secure', { origin: location.origin })}</p> : null}
+      {app.launch.noCamera && !running ? <p className="pp-note">{t('calibration.tab.noCamera')}</p> : null}
+      <p className="pp-note">{t('calibration.tab.applyNote')}</p>
+    </>
+  );
+}
+
+/** What the camera is really asked for after the phone / low-power policy. */
+function CaptureInfo() {
+  const app = useApp();
+  const t = useT();
+  // Re-render when the relevant settings or the tracker status change.
+  useSettings((s) => `${s.camera.lowPower}|${s.camera.resolution}|${s.camera.inferenceHz}|${s.camera.numFaces}`);
+  useUi((s) => s.tracker.state);
+  const capture = (app.tracker as Partial<FaceTracker>).diagnostics?.().capture as EffectiveCapture | undefined;
+  if (!capture) return null;
+  return (
+    <p className="pp-note" data-testid="camera-capture" data-low-power={capture.lowPower}>
+      {t('calibration.tab.capture')}: {t('calibration.tab.captureValue', { resolution: capture.resolution, hz: capture.inferenceHz, faces: capture.numFaces })}
+      {capture.lowPower ? ` · ${t(capture.reason === 'setting' ? 'calibration.tab.lowPowerSetting' : 'calibration.tab.lowPowerAuto')}` : ''}
+    </p>
   );
 }
 

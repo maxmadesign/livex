@@ -3,6 +3,7 @@ dist/
 dist-e2e/
 .env
 .env.local
+.data/
 *.local
 # MediaPipe WASM runtime is copied from node_modules by `npm run assets:tracking` (and before dev/build)
 public/mediapipe/wasm/

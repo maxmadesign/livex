@@ -1,7 +1,7 @@
 import { makeRng } from '../core/math';
 import type { Quat, Vec3 } from '../core/types';
 import type { PlushAsset } from '../plush/manifest';
-import { CHUTE, FIELD, FIXED_DT } from '../physics/fieldSpec';
+import { CHUTE, FIELD, FIXED_DT, PRIZE_SENSOR } from '../physics/fieldSpec';
 import type { PhysicsWorld, ToyBody } from '../physics/PhysicsWorld';
 
 export interface FieldOptions {
@@ -212,6 +212,20 @@ export class ToyField {
   /** Removes toys that are in the prize bin. Returns the removed toys. */
   clearBin(): ToyBody[] {
     const removed = this.inBin();
+    for (const toy of removed) this.phys.removeToy(toy);
+    return removed;
+  }
+
+  /**
+   * Removes every toy whose centre of mass is below the play floor (in the chute or the
+   * bin) whether or not a round flagged it — for resets that skip the normal round end,
+   * where a toy can drop into the exit without being seen by the prize sensor logic.
+   */
+  clearFallen(): ToyBody[] {
+    const removed: ToyBody[] = [];
+    for (const toy of this.phys.toys.values()) {
+      if (toy.inBin || toy.body.worldCom(this.phys.scratchV).y < PRIZE_SENSOR.awardComY) removed.push(toy);
+    }
     for (const toy of removed) this.phys.removeToy(toy);
     return removed;
   }

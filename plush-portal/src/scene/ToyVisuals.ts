@@ -2,16 +2,34 @@ import { BufferGeometry, Group, InstancedBufferAttribute, InstancedMesh, Matrix4
 import { damp } from '../core/math';
 import type { ClawContact } from '../physics/GripMonitor';
 import type { ImpactEvent, ToyBody } from '../physics/PhysicsWorld';
-import type { PlushLibrary } from '../plush/PlushLibrary';
+import type { LoadedPlush, PlushLibrary, TexturedState } from '../plush/PlushLibrary';
 import { PlushDeformer, type DeformFrame } from '../plush/PlushDeformer';
 import { MAX_DENTS, PlushDepthMaterial, PlushMaterial, applyPaint, applyPlushDeformation, createPlushUniforms, type PlushUniforms } from '../plush/PlushMaterial';
-import type { PlushAsset } from '../plush/manifest';
+import type { PlushAsset, TextureSetting } from '../plush/manifest';
 import type { DisplaySlot } from './Cabinet';
 
 export interface ToyQuality {
   lod: 'low' | 'medium' | 'high';
   fur: 'flat' | 'sheen' | 'shell' | 'shellHigh';
   deform: 'basic' | 'fine' | 'ultra';
+  /**
+   * *Graphics → Textures* (textured models pick the closest variant; 4K uses 2K). Without it the
+   * resolution follows the model detail: low → 512, medium → 1K, high → 2K (as in the presets).
+   */
+  textures?: TextureSetting;
+}
+
+/** Texture setting used when the quality object does not carry one. */
+export function textureSettingFor(quality: ToyQuality): TextureSetting {
+  return quality.textures ?? (quality.lod === 'low' ? '512' : quality.lod === 'medium' ? '1k' : '2k');
+}
+
+/** Strength of the fabric micro relief of textured models per fur quality. */
+const MICRO_BY_FUR: Record<ToyQuality['fur'], number> = { flat: 0, sheen: 0.65, shell: 1, shellHigh: 1 };
+
+/** Creates the plush material for a loaded slot: textured models get the textured variant. */
+export function plushMaterialFor(loaded: LoadedPlush | undefined, uniforms: PlushUniforms, options: { dents?: number; deformNormals?: boolean; shell?: boolean } = {}): PlushMaterial {
+  return new PlushMaterial(uniforms, { ...options, textures: loaded?.textured?.textures ?? null });
 }
 
 interface ToyVisual {
@@ -54,7 +72,13 @@ export class ToyVisuals {
   private readonly shellGeometries = new Map<string, BufferGeometry>();
   private readonly display: Mesh[] = [];
   private readonly displayMaterials: PlushMaterial[] = [];
+  /** Display-bay materials of textured assets, by asset id (their textures follow the tier). */
+  private readonly displayByAsset = new Map<string, PlushMaterial>();
   private quality: ToyQuality;
+  /** Bumped on every texture-setting change so late texture loads of an older setting are ignored. */
+  private textureEpoch = 0;
+  /** Slots already asked (in this texture epoch) to move to the current tier (see `followTier`). */
+  private readonly tierRequested = new Set<string>();
   /** Toy that is the centre of attention (gets the best LOD / fur). */
   focus: ToyBody | null = null;
   /** Assist anchor of the held toy in its local space (set by the game while a toy is carried). */
@@ -70,20 +94,69 @@ export class ToyVisuals {
   ) {
     this.group.name = 'toys';
     this.quality = { ...quality };
+    // Models loaded from now on start with the right texture resolution.
+    this.library.textureTier = textureSettingFor(this.quality);
   }
 
   setQuality(quality: ToyQuality): void {
     const changed = quality.deform !== this.quality.deform;
+    const textures = textureSettingFor(quality);
+    const texturesChanged = textures !== textureSettingFor(this.quality);
     this.quality = { ...quality };
     for (const v of this.visuals.values()) {
-      v.uniforms.uSheen.value = quality.fur === 'flat' ? 0.35 : 1;
-      v.uniforms.uFiber.value = quality.fur === 'flat' ? 0 : 1;
+      this.applyFurUniforms(v.uniforms);
       if (changed) this.applyDeformDefines(v);
     }
-    for (const m of this.displayMaterials) {
-      m.plush.uSheen.value = quality.fur === 'flat' ? 0.35 : 1;
-      m.plush.uFiber.value = quality.fur === 'flat' ? 0 : 1;
+    for (const m of this.displayMaterials) this.applyFurUniforms(m.plush);
+    if (texturesChanged) this.switchTextures(textures);
+  }
+
+  private applyFurUniforms(uniforms: PlushUniforms): void {
+    const fur = this.quality.fur;
+    uniforms.uSheen.value = fur === 'flat' ? 0.35 : 1;
+    uniforms.uFiber.value = fur === 'flat' ? 0 : 1;
+    uniforms.uMicro.value = MICRO_BY_FUR[fur];
+  }
+
+  /** Moves every textured toy in use to the texture variant closest to `setting`. */
+  private switchTextures(setting: TextureSetting): void {
+    this.library.textureTier = setting;
+    const epoch = ++this.textureEpoch;
+    this.tierRequested.clear();
+    const ids = new Set<string>();
+    for (const v of this.visuals.values()) if (v.material.textured) ids.add(v.toy.asset.id);
+    for (const id of this.displayByAsset.keys()) ids.add(id);
+    for (const id of ids) {
+      this.tierRequested.add(id);
+      void this.library.useTextures(id, setting).then((state) => {
+        if (state && epoch === this.textureEpoch) this.applyTextures(id, state);
+      });
     }
+  }
+
+  /**
+   * A slot whose model finished loading while the setting changed carries the previous tier (the
+   * switch above only reaches toys that already exist): ask once per setting for the right one.
+   */
+  private followTier(asset: PlushAsset): void {
+    const setting = textureSettingFor(this.quality);
+    const current = this.library.get(asset.id)?.textured?.tier;
+    const tier = this.library.tierFor(asset, setting);
+    if (!current || !tier || current === tier || this.tierRequested.has(asset.id)) return;
+    this.tierRequested.add(asset.id);
+    const epoch = this.textureEpoch;
+    void this.library.useTextures(asset.id, setting).then((state) => {
+      if (state && epoch === this.textureEpoch) this.applyTextures(asset.id, state);
+    });
+  }
+
+  private applyTextures(id: string, state: TexturedState): void {
+    for (const v of this.visuals.values()) {
+      if (v.toy.asset.id !== id) continue;
+      v.material.setTextures(state.textures);
+      v.shellMaterial?.setTextures(state.textures);
+    }
+    this.displayByAsset.get(id)?.setTextures(state.textures);
   }
 
   private applyDeformDefines(v: ToyVisual): void {
@@ -118,10 +191,10 @@ export class ToyVisuals {
     if (!loaded) return;
     const uniforms = createPlushUniforms();
     applyPaint(uniforms, toy.asset);
-    uniforms.uSheen.value = this.quality.fur === 'flat' ? 0.35 : 1;
-    uniforms.uFiber.value = this.quality.fur === 'flat' ? 0 : 1;
-    const material = new PlushMaterial(uniforms);
-    const depth = new PlushDepthMaterial(uniforms);
+    this.applyFurUniforms(uniforms);
+    const material = plushMaterialFor(loaded, uniforms);
+    if (material.textured) this.followTier(toy.asset);
+    const depth = new PlushDepthMaterial(uniforms, { textured: material.textured });
     const lod = Math.min(loaded.lods.length - 1, 1);
     const mesh = new Mesh(loaded.lods[lod]!, material);
     mesh.customDepthMaterial = depth;
@@ -222,11 +295,19 @@ export class ToyVisuals {
     const fur = this.quality.fur;
     let layers = 0;
     let lod = v.lod;
-    if (fur === 'shell' && focus) layers = 10;
-    else if (fur === 'shellHigh') {
+    // Textured models are about 2.5× denser per LOD than the procedural ones: their shells use the
+    // next coarser LOD so the fur costs about the same (the shell sits a few millimetres out, so
+    // the coarser surface under it does not show).
+    const shellLod = v.material.textured ? 1 : 0;
+    if (fur === 'shell' && focus) {
+      layers = 10;
+      lod = Math.max(v.lod, shellLod);
+    } else if (fur === 'shellHigh') {
       layers = focus ? 16 : 8;
-      lod = focus ? v.lod : Math.max(v.lod, 1);
+      lod = focus ? Math.max(v.lod, shellLod) : Math.max(v.lod, 1 + shellLod);
     }
+    const loaded = this.library.get(v.toy.asset.id);
+    lod = Math.min(lod, (loaded?.lods.length ?? 1) - 1);
     const key = layers > 0 ? `${lod}:${layers}` : '';
     if (key === v.shellKey) return;
     if (v.shell) {
@@ -239,7 +320,7 @@ export class ToyVisuals {
     const geometry = this.shellGeometry(v.toy.asset, lod, layers);
     if (!geometry) return;
     if (!v.shellMaterial) {
-      v.shellMaterial = new PlushMaterial(v.uniforms, { shell: true });
+      v.shellMaterial = plushMaterialFor(this.library.get(v.toy.asset.id), v.uniforms, { shell: true });
       this.applyDeformDefines(v);
     }
     v.uniforms.uShellLength.value = 0.0042;
@@ -283,7 +364,8 @@ export class ToyVisuals {
       }
       if (v.mesh.visible) this.updateShell(v, focus);
       const index = v.mesh.geometry.getIndex();
-      triangles += (index ? index.count / 3 : 0) * (1 + (v.shell ? v.shell.count : 0));
+      const shellIndex = v.shell?.geometry.getIndex();
+      triangles += (index ? index.count / 3 : 0) + (v.shell && shellIndex ? (shellIndex.count / 3) * v.shell.count : 0);
 
       // Velocity / acceleration from the fixed-step poses (world space), smoothed.
       const vx = (c[0]! - p[0]!) / fixedDt, vy = (c[1]! - p[1]!) / fixedDt, vz = (c[2]! - p[2]!) / fixedDt;
@@ -350,6 +432,7 @@ export class ToyVisuals {
     this.display.length = 0;
     for (const m of this.displayMaterials) m.dispose();
     this.displayMaterials.length = 0;
+    this.displayByAsset.clear();
     if (assets.length === 0) return;
     const perAsset = new Map<string, PlushMaterial>();
     slots.forEach((slot, i) => {
@@ -360,12 +443,16 @@ export class ToyVisuals {
       if (!material) {
         const uniforms = createPlushUniforms();
         applyPaint(uniforms, asset);
-        uniforms.uSheen.value = this.quality.fur === 'flat' ? 0.35 : 1;
-        material = new PlushMaterial(uniforms, { dents: 1, deformNormals: false });
+        this.applyFurUniforms(uniforms);
+        material = plushMaterialFor(loaded, uniforms, { dents: 1, deformNormals: false });
         perAsset.set(asset.id, material);
         this.displayMaterials.push(material);
+        if (material.textured) {
+          this.displayByAsset.set(asset.id, material);
+          this.followTier(asset);
+        }
       }
-      const mesh = new Mesh(loaded.lods[Math.min(1, loaded.lods.length - 1)]!, material);
+      const mesh = new Mesh(loaded.lods[displayLod(loaded)]!, material);
       mesh.position.set(slot.x, slot.y, slot.z);
       mesh.rotation.y = slot.yaw;
       mesh.castShadow = false;
@@ -375,6 +462,13 @@ export class ToyVisuals {
       this.group.add(mesh);
       this.display.push(mesh);
     });
+  }
+
+  /** Number of toys currently drawn with a textured (generated) model (diagnostics). */
+  texturedCount(): number {
+    let n = 0;
+    for (const v of this.visuals.values()) if (v.material.textured && v.mesh.visible) n++;
+    return n;
   }
 
   clear(): void {
@@ -389,6 +483,7 @@ export class ToyVisuals {
       g.dispose();
     }
     this.shellGeometries.clear();
+    this.tierRequested.clear();
     this.focus = null;
     this.heldToy = null;
   }
@@ -397,4 +492,20 @@ export class ToyVisuals {
     this.clear();
     this.group.removeFromParent();
   }
+}
+
+/** Display-bay toys are small and static: the LOD closest to ~5k triangles (LOD1 of a procedural model). */
+function displayLod(loaded: LoadedPlush): number {
+  const lods = loaded.lods;
+  let best = Math.min(1, lods.length - 1);
+  let bestDiff = Infinity;
+  lods.forEach((g, i) => {
+    const tris = (g.getIndex()?.count ?? g.getAttribute('position').count) / 3;
+    const diff = Math.abs(Math.log(tris / 5200));
+    if (diff < bestDiff) {
+      best = i;
+      bestDiff = diff;
+    }
+  });
+  return best;
 }

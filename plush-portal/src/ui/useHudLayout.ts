@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { solveLayout, type HudLayout } from '../layout/solve';
-import { useSettings, useUi } from './context';
+import { applyPhoneGraphics, installPhoneGuards, markPhoneSetupDone, phoneFirstRunAction, phoneSetupDone } from '../layout/phone';
+import { readSafeAreaInsets } from '../layout/safeArea';
+import { hasCoarsePointer, solveLayout, type HudLayout } from '../layout/solve';
+import { useApp, useSettings, useSettingsState, useUi } from './context';
 
 /** Viewport size in CSS pixels, updated on resize / orientation change. */
 export function useViewport(): { vw: number; vh: number } {
   const [size, setSize] = useState(() => ({ vw: window.innerWidth, vh: window.innerHeight }));
   useEffect(() => {
-    const update = () => setSize({ vw: window.innerWidth, vh: window.innerHeight });
+    const update = () => setSize((prev) => (prev.vw === window.innerWidth && prev.vh === window.innerHeight ? prev : { vw: window.innerWidth, vh: window.innerHeight }));
+    // Some phones report the new size only after the rotation animation: measure once more then.
+    let timer = 0;
+    const rotated = () => {
+      update();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(update, 350);
+    };
     window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
+    window.addEventListener('orientationchange', rotated);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
+      window.removeEventListener('orientationchange', rotated);
     };
   }, []);
   return size;
@@ -22,7 +32,9 @@ export function useHudLayout(): HudLayout {
   const profile = useUi((s) => s.profile);
   const layout = useSettings((s) => s.profiles[profile].layout);
   const { vw, vh } = useViewport();
-  return useMemo(() => solveLayout(profile, layout, vw, vh), [profile, layout, vw, vh]);
+  // Safe-area insets change with the orientation, i.e. with the viewport size.
+  const insets = useMemo(() => readSafeAreaInsets(), [vw, vh]);
+  return useMemo(() => solveLayout(profile, layout, vw, vh, insets), [profile, layout, vw, vh, insets]);
 }
 
 export function useReducedMotion(): boolean {
@@ -36,4 +48,29 @@ export function useReducedMotion(): boolean {
     return () => mq.removeEventListener('change', update);
   }, []);
   return pref === 'on' || (pref === 'system' && system);
+}
+
+/**
+ * First run of the phone preset on a touch device: the Safe graphics preset with its pixel-density
+ * cap (src/layout/phone.ts), once per device. An explicit ?quality= wins.
+ */
+export function usePhoneSetup(): void {
+  const app = useApp();
+  const profile = useUi((s) => s.profile);
+  const editing = useSettingsState((s) => s.draft !== null);
+  useEffect(() => {
+    const action = phoneFirstRunAction({ profile, coarse: hasCoarsePointer(), done: phoneSetupDone(), launchQuality: app.launch.quality, editing });
+    if (action === 'mark') markPhoneSetupDone(null);
+    if (action !== 'apply') return;
+    const store = app.settings.getState();
+    markPhoneSetupDone(applyPhoneGraphics((path, value) => store.set(path, value)));
+  }, [app, profile, editing]);
+}
+
+/** While the phone preset is active: no pinch zoom, long-press menus or text selection during play. */
+export function usePhoneGuards(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    return installPhoneGuards(document);
+  }, [active]);
 }
