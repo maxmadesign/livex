@@ -1,0 +1,132 @@
+/*
+ * Win card arrangements and the prize-claim block (src/ui/RewardCard.tsx).
+ *
+ * Sizes follow the content model in src/rewards/cardLayout.ts (CARD): the card's box is computed
+ * from it before it is drawn, so heights here are fixed in design units (`--u`, scaled per card).
+ * Change both together. Colours: the theme's, or the brand kit's palette (--rw-*) where a kit
+ * dresses the theme. The QR itself is always black modules on a white tile.
+ */
+
+/* ------------------------------------------------------------ card frame */
+.pp-hud .pp-result[data-arrangement] {
+  box-sizing: border-box; justify-content: center; gap: calc(var(--u) * 12);
+  padding: calc(var(--u) * 26) calc(var(--u) * 40) calc(var(--u) * 30);
+}
+.pp-hud .pp-result[data-arrangement] > *, .pp-hud .pp-result[data-arrangement] .pp-result-main > * { flex: none; }
+.pp-hud .pp-result[data-arrangement] h2 {
+  font-size: calc(var(--u) * 58 * var(--fs)); line-height: calc(var(--u) * 62 * var(--fs)); height: calc(var(--u) * 62 * var(--fs));
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pp-hud .pp-result[data-arrangement] .pp-subtitle {
+  font-size: calc(var(--u) * 27 * var(--fs)); line-height: calc(var(--u) * 34 * var(--fs)); max-width: 100%;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.pp-hud .pp-result[data-arrangement] .pp-subtitle[data-lines="1"] { -webkit-line-clamp: 1; line-clamp: 1; }
+.pp-hud .pp-result[data-arrangement] .pp-count { font-size: calc(var(--u) * 22 * var(--fs)); line-height: calc(var(--u) * 28 * var(--fs)); opacity: 0.72; }
+/* PLAY AGAIN and the collection button stay on one row (they wrapped on phones). */
+.pp-hud .pp-result[data-arrangement] .pp-result-actions { flex-wrap: nowrap; }
+.pp-hud .pp-result[data-arrangement] .pp-result-actions .pp-btn { white-space: nowrap; }
+
+/* Side: the usual card on the left, the QR column on the right. */
+.pp-hud .pp-result[data-arrangement="side"] { flex-direction: row; align-items: center; gap: calc(var(--u) * 36); }
+.pp-hud .pp-result[data-arrangement="side"] .pp-result-main {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 12);
+  width: calc(var(--u) * 440); min-width: 0; flex: none;
+}
+.pp-hud .pp-result[data-arrangement="side"] .pp-subtitle { font-size: calc(var(--u) * 25 * var(--fs)); }
+
+/* Phone held sideways: the picture beside the text column (replaces the grid in hud.css). */
+.pp-hud .pp-result[data-arrangement="phone"] {
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left;
+  gap: calc(var(--u) * 20); padding: calc(var(--u) * 18) calc(var(--u) * 26); border-radius: calc(var(--u) * 40);
+}
+.pp-hud .pp-result[data-arrangement="phone"] > .portrait { grid-column: auto; grid-row: auto; }
+.pp-hud .pp-result[data-arrangement="phone"] .pp-result-main {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: calc(var(--u) * 8);
+  flex: 1 1 0; min-width: 0;
+}
+.pp-hud .pp-result[data-arrangement="phone"] h2 { font-size: calc(var(--u) * 46 * var(--fs)); line-height: calc(var(--u) * 50 * var(--fs)); height: calc(var(--u) * 50 * var(--fs)); }
+.pp-hud .pp-result[data-arrangement="phone"] .pp-subtitle { font-size: calc(var(--u) * 24 * var(--fs)); line-height: calc(var(--u) * 32 * var(--fs)); }
+.pp-hud .pp-result[data-arrangement="phone"] .pp-count { font-size: calc(var(--u) * 22 * var(--fs)); line-height: calc(var(--u) * 32 * var(--fs)); }
+.pp-hud .pp-result[data-arrangement="phone"] .pp-menu { justify-content: flex-start; }
+.pp-hud .pp-result[data-arrangement="phone"] .pp-breakdown { align-items: flex-start; }
+.pp-root[data-profile="mobile"] .pp-hud .pp-result[data-arrangement="phone"] > .pp-newbest { left: calc(var(--u) * 111); }
+
+/* Compact points line (phone, next to a claim code). */
+.pp-points-line {
+  display: flex; align-items: center; gap: calc(var(--u) * 10); margin: 0;
+  height: calc(var(--u) * 32 * var(--fs)); font-size: calc(var(--u) * 24 * var(--fs)); line-height: 1;
+}
+.pp-points-line b { font-family: var(--font-display); font-variant-numeric: tabular-nums; color: var(--rw-accent, var(--c-primary-deep)); }
+
+/* ---------------------------------------------------------- claim block */
+.pp-reward {
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 12); flex: none;
+  color: var(--rw-ink, var(--c-ink));
+}
+.pp-reward[data-part="tile"] { align-self: center; }
+.pp-reward[data-part="link"] { align-items: flex-start; gap: calc(var(--u) * 8); }
+.pp-reward-label {
+  box-sizing: border-box; height: calc(var(--u) * 36 * var(--fs)); padding: 0 calc(var(--u) * 18); border-radius: calc(var(--u) * 999);
+  display: inline-flex; align-items: center; white-space: nowrap;
+  background: var(--rw-chip, #2b2233); color: var(--rw-accent, #ffe27a); border: calc(var(--u) * 2) solid currentColor;
+  font-family: var(--font-display); font-weight: 700; font-size: calc(var(--u) * 20 * var(--fs)); letter-spacing: 0.1em;
+}
+.pp-reward-tile {
+  position: relative; box-sizing: border-box; flex: none; overflow: hidden;
+  background: #fff; border-radius: calc(var(--u) * 10);
+  /* The glow stays outside the tile: nothing is drawn over the modules or the quiet zone. */
+  box-shadow: 0 0 0 calc(var(--u) * 4) var(--rw-accent, var(--c-primary)), 0 calc(var(--u) * 10) calc(var(--u) * 26) rgba(0, 0, 0, 0.35);
+}
+.pp-reward-tile .pp-qr { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.pp-reward-tile.placeholder { display: flex; align-items: center; justify-content: center; text-align: center; color: #4d4d4d; font-weight: 600; font-size: calc(var(--u) * 22 * var(--fs)); padding: calc(var(--u) * 16); }
+.pp-reward-instr {
+  margin: 0; max-width: 100%; font-weight: 600; text-align: center;
+  font-size: calc(var(--u) * 24 * var(--fs)); line-height: calc(var(--u) * 30 * var(--fs)); max-height: calc(var(--u) * 60 * var(--fs));
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.pp-reward-code { display: flex; align-items: center; gap: calc(var(--u) * 14); height: calc(var(--u) * 60 * var(--fs)); }
+.pp-reward-code .code {
+  font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; white-space: nowrap;
+  font-size: calc(var(--u) * 40 * var(--fs)); line-height: 1; color: var(--rw-ink, var(--c-ink));
+}
+.pp-reward-code .code[data-pending="true"] { opacity: 0.55; }
+.pp-reward[data-part="link"] .pp-reward-code { height: calc(var(--u) * 44 * var(--fs)); gap: calc(var(--u) * 10); }
+.pp-reward[data-part="link"] .pp-reward-code .code { font-size: calc(var(--u) * 32 * var(--fs)); }
+.pp-reward-link { text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; gap: calc(var(--u) * 8); white-space: nowrap; }
+.pp-reward-note {
+  margin: 0; max-width: 100%; font-weight: 600; text-align: center;
+  font-size: calc(var(--u) * 24 * var(--fs)); line-height: calc(var(--u) * 30 * var(--fs)); max-height: calc(var(--u) * 60 * var(--fs));
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  color: var(--rw-muted, var(--c-ink));
+}
+.pp-hud .pp-result[data-arrangement="phone"] .pp-reward-note { text-align: left; }
+
+/* Countdown ring: how long the QR stays up. */
+.pp-ring { position: relative; flex: none; width: calc(var(--u) * 56 * var(--fs)); height: calc(var(--u) * 56 * var(--fs)); display: inline-grid; place-items: center; }
+.pp-reward[data-part="link"] .pp-ring { width: calc(var(--u) * 40 * var(--fs)); height: calc(var(--u) * 40 * var(--fs)); }
+.pp-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pp-ring circle { fill: none; stroke-width: 3.6; }
+.pp-ring .track { stroke: color-mix(in srgb, var(--rw-ink, var(--c-ink)) 18%, transparent); }
+.pp-ring .left { stroke: var(--rw-accent, var(--c-primary)); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.pp-ring b { position: relative; font-family: var(--font-display); font-variant-numeric: tabular-nums; font-size: calc(var(--u) * 20 * var(--fs)); color: var(--rw-ink, var(--c-ink)); }
+.pp-root[data-reduced="true"] .pp-ring .left { transition: none; }
+
+/* Spinner while the code is on its way. */
+.pp-spinner {
+  display: inline-block; width: calc(var(--u) * 44); height: calc(var(--u) * 44); min-width: 14px; min-height: 14px; border-radius: 50%;
+  border: calc(var(--u) * 6) solid color-mix(in srgb, var(--rw-accent, var(--c-primary)) 25%, transparent); border-top-color: var(--rw-accent, var(--c-primary));
+  animation: pp-reward-spin 0.9s linear infinite;
+}
+.pp-reward-link .pp-spinner { width: 1em; height: 1em; border-width: 0.16em; }
+.pp-root[data-reduced="true"] .pp-spinner { animation-duration: 2.4s; }
+@keyframes pp-reward-spin { to { transform: rotate(360deg); } }
+
+/* Theme dressed by a brand kit: its palette on the card's text (black / white / greys and the brand
+   green for accents only). */
+.pp-hud .pp-result[data-brand] h2 { color: var(--rw-accent); }
+.pp-hud .pp-result[data-brand] .pp-subtitle, .pp-hud .pp-result[data-brand] .pp-count { color: var(--rw-ink); }
+
+/* ----------------------------------------------------- settings preview */
+.pp-reward-preview { position: absolute; inset: 0; pointer-events: auto; z-index: 30; background: rgba(0, 0, 0, 0.45); }
+.pp-reward-preview .pp-result { animation: none; }

@@ -5,7 +5,9 @@ import type { HudLayout } from '../layout/solve';
 import { useApp, useCollection, useSettings, useT, useUi } from './context';
 import { IconAgain, IconArrow, IconCamera, IconClaw, IconHeart, IconHelp, IconInfo, IconPalette, IconPlay, IconSparkle, LogoMark, Momo } from './Icons';
 import { useModals } from './modals';
-import { ScoreBreakdown, scoreHudRect, winCardRect } from './ScoreHud';
+import { ScoreBreakdown, ScoreLine, scoreHudRect } from './ScoreHud';
+import { WinCard, useWinCard } from './RewardCard';
+import { compactPoints } from '../rewards/cardLayout';
 // Control panel (phone layout, immersive mode, release fallback).
 import type { CSSProperties } from 'react';
 import { labelEm } from '../layout/labelFit';
@@ -481,12 +483,15 @@ function ResultLayer({ layout }: { layout: HudLayout }) {
   const result = useUi((s) => s.result);
   const prize = useUi((s) => s.prize);
   const thumbs = useUi((s) => s.thumbnails);
+  const themeId = useUi((s) => s.themeId);
   const lang = useSettings((s) => s.system.language);
   const scoreEnabled = useUi((s) => s.score.enabled);
   const last = useUi((s) => s.score.last);
+  // Geometry and the claim block of this round (src/ui/RewardCard.tsx, src/rewards/cardLayout.ts).
+  const card = useWinCard(layout);
   if (phase !== 'RESULT' || !result) return null;
   // Demo rounds celebrate with effects and DEMO score popups; the middle of the screen belongs to
-  // the attract call to action, so no result card is drawn over it.
+  // the attract call to action, so no result card is drawn over it (and never a claim code).
   if (result.demo) return null;
   const award = scoreEnabled && last && last.roundId === result.roundId && !last.demo ? last : null;
   const zoneMid = (layout.safeTop + layout.safeBottom) / 2;
@@ -500,33 +505,35 @@ function ResultLayer({ layout }: { layout: HudLayout }) {
       </div>
     );
   }
+  if (!card) return null;
   const asset = app.game.library.assets().find((a) => a.id === result.targetTypeId);
   const name = asset ? asset.name[lang] : '';
-  // Centre of the card: middle of the safe zone, kept clear of the control panel when possible.
-  const card = winCardRect(layout, !!award);
+  const g = card.geometry;
+  // Phones next to a claim code: one compact points line instead of the breakdown (room for the code).
+  const points = award ? compactPoints(layout, g.kind) ? <ScoreLine award={award} /> : <ScoreBreakdown award={award} /> : null;
   return (
-    <div
-      className="pp-result"
-      data-testid="result-win"
-      data-points={award ? award.total : undefined}
-      role="status"
-      style={{ left: card.x, width: card.w, top: card.y, boxSizing: 'border-box', ...(card.scale < 1 ? ({ '--u': `${layout.unit * card.scale}px` } as CSSProperties) : {}) }}
-    >
-      {award?.newBest ? (
-        <span className="pp-newbest" data-testid="new-best">
-          {t('score.newBest')}
-        </span>
-      ) : null}
-      <h2>{result.demo ? t('result.demo.title') : t('result.won.title')}</h2>
-      <div className="portrait" data-compact={!!award}>
-        {asset && thumbs[asset.id] ? <img src={thumbs[asset.id]} alt={name} /> : null}
-        {prize?.isNew && !result.demo ? <span className="pp-badge-new">{t('result.won.new')}</span> : null}
-      </div>
-      {award ? <ScoreBreakdown award={award} /> : null}
-      <p>{result.demo ? t('result.demo.subtitle') : t('result.won.subtitle', { name })}</p>
-      {!result.demo && prize && prize.count > 1 ? <p style={{ opacity: 0.7, fontSize: '0.82em' }}>{t('result.won.count', { count: prize.count })}</p> : null}
-      {!result.demo ? (
-        <div className="pp-menu">
+    <WinCard
+      layout={layout}
+      geometry={g}
+      view={card.view}
+      themeId={themeId}
+      title={t('result.won.title')}
+      subtitle={t('result.won.subtitle', { name })}
+      thumb={asset ? (thumbs[asset.id] ?? null) : null}
+      thumbAlt={name}
+      newLabel={prize?.isNew ? t('result.won.new') : null}
+      countLine={prize && prize.count > 1 ? t('result.won.count', { count: prize.count }) : null}
+      points={points}
+      dataPoints={award ? award.total : undefined}
+      ribbon={
+        award?.newBest ? (
+          <span className="pp-newbest" data-testid="new-best">
+            {t('score.newBest')}
+          </span>
+        ) : null
+      }
+      actions={
+        <div className="pp-menu pp-result-actions">
           <button type="button" className="pp-btn accent" onClick={() => app.game.playAgain()} data-testid="result-again">
             <IconAgain style={{ width: '1.1em', height: '1.1em' }} />
             {t('hud.again')}
@@ -535,8 +542,8 @@ function ResultLayer({ layout }: { layout: HudLayout }) {
             <IconHeart />
           </button>
         </div>
-      ) : null}
-    </div>
+      }
+    />
   );
 }
 
