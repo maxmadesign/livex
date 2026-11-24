@@ -4,6 +4,7 @@ import { THEME_PROMPT_INFO } from '../../../src/ai/prompt';
 import { LINE_BANKS, LINE_KEYS } from '../../../src/ai/lines';
 import { createNullTracker } from '../../../src/app/nullPorts';
 import { INITIAL_TRACKER } from '../../../src/app/gameStore';
+import { ACTIVE_BRAND, NVIDIA_PALETTE } from '../../../src/brand';
 import { IDLE_CALIBRATION, type TrackerPort } from '../../../src/core/contracts';
 import { DISPLAY_PROFILE_IDS, LANGS, THEME_IDS } from '../../../src/core/types';
 import { hasString, translate } from '../../../src/i18n';
@@ -56,7 +57,8 @@ describe('theme and display preset ids', () => {
 
   it('names the new theme and preset in every language', () => {
     const names: Record<string, [string, string, string]> = {
-      'theme.gpu.name': ['GPU Party', '显卡派对', 'GPUパーティー'],
+      // The GPU theme is named by the brand kit of the build (src/brand): "NVIDIA GTC" or "GPU Party".
+      'theme.gpu.name': [ACTIVE_BRAND.themeName.en, ACTIVE_BRAND.themeName.zh, ACTIVE_BRAND.themeName.ja],
       'device.mobile.name': ['Phone', '手机', 'スマートフォン'],
     };
     for (const [key, [en, zh, ja]] of Object.entries(names)) {
@@ -71,13 +73,14 @@ describe('theme and display preset ids', () => {
   // to the GPU theme work, so it does not have to edit this shared file.
   it('GPU Party has its own dark theme definition with the green palette', () => {
     const gpu = THEMES.gpu;
-    expect(gpu.ui.primary).toBe('#76b900');
-    expect(gpu.ui.primaryDeep).toBe('#4e7a00');
-    expect(gpu.ui.accent).toBe('#9be33a');
-    expect(gpu.ui.ink).toBe('#eaffd0');
-    expect(gpu.ui.paper).toBe('#10140c');
-    expect(gpu.ui.panel).toBe('#1a2212');
-    expect(gpu.ui.glow).toBe('#b6ff5c');
+    // UI colours from the brand kit palette (src/brand/kits.ts NVIDIA_PALETTE).
+    expect(gpu.ui.primary).toBe(NVIDIA_PALETTE.green);
+    expect(gpu.ui.primaryDeep).toBe(NVIDIA_PALETTE.greenDeep);
+    expect(gpu.ui.accent).toBe(NVIDIA_PALETTE.green);
+    expect(gpu.ui.ink).toBe(NVIDIA_PALETTE.white);
+    expect(gpu.ui.paper).toBe(NVIDIA_PALETTE.black);
+    expect(gpu.ui.panel).toBe(NVIDIA_PALETTE.gray900);
+    expect(gpu.ui.glow).toBe(NVIDIA_PALETTE.greenLight);
     expect(gpu).not.toBe(THEMES.cosmic);
     expect(gpu.cabinet.led.length).toBeGreaterThan(0);
     expect(gpu.particles.colors.length).toBeGreaterThan(0);

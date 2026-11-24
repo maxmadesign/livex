@@ -1,9 +1,56 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { brandForTheme, type BrandKit } from '../../brand';
+import { brandFontStatus, loadBrandFont, onBrandFontStatus } from '../../brand/fonts';
 import type { ThemeId } from '../../core/types';
 import type { CustomModelEntry } from '../../settings/spec';
+import { BrandLogo, useBrandLogo } from '../BrandLogo';
 import { useApp, useSettings, useT, useUi } from '../context';
 import { ThemeCards } from '../Dialogs';
+import { brandFolder, fontStatus, logoStatus, type StatusLine } from './brandStatus';
 import { Field, Section, useSetter } from './Field';
+
+/* --------------------------------------------------------- brand status */
+
+/**
+ * For the theme a brand kit dresses (src/brand): which event / host logo files are drawn (official
+ * or placeholder, and where to drop the official file), and whether the brand typeface loaded.
+ */
+function BrandStatus({ kit }: { kit: BrandKit }) {
+  const t = useT();
+  const lang = useSettings((s) => s.system.language);
+  const event = useBrandLogo(kit.logo);
+  const host = useBrandLogo(kit.hostLogo);
+  const font = useSyncExternalStore(onBrandFontStatus, () => brandFontStatus(kit));
+  useEffect(() => {
+    void loadBrandFont(kit);
+  }, [kit]);
+  const line = (id: string, label: string, status: StatusLine) => (
+    <>
+      <dt>{label}</dt>
+      <dd data-testid={`brand-status-${id}`} data-state={status.state}>
+        {t(status.key, status.params)}
+      </dd>
+    </>
+  );
+  return (
+    <>
+      <Section title={t('brand.status.title')} />
+      <div className="pp-brand-status" data-testid="brand-status">
+        {event?.url ? <BrandLogo slot={kit.logo} alt={t('brand.logo.alt', { event: kit.eventName })} testId="brand-status-logo" /> : null}
+        <dl className="pp-kv">
+          <dt>{t('brand.status.kit')}</dt>
+          <dd>{kit.themeName[lang]}</dd>
+          {line('event', t('brand.status.event'), logoStatus(kit.logo, event))}
+          {line('host', t('brand.status.host'), logoStatus(kit.hostLogo, host))}
+          {line('font', t('brand.status.font'), fontStatus(kit, font))}
+        </dl>
+      </div>
+      <p className="pp-note">{t('gpu.description')}</p>
+      {/* A real event's marks are the owner's responsibility (docs); a generic kit says its cast is original. */}
+      {kit.namesAllowed ? <p className="pp-note">{t('brand.status.note', { dir: brandFolder(kit) })}</p> : <p className="pp-note">{t('gpu.originals')}</p>}
+    </>
+  );
+}
 
 /* --------------------------------------------------------- Themes & Toys */
 
@@ -121,10 +168,12 @@ export function ThemesTab() {
   const t = useT();
   const set = useSetter();
   const current = useSettings((s) => s.themes.current);
+  const kit = brandForTheme(current);
   return (
     <>
       <Section title={t('sec.themes.theme')} />
       <ThemeCards value={current} onPick={(id) => set('themes.current', id)} />
+      {kit ? <BrandStatus kit={kit} /> : null}
       <Section title={t('sec.themes.toys')} />
       <ToyList theme={current} />
       <Section title={t('sec.themes.field')} />

@@ -605,6 +605,8 @@ export function Hud({ layout }: { layout: HudLayout }) {
   const webglLost = useUi((s) => s.webglLost);
   const perfPanel = useSettings((s) => s.graphics.perfPanel);
   const scoring = useUi((s) => s.score.enabled);
+  // The theme being switched to: the curtain takes its style (src/ui/theme-gpu.css .pp-curtain[data-to]).
+  const nextTheme = useSettings((s) => s.themes.current);
   // The DEMO badge sits under the top bar, or under the score when that is there too.
   const score = scoring ? scoreHudRect(layout) : null;
   const badgeTop = score?.place === 'belowTop' ? score.y + score.h + 12 * layout.unit : Math.max(layout.safeTop + 10, layout.topBar.y + layout.topBar.h + 14);
@@ -625,7 +627,11 @@ export function Hud({ layout }: { layout: HudLayout }) {
       <ResultLayer layout={layout} />
       <Toasts layout={layout} />
       {perfPanel ? <PerfPanel layout={layout} /> : null}
-      {themeBusy ? <div className="pp-curtain">{t('theme.switching')}</div> : null}
+      {themeBusy ? (
+        <div className="pp-curtain" data-to={nextTheme} data-testid="theme-curtain">
+          {t('theme.switching')}
+        </div>
+      ) : null}
       {webglLost ? <div className="pp-curtain">{t('hud.webglLost')}</div> : null}
       <IconSparkle style={{ display: 'none' }} />
     </div>

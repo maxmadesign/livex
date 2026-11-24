@@ -1,3 +1,23 @@
+import { ACTIVE_BRAND, type BrandId } from '../../brand';
+
+/**
+ * GPU theme copy that depends on the brand kit of this build (src/brand): the GTC booth, or the
+ * neutral GPU Party of public demo copies. Event and host names come from the kit ({event}).
+ */
+const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
+  gtc: {
+    tagline: 'GTC booth claw machine with GPU plush',
+    welcome: 'Welcome to {event}',
+    sub: 'Free play · win a GPU plush',
+  },
+  neutral: {
+    tagline: 'Cuddly chips and graphics cards in neon green',
+    welcome: 'Welcome to the {event}!',
+    sub: 'Free play · win cute plushies',
+  },
+};
+const kit = GPU_KIT[ACTIVE_BRAND.id];
+
 /** English UI strings (HUD, dialogs, toasts). The zh / ja files must provide the same keys. */
 export const uiEn: Record<string, string> = {
 
@@ -109,9 +129,33 @@ export const uiEn: Record<string, string> = {
   'theme.ocean.tagline': 'Soft sea-salt daydreams',
   'theme.cosmic.name': 'Cosmic Arcade',
   'theme.cosmic.tagline': 'Neon friends from orbit',
-  'theme.gpu.name': 'GPU Party',
-  'theme.gpu.tagline': 'Cuddly chips and graphics cards in neon green',
+  'theme.gpu.name': ACTIVE_BRAND.themeName.en,
+  'theme.gpu.tagline': kit.tagline,
   'theme.switching': 'Changing theme…',
+
+  // Brand kit screens (boot, attract, Settings → Themes status). {event} comes from the kit.
+  'brand.logo.alt': '{event} logo',
+  'brand.attract.welcome': kit.welcome,
+  'brand.attract.sub': kit.sub,
+  // Shown instead when a real win shows the prize-claim QR code (settings.rewards); kept short for phones.
+  'brand.attract.reward.both': 'Free play · win a plush, scan to claim it or save on swag',
+  'brand.attract.reward.prize': 'Free play · win a plush, scan to claim it',
+  'brand.attract.reward.swag': 'Free play · win a plush, scan for a swag discount',
+  'brand.status.title': 'Brand kit',
+  'brand.status.kit': 'Kit',
+  'brand.status.event': 'Event logo',
+  'brand.status.host': 'Host logo',
+  'brand.status.font': 'Brand font',
+  'brand.status.checking': 'Checking…',
+  'brand.status.logo.official': 'Official file in use ({path})',
+  'brand.status.logo.placeholder': 'Placeholder in use. To replace it, put the official file at public/{path}',
+  'brand.status.logo.missing': 'Not drawn. To show it, put the official file at public/{path}',
+  'brand.status.logo.none': 'None in this kit',
+  'brand.status.logo.original': 'Original artwork ({path})',
+  'brand.status.font.loaded': '{family} loaded',
+  'brand.status.font.fallback': '{family} not found, using {fallback}. To use it, put the font files at public/{path}',
+  'brand.status.font.none': 'None in this kit, using {fallback}',
+  'brand.status.note': 'Official files go into public/{dir} (or the same folder of a production build) and are picked up on the next page load.',
 
   'guide.name': 'Momo',
   'guide.source.gpt': 'GPT',

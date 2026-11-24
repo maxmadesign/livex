@@ -1,3 +1,4 @@
+import { NVIDIA_PALETTE } from '../brand/kits';
 import type { ThemeId } from '../core/types';
 
 export type ParticleKind = 'petals' | 'confetti' | 'bubbles' | 'stars';
@@ -239,18 +240,22 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
   // GPU Party: plush merchandise from a graphics-card / AI-computing fan shop. A matte black
   // lacquered cabinet with a vivid lime accent stripe, lime LEDs chasing like data on a bus,
   // a cool white key light with a green rim, and green "data bit" confetti for wins.
-  // UI text (ink) on paper / panel: 17.5:1 / 15.4:1; primary 7.7:1, accent 11.9:1 on paper.
   gpu: {
     id: 'gpu',
+    // UI in the brand palette only (src/brand/kits.ts NVIDIA_PALETTE): black and near-black panels,
+    // white text, brand green for primary actions, accents, focus rings and progress. The derived
+    // shades are used only where the palette allows them: greenDeep for pressed / edge shading,
+    // greenLight for emitted light (glows). Contrast: white on paper / panel 21:1 / 17.4:1, green on
+    // paper / panel 8.7:1 / 7.2:1, black lettering on green 8.7:1 (src/ui/theme-gpu.css).
     ui: {
-      primary: '#76b900',
-      primaryDeep: '#4e7a00',
-      accent: '#9be33a',
-      accent2: '#e4ff9e',
-      ink: '#eaffd0',
-      paper: '#10140c',
-      panel: '#1a2212',
-      glow: '#b6ff5c',
+      primary: NVIDIA_PALETTE.green,
+      primaryDeep: NVIDIA_PALETTE.greenDeep,
+      accent: NVIDIA_PALETTE.green,
+      accent2: NVIDIA_PALETTE.white,
+      ink: NVIDIA_PALETTE.white,
+      paper: NVIDIA_PALETTE.black,
+      panel: NVIDIA_PALETTE.gray900,
+      glow: NVIDIA_PALETTE.greenLight,
     },
     cabinet: {
       frame: '#0d0e0f',

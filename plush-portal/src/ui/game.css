@@ -23,11 +23,11 @@
 .pp-score[data-stacked="true"] { flex-direction: column; gap: calc(var(--u) * 8); border-radius: calc(var(--u) * 40); padding: calc(var(--u) * 16) calc(var(--u) * 14); }
 .pp-score[data-stacked="true"] .value { font-size: calc(var(--u) * 56 * var(--fs)); }
 .pp-score[data-demo="true"] { background: linear-gradient(180deg, color-mix(in srgb, var(--c-paper) 80%, transparent), color-mix(in srgb, var(--c-panel) 72%, transparent)); }
-/* Cosmic and GPU Party have dark paper: the panel's default dark text ("Best", the label, GPU's green
-   digits) was unreadable on it, so these two use their light ink and glow colours. */
-.pp-root[data-theme="cosmic"] .pp-score, .pp-root[data-theme="gpu"] .pp-score { color: var(--c-ink); }
-.pp-root[data-theme="cosmic"] .pp-score .label, .pp-root[data-theme="gpu"] .pp-score .label { color: var(--c-glow); }
-.pp-root[data-theme="cosmic"] .pp-score .value, .pp-root[data-theme="gpu"] .pp-score .value { color: var(--c-glow); text-shadow: 0 calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.6); }
+/* Cosmic has dark paper: the panel's default dark text ("Best", the label) was unreadable on it, so it
+   uses its light ink and glow colours. The GPU theme has its own sheet (theme-gpu.css). */
+.pp-root[data-theme="cosmic"] .pp-score { color: var(--c-ink); }
+.pp-root[data-theme="cosmic"] .pp-score .label { color: var(--c-glow); }
+.pp-root[data-theme="cosmic"] .pp-score .value { color: var(--c-glow); text-shadow: 0 calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.6); }
 
 /* Combo badge: a little flame that grows hotter with the multiplier. */
 .pp-combo {
@@ -147,7 +147,7 @@
   text-shadow: 0 calc(var(--u) * 5) 0 color-mix(in srgb, var(--c-primary-deep) 80%, #000), 0 0 calc(var(--u) * 24) rgba(255, 255, 255, 0.7);
 }
 .pp-root[data-lang="ja"] .pp-cta .title { font-size: min(max(24px, calc(var(--u) * 64 * var(--fs))), var(--cta-fit, 9999px)); letter-spacing: 0.02em; }
-.pp-cta .sub { position: relative; font-size: max(13px, calc(var(--u) * 28 * var(--fs))); font-weight: 600; letter-spacing: 0.04em; opacity: 0.96; text-shadow: 0 calc(var(--u) * 2) 0 rgba(40, 10, 40, 0.4); white-space: normal; }
+.pp-cta .sub { position: relative; font-size: max(13px, calc(var(--u) * 28 * var(--fs))); font-weight: 600; letter-spacing: 0.04em; opacity: 0.96; text-shadow: 0 calc(var(--u) * 2) 0 rgba(40, 10, 40, 0.4); white-space: normal; text-wrap: balance; }
 .pp-cta .shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
 .pp-cta .shine::before {
   content: ""; position: absolute; top: -20%; bottom: -20%; left: -40%; width: 30%;

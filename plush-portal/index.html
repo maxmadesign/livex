@@ -14,6 +14,30 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>PLUSH PORTAL</title>
+    <style>
+      html[data-boot-theme="gpu"], html[data-boot-theme="gpu"] body, html[data-boot-theme="gpu"] #root { background: #000; }
+    </style>
+    <script>
+      // Before the app has loaded: a black page (and phone toolbar) when the game will start in the
+      // brand-kit GPU theme, so the first frames match its loading screen instead of flashing the
+      // default colours. Same sources as the app: ?theme=, then the saved settings (src/app/launch.ts).
+      // The app removes the mark once it draws the theme itself (src/ui/App.tsx, src/ui/theme-gpu.css).
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('plush-portal/settings') || 'null');
+          var theme = new URLSearchParams(location.search).get('theme') || (saved && saved.settings && saved.settings.themes && saved.settings.themes.current);
+          if (theme !== 'gpu') return;
+          document.documentElement.setAttribute('data-boot-theme', 'gpu');
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) {
+            meta.setAttribute('data-initial', meta.getAttribute('content') || '');
+            meta.setAttribute('content', '#000000');
+          }
+        } catch (e) {
+          /* storage unavailable: keep the defaults */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

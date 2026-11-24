@@ -1,3 +1,20 @@
+import { ACTIVE_BRAND, type BrandId } from '../../brand';
+
+/** GPU theme copy per brand kit (see ui.en.ts). */
+const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
+  gtc: {
+    tagline: 'GTCブースのクレーンゲーム。GPUぬいぐるみをゲット',
+    welcome: '{event}へようこそ',
+    sub: '無料で遊べる · GPUぬいぐるみをゲット',
+  },
+  neutral: {
+    tagline: 'ネオングリーンのふわふわチップとグラボ',
+    welcome: '{event}へようこそ！',
+    sub: '無料で遊べる · かわいいぬいぐるみをゲット',
+  },
+};
+const kit = GPU_KIT[ACTIVE_BRAND.id];
+
 /** ja translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiJa: Record<string, string> = {
 
@@ -109,9 +126,31 @@ export const uiJa: Record<string, string> = {
   'theme.ocean.tagline': 'やわらかな潮色のゆめ',
   'theme.cosmic.name': 'コズミックアーケード',
   'theme.cosmic.tagline': '軌道からやってきたネオンのなかま',
-  'theme.gpu.name': 'GPUパーティー',
-  'theme.gpu.tagline': 'ネオングリーンのふわふわチップとグラボ',
+  'theme.gpu.name': ACTIVE_BRAND.themeName.ja,
+  'theme.gpu.tagline': kit.tagline,
   'theme.switching': 'テーマを切り替え中…',
+
+  'brand.logo.alt': '{event}のロゴ',
+  'brand.attract.welcome': kit.welcome,
+  'brand.attract.sub': kit.sub,
+  'brand.attract.reward.both': '無料で遊べる · ゲットしたらQRで景品かグッズ割引',
+  'brand.attract.reward.prize': '無料で遊べる · ゲットしたらQRで景品を受け取れます',
+  'brand.attract.reward.swag': '無料で遊べる · ゲットしたらQRでグッズ割引',
+  'brand.status.title': 'ブランドキット',
+  'brand.status.kit': 'キット',
+  'brand.status.event': 'イベントロゴ',
+  'brand.status.host': '主催者ロゴ',
+  'brand.status.font': 'ブランドフォント',
+  'brand.status.checking': '確認しています…',
+  'brand.status.logo.official': '公式ファイルを使用中（{path}）',
+  'brand.status.logo.placeholder': '代替画像を使用中です。差し替えるには公式ファイルを public/{path} に置いてください',
+  'brand.status.logo.missing': '表示していません。表示するには公式ファイルを public/{path} に置いてください',
+  'brand.status.logo.none': 'このキットにはありません',
+  'brand.status.logo.original': 'オリジナルのアートワーク（{path}）',
+  'brand.status.font.loaded': '{family} を読み込みました',
+  'brand.status.font.fallback': '{family} が見つからないため {fallback} を使用中です。使うにはフォントファイルを public/{path} に置いてください',
+  'brand.status.font.none': 'このキットにはありません。{fallback} を使用中です',
+  'brand.status.note': '公式ファイルは public/{dir}（または本番ビルドの同じフォルダー）に置くと、次にページを読み込んだときに使われます。',
 
   'guide.name': 'Momo',
   'guide.source.gpt': 'GPT',

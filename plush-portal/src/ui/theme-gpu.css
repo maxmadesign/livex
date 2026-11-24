@@ -1,0 +1,455 @@
+/* GPU theme, dressed by the brand kit of the build (src/brand: the GTC kit, or the neutral GPU Party
+   kit; both use the NVIDIA palette). Imported last (src/main.tsx), so it overrides hud.css, game.css,
+   frame.css and calibration.css at equal specificity.
+
+   Palette only: black and near-black panels, white text, brand green #76B900 (--c-primary, --c-accent)
+   for primary actions, accents, focus rings and progress, neutral greys for lines and secondary text.
+   The derived shades are used only as the palette allows: --c-primary-deep (#5A8F00) for pressed and
+   edge shading, --c-glow (#A4D65E) for emitted light. No other hue, and the logos are drawn as supplied.
+
+   Contrast (WCAG 2): white on black / #1A1A1A / #262626 21 / 17.4 / 15.1:1; green on black / #1A1A1A
+   8.7 / 7.2:1; black lettering on green 8.7:1; grey #B3B3B3 on #1A1A1A 8.3:1. */
+
+.pp-root[data-theme="gpu"] {
+  --g-green: var(--c-primary);
+  --g-green-deep: var(--c-primary-deep);
+  --g-light: var(--c-glow);
+  --g-950: #0d0d0d;
+  --g-900: #1a1a1a;
+  --g-800: #262626;
+  --g-700: #333333;
+  --g-600: #4d4d4d;
+  --g-500: #666666;
+  --g-400: #8c8c8c;
+  --g-300: #b3b3b3;
+  --g-200: #cccccc;
+  --g-radius: calc(var(--u) * 10);
+  --g-shadow: rgba(0, 0, 0, 0.55);
+  /* Brand typeface (or its open fallback) for Latin text; Chinese and Japanese glyphs fall through
+     to the existing CJK fonts (the brand stack lists no generic family, src/brand/fonts.ts). */
+  --font-display: var(--font-brand, "Inter Variable"), "ZCOOL KuaiLe", "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yuanti SC", system-ui, sans-serif;
+  --font-body: var(--font-brand, "Inter Variable"), "Noto Sans SC", "M PLUS Rounded 1c", "Hiragino Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color-scheme: dark;
+}
+.pp-root[data-theme="gpu"][data-lang="ja"] {
+  --font-display: var(--font-brand, "Inter Variable"), "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+  --font-body: var(--font-brand, "Inter Variable"), "M PLUS Rounded 1c", "Hiragino Sans", system-ui, sans-serif;
+}
+/* Behind the canvas before the first frame, and the room around a simulated 9:16 screen. */
+html:has(.pp-root[data-theme="gpu"]), html:has(.pp-root[data-theme="gpu"]) body, html:has(.pp-root[data-theme="gpu"]) #root { background: #000; }
+html:has(.pp-root[data-theme="gpu"]) .pp-surround[data-frame="simulate916"] {
+  background:
+    radial-gradient(ellipse 55% 75% at 50% 50%, color-mix(in srgb, var(--c-glow) 9%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 40%, #1a1a1a 0%, #0d0d0d 55%, #000 100%);
+}
+html:has(.pp-root[data-theme="gpu"]) .pp-root[data-frame="simulate916"][data-letterbox="true"] {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 7px #000, 0 0 0 8px #333, 0 28px 90px rgba(0, 0, 0, 0.7), 0 0 160px color-mix(in srgb, var(--c-glow) 12%, transparent);
+}
+
+/* ------------------------------------------------------------------ buttons
+   Filled buttons (GRAB, START, PLAY AGAIN, accent actions) are flat brand green with black lettering;
+   secondary (soft) buttons are black with a white outline and white lettering. */
+.pp-root[data-theme="gpu"] .pp-btn {
+  --face: var(--g-green);
+  --edge: var(--g-green-deep);
+  color: #000;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: none;
+  background: var(--face);
+  box-shadow:
+    0 var(--depth) 0 var(--edge),
+    0 calc(var(--depth) + var(--u) * 8) calc(var(--u) * 18) var(--g-shadow),
+    inset 0 calc(var(--u) * 3) 0 rgba(255, 255, 255, 0.22);
+}
+.pp-root[data-theme="gpu"] .pp-btn:not(.round):not(.pp-grab) { border-radius: var(--g-radius); }
+.pp-root[data-theme="gpu"] .pp-btn:hover { filter: brightness(1.06); }
+.pp-root[data-theme="gpu"] .pp-btn:active, .pp-root[data-theme="gpu"] .pp-btn[data-pressed="true"] {
+  --face: var(--g-green-deep);
+  box-shadow: 0 calc(var(--u) * 2) 0 color-mix(in srgb, var(--g-green-deep) 70%, #000), 0 calc(var(--u) * 5) calc(var(--u) * 8) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-btn.accent, .pp-root[data-theme="gpu"] .pp-grab.start { --face: var(--g-green); --edge: var(--g-green-deep); }
+.pp-root[data-theme="gpu"] .pp-btn.soft {
+  --face: #000;
+  --edge: var(--g-700);
+  color: #fff;
+  box-shadow:
+    0 var(--depth) 0 var(--edge),
+    0 calc(var(--depth) + var(--u) * 8) calc(var(--u) * 18) var(--g-shadow),
+    inset 0 0 0 calc(var(--u) * 3) #fff;
+}
+.pp-root[data-theme="gpu"] .pp-btn.soft:active, .pp-root[data-theme="gpu"] .pp-btn.soft[data-pressed="true"] {
+  --face: var(--g-800);
+  box-shadow: 0 calc(var(--u) * 2) 0 var(--g-700), inset 0 0 0 calc(var(--u) * 3) var(--g-green);
+}
+.pp-root[data-theme="gpu"] .pp-btn:disabled, .pp-root[data-theme="gpu"] .pp-btn[aria-disabled="true"] { filter: grayscale(1) brightness(0.8) opacity(0.6); }
+/* Focus rings in brand green everywhere (keyboard users on a desk kiosk). */
+.pp-root[data-theme="gpu"] .pp-btn:focus-visible, .pp-root[data-theme="gpu"] .pp-cta:focus-visible { outline: calc(var(--u) * 5) solid var(--g-green); outline-offset: calc(var(--u) * 5); }
+.pp-root[data-theme="gpu"] :is(.pp-tab, .pp-card, .pp-seg button, .pp-toggle, .pp-input, .pp-select, .pp-textarea, .pp-range, .pp-momo, button.pp-chip, .pp-rotate):focus-visible { outline: 3px solid var(--g-green); outline-offset: 2px; }
+.pp-root[data-theme="gpu"] .pp-grab[data-busy="true"]::after { border-color: rgba(0, 0, 0, 0.25); border-top-color: #000; }
+
+/* ------------------------------------------------------------------ top bar */
+.pp-root[data-theme="gpu"] .pp-logo {
+  border-radius: var(--g-radius);
+  background: rgba(0, 0, 0, 0.86);
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * -5) 0 var(--g-green), 0 calc(var(--u) * 10) calc(var(--u) * 22) var(--g-shadow);
+  letter-spacing: 0.06em;
+}
+.pp-root[data-theme="gpu"] .pp-logo b { color: #fff; }
+.pp-root[data-theme="gpu"] .pp-logo i { color: var(--g-green); }
+/* The app mark in the palette: a black medallion with a green ring, a white claw and green prizes. */
+.pp-root[data-theme="gpu"] .pp-logo svg circle:first-of-type { fill: #000; stroke: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-logo svg path { stroke: #fff; }
+.pp-root[data-theme="gpu"] .pp-logo svg rect { fill: #fff; }
+.pp-root[data-theme="gpu"] .pp-logo svg circle:not(:first-of-type) { fill: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-chip {
+  border-radius: calc(var(--u) * 8);
+  background: rgba(0, 0, 0, 0.86);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 4) calc(var(--u) * 10) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-chip .dot { background: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-chip .dot[data-tone="warn"] { background: #fff; }
+.pp-root[data-theme="gpu"] .pp-chip .dot[data-tone="off"] { background: var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-chip .dot[data-tone="live"] { background: var(--g-green); box-shadow: 0 0 0 calc(var(--u) * 4) color-mix(in srgb, var(--c-glow) 30%, transparent); }
+
+/* ------------------------------------------------------------ control panel */
+.pp-root[data-theme="gpu"] .pp-panel.bar {
+  border-radius: calc(var(--u) * 18);
+  background: linear-gradient(180deg, var(--g-900), #000);
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 5) 0 var(--g-green), 0 calc(var(--u) * 24) calc(var(--u) * 44) rgba(0, 0, 0, 0.6);
+}
+.pp-root[data-theme="gpu"] .pp-panel.split .pp-cluster {
+  border-radius: calc(var(--u) * 18);
+  background: rgba(0, 0, 0, 0.82);
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 5) 0 var(--g-green), 0 calc(var(--u) * 20) calc(var(--u) * 36) rgba(0, 0, 0, 0.55);
+}
+.pp-root[data-theme="gpu"] .pp-status {
+  color: #fff;
+  border-radius: calc(var(--u) * 8);
+  background: rgba(0, 0, 0, 0.88);
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 4) calc(var(--u) * 14) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-panel.bar .pp-status { background: none; box-shadow: none; }
+.pp-root[data-theme="gpu"] .pp-status .timer { background: var(--g-green); color: #000; border-radius: calc(var(--u) * 6); }
+
+.pp-root[data-theme="gpu"] .pp-dpad .pp-btn {
+  --face: var(--g-800);
+  --edge: #000;
+  color: #fff;
+  box-shadow: 0 var(--depth) 0 var(--edge), 0 calc(var(--depth) + var(--u) * 6) calc(var(--u) * 14) var(--g-shadow), inset 0 0 0 calc(var(--u) * 2) var(--g-600);
+}
+.pp-root[data-theme="gpu"] .pp-dpad .pp-btn[data-pressed="true"], .pp-root[data-theme="gpu"] .pp-dpad .pp-btn:active { --face: var(--g-green); --edge: var(--g-green-deep); color: #000; }
+.pp-root[data-theme="gpu"] .pp-dpad .hub { background: radial-gradient(circle at 40% 35%, var(--g-600), var(--g-900)); box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-green), 0 calc(var(--u) * 3) calc(var(--u) * 6) var(--g-shadow); }
+
+/* -------------------------------------------------------------------- guide */
+.pp-root[data-theme="gpu"] .pp-momo { filter: drop-shadow(0 calc(var(--u) * 8) calc(var(--u) * 8) rgba(0, 0, 0, 0.5)); }
+.pp-root[data-theme="gpu"] .pp-bubble {
+  border-radius: calc(var(--u) * 12);
+  background: #000;
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 5) 0 var(--g-green), 0 calc(var(--u) * 14) calc(var(--u) * 24) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-bubble::after { background: #000; box-shadow: inset calc(var(--u) * 2) calc(var(--u) * -2) 0 var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-guide[data-align="right"] .pp-bubble::after { box-shadow: inset calc(var(--u) * -2) calc(var(--u) * 2) 0 var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-bubble small { color: var(--g-300); opacity: 1; }
+.pp-root[data-theme="gpu"][data-profile="mobile"] .pp-bubble { border-bottom-color: #000; }
+
+/* ------------------------------------------------------------------ overlays */
+.pp-root[data-theme="gpu"] .pp-demo {
+  border-radius: calc(var(--u) * 8);
+  background: #000;
+  color: var(--g-green);
+  box-shadow: inset 0 0 0 calc(var(--u) * 3) var(--g-green), 0 calc(var(--u) * 8) calc(var(--u) * 20) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-toast {
+  border-radius: calc(var(--u) * 10);
+  background: var(--g-900);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset calc(var(--u) * 8) 0 0 var(--g-green), 0 calc(var(--u) * 10) calc(var(--u) * 26) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-toast.miss { background: #000; color: #fff; }
+.pp-root[data-theme="gpu"] .pp-toast.miss small { color: var(--g-300); opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-rotate { border-radius: calc(var(--u) * 10); background: var(--g-900); color: #fff; box-shadow: inset 0 0 0 2px var(--g-green), 0 6px 18px var(--g-shadow); }
+
+/* Theme switch: a black curtain with a green light running along a progress rail. Styled by the
+   theme being switched to (data-to, src/ui/Hud.tsx), so going into this theme already looks like it.
+   Literal palette values here: while switching in, the custom properties still hold the old theme's. */
+.pp-curtain[data-to="gpu"], .pp-root[data-theme="gpu"] .pp-curtain {
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-family: var(--font-brand, "Inter Variable"), "ZCOOL KuaiLe", "M PLUS Rounded 1c", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.pp-curtain[data-to="gpu"]::before, .pp-root[data-theme="gpu"] .pp-curtain::before {
+  content: ""; position: absolute; left: 50%; top: calc(50% + var(--u) * 52); width: min(60%, calc(var(--u) * 640)); height: calc(var(--u) * 6);
+  transform: translateX(-50%); border-radius: 0;
+  background: linear-gradient(90deg, transparent 0 35%, #a4d65e 47%, #76b900 53%, transparent 65% 100%) 0 0 / 200% 100%, #262626;
+  animation: pp-g-rail 1.4s linear infinite;
+}
+
+/* --------------------------------------------------------------- win card
+   Palette only; the card's structure belongs to the win card / prize QR work. */
+.pp-root[data-theme="gpu"] .pp-result {
+  border-radius: calc(var(--u) * 22);
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c-glow) 22%, var(--g-900)) 0%, var(--g-900) 48%, #000 100%);
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 6) 0 var(--g-green), 0 calc(var(--u) * 30) calc(var(--u) * 60) rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+.pp-root[data-theme="gpu"] .pp-result h2, .pp-root[data-theme="gpu"] .pp-breakdown .total { color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-breakdown { color: #fff; }
+.pp-root[data-theme="gpu"] .pp-breakdown .total { border-top-color: var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-result .portrait::before { background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c-glow) 34%, transparent) 0 12deg, transparent 12deg 24deg); }
+.pp-root[data-theme="gpu"] .pp-result .portrait img { filter: drop-shadow(0 calc(var(--u) * 14) calc(var(--u) * 12) rgba(0, 0, 0, 0.6)); }
+.pp-root[data-theme="gpu"] .pp-badge-new { background: var(--g-green); color: #000; border-radius: calc(var(--u) * 6); box-shadow: 0 calc(var(--u) * 5) 0 var(--g-green-deep); }
+.pp-root[data-theme="gpu"] .pp-newbest {
+  border-radius: calc(var(--u) * 6);
+  background: var(--g-green);
+  color: #000;
+  text-shadow: none;
+  box-shadow: 0 calc(var(--u) * 6) 0 var(--g-green-deep), 0 0 calc(var(--u) * 28) color-mix(in srgb, var(--c-glow) 60%, transparent);
+}
+
+/* ------------------------------------------------------------------- dialogs */
+.pp-root[data-theme="gpu"] .pp-backdrop { background: rgba(0, 0, 0, 0.62); }
+.pp-root[data-theme="gpu"] .pp-modal {
+  border-radius: calc(var(--u) * 16);
+  background: var(--g-900);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 36) calc(var(--u) * 80) rgba(0, 0, 0, 0.7);
+}
+.pp-root[data-theme="gpu"][data-profile="mobile"] .pp-modal { border-radius: 10px; }
+.pp-root[data-theme="gpu"] .pp-modal header { background: #000; box-shadow: inset 0 calc(var(--u) * -4) 0 var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-modal header h1 { color: #fff; letter-spacing: 0.01em; }
+.pp-root[data-theme="gpu"] .pp-modal footer { background: #000; border-top: calc(var(--u) * 2) solid var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-modal footer .note { color: var(--g-300); opacity: 1; }
+
+.pp-root[data-theme="gpu"] .pp-card {
+  border-radius: calc(var(--u) * 12);
+  background: var(--g-800);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-600);
+}
+.pp-root[data-theme="gpu"] .pp-card[aria-pressed="true"], .pp-root[data-theme="gpu"] .pp-card[data-selected="true"] { box-shadow: inset 0 0 0 calc(var(--u) * 4) var(--g-green), 0 0 calc(var(--u) * 18) color-mix(in srgb, var(--c-glow) 28%, transparent); }
+.pp-root[data-theme="gpu"] .pp-card strong { color: #fff; }
+.pp-root[data-theme="gpu"] .pp-card[data-selected="true"] strong, .pp-root[data-theme="gpu"] .pp-card[aria-pressed="true"] strong { color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-card span { color: var(--g-200); opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-card .tag { background: var(--g-green); color: #000; border-radius: calc(var(--u) * 6); }
+.pp-root[data-theme="gpu"] .pp-swatches i { box-shadow: inset 0 0 0 calc(var(--u) * 2) rgba(255, 255, 255, 0.4); }
+
+.pp-root[data-theme="gpu"] .pp-toy { border-radius: calc(var(--u) * 12); background: var(--g-800); color: #fff; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-toy small { color: var(--g-200); opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-toy .ph { background: radial-gradient(circle at 40% 35%, var(--g-600), var(--g-900)); }
+/* Not caught yet: a light silhouette (a black one disappears on the dark card). */
+.pp-root[data-theme="gpu"] .pp-toy[data-locked="true"] img { filter: brightness(0) invert(1) opacity(0.2); }
+.pp-root[data-theme="gpu"] .pp-toy .count { background: var(--g-green); color: #000; }
+
+.pp-root[data-theme="gpu"] .pp-steps li::before { background: var(--g-green); color: #000; box-shadow: 0 calc(var(--u) * 4) 0 var(--g-green-deep); }
+.pp-root[data-theme="gpu"] .pp-note { border-radius: calc(var(--u) * 10); background: var(--g-800); color: #fff; box-shadow: inset calc(var(--u) * 6) 0 0 var(--g-green); padding-left: calc(var(--u) * 26); }
+.pp-root[data-theme="gpu"] .pp-note.warn { box-shadow: inset calc(var(--u) * 6) 0 0 #fff; }
+
+/* ----------------------------------------------------------------- settings */
+.pp-root[data-theme="gpu"] .pp-tab { border-radius: calc(var(--u) * 10); color: #fff; }
+.pp-root[data-theme="gpu"] .pp-tab:hover { background: var(--g-800); }
+.pp-root[data-theme="gpu"] .pp-tab[aria-selected="true"] { background: var(--g-green); color: #000; box-shadow: 0 calc(var(--u) * 4) 0 var(--g-green-deep); }
+.pp-root[data-theme="gpu"] .pp-sec { color: var(--g-green); letter-spacing: 0.02em; }
+.pp-root[data-theme="gpu"] .pp-sec::after { border-radius: 0; height: calc(var(--u) * 2); background: var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-field { border-bottom-color: var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-field .hint { color: var(--g-300); opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-field .later { background: var(--g-700); color: #fff; }
+.pp-root[data-theme="gpu"] .pp-range { accent-color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-range::-webkit-slider-runnable-track { background: var(--g-700); box-shadow: inset 0 0 0 1px var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-range::-moz-range-track { background: var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-range::-webkit-slider-thumb { background: var(--g-green); box-shadow: 0 0 0 calc(var(--u) * 3) #000, 0 0 0 calc(var(--u) * 5) #fff; }
+.pp-root[data-theme="gpu"] .pp-range::-moz-range-thumb { background: var(--g-green); box-shadow: 0 0 0 calc(var(--u) * 3) #000, 0 0 0 calc(var(--u) * 5) #fff; }
+.pp-root[data-theme="gpu"] .pp-toggle { background: var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-toggle[aria-checked="true"] { background: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-seg button { border-radius: calc(var(--u) * 8); background: var(--g-800); color: #fff; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-600); }
+.pp-root[data-theme="gpu"] .pp-seg button[aria-pressed="true"] { background: var(--g-green); color: #000; box-shadow: 0 calc(var(--u) * 4) 0 var(--g-green-deep); }
+.pp-root[data-theme="gpu"] :is(.pp-input, .pp-select, .pp-textarea) { border-radius: calc(var(--u) * 8); background: #000; color: #fff; border-color: var(--g-600); }
+.pp-root[data-theme="gpu"] :is(.pp-input, .pp-select, .pp-textarea):focus { border-color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-kv { border-radius: calc(var(--u) * 10); background: #000; color: #fff; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-kv dt { color: var(--g-300); opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-preview { background: #000; color: var(--g-300); box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-log { background: #000; color: var(--g-200); box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-layout-map { background: var(--g-800); }
+.pp-root[data-theme="gpu"] .pp-layout-map .zone { background: color-mix(in srgb, var(--g-green) 24%, transparent); border-color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-layout-map .pane { background: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-layout-map .floor { background: #fff; }
+
+/* Brand status block (Settings → Themes & Toys, src/ui/settings/tabThemes.tsx). */
+.pp-brand-status { display: flex; align-items: center; gap: calc(var(--u) * 16); flex-wrap: wrap; }
+.pp-brand-status .pp-brand-logo { --logo-h: max(20px, calc(var(--u) * 44)); }
+.pp-brand-status .pp-kv { flex: 1 1 calc(var(--u) * 380); margin: calc(var(--u) * 8) 0; }
+.pp-brand-status dd[data-state="placeholder"], .pp-brand-status dd[data-state="missing"], .pp-brand-status dd[data-state="fallback"] { overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- score HUD */
+.pp-root[data-theme="gpu"] .pp-score {
+  border-radius: calc(var(--u) * 12);
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * -5) 0 var(--g-green), 0 calc(var(--u) * 14) calc(var(--u) * 26) var(--g-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-score[data-stacked="true"] { border-radius: calc(var(--u) * 16); }
+.pp-root[data-theme="gpu"] .pp-score[data-demo="true"] { background: rgba(0, 0, 0, 0.78); }
+.pp-root[data-theme="gpu"] .pp-score .label { color: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-score .value { color: #fff; text-shadow: none; }
+.pp-root[data-theme="gpu"] .pp-score .best { color: var(--g-300); opacity: 1; }
+.pp-root[data-theme="gpu"] :is(.pp-score, .pp-score-pop) .tag { background: var(--g-green); color: #000; border-radius: calc(var(--u) * 6); }
+.pp-root[data-theme="gpu"] .pp-combo {
+  border-radius: calc(var(--u) * 8);
+  background: #000;
+  color: #fff;
+  text-shadow: none;
+  box-shadow: inset 0 0 0 calc(var(--u) * 3) var(--g-green), 0 0 calc(var(--u) * 16) color-mix(in srgb, var(--c-glow) 55%, transparent);
+}
+.pp-root[data-theme="gpu"] .pp-combo[data-level="2"] { box-shadow: inset 0 0 0 calc(var(--u) * 3) var(--g-green), 0 0 calc(var(--u) * 26) color-mix(in srgb, var(--c-glow) 75%, transparent); }
+.pp-root[data-theme="gpu"] .pp-combo[data-level="3"] { background: var(--g-green); color: #000; box-shadow: inset 0 0 0 calc(var(--u) * 3) #fff, 0 0 calc(var(--u) * 36) var(--c-glow); }
+.pp-root[data-theme="gpu"] .pp-combo .flame { background: radial-gradient(circle at 50% 78%, #fff 0 18%, var(--c-glow) 38%, var(--g-green) 62%, transparent 74%); filter: drop-shadow(0 0 calc(var(--u) * 6) var(--c-glow)); }
+.pp-root[data-theme="gpu"] .pp-combo[data-level="3"] .flame { background: radial-gradient(circle at 50% 78%, #fff 0 22%, #000 40%, rgba(0, 0, 0, 0) 74%); filter: none; }
+/* Floating points: white digits with a black outline and a green light behind them; the tiers are
+   told apart by their label and the strength of the light, not by other hues. */
+.pp-root[data-theme="gpu"] .pp-score-pop b { color: #fff; -webkit-text-stroke-color: #000; text-shadow: 0 calc(var(--u) * 6) 0 #000, 0 0 calc(var(--u) * 26) color-mix(in srgb, var(--c-glow) 70%, transparent); }
+.pp-root[data-theme="gpu"] .pp-score-pop .tier { background: rgba(0, 0, 0, 0.86); color: #fff; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-600); border-radius: calc(var(--u) * 6); }
+.pp-root[data-theme="gpu"] .pp-score-pop .combo { color: #fff; text-shadow: 0 calc(var(--u) * 3) 0 #000, 0 0 calc(var(--u) * 16) var(--c-glow); }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="rare"] b { color: #fff; -webkit-text-stroke-color: var(--g-green-deep); }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="rare"] .tier { background: #000; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="epic"] b { color: #fff; -webkit-text-stroke-color: var(--g-green-deep); text-shadow: 0 calc(var(--u) * 6) 0 #000, 0 0 calc(var(--u) * 34) var(--c-glow); }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="epic"] .tier { background: var(--g-green); color: #000; box-shadow: none; }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="legendary"] b { color: var(--g-green); -webkit-text-stroke-color: #000; text-shadow: 0 calc(var(--u) * 6) 0 #000, 0 0 calc(var(--u) * 44) var(--c-glow); }
+.pp-root[data-theme="gpu"] .pp-score-pop[data-tier="legendary"] .tier { background: #fff; color: #000; box-shadow: 0 0 calc(var(--u) * 20) var(--c-glow); }
+.pp-root[data-theme="gpu"] .pp-tier { background: var(--g-700); color: #fff; border-radius: calc(var(--u) * 6); }
+.pp-root[data-theme="gpu"] .pp-tier[data-tier="rare"] { background: #000; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-tier[data-tier="epic"] { background: var(--g-green); color: #000; }
+.pp-root[data-theme="gpu"] .pp-tier[data-tier="legendary"] { background: #fff; color: #000; box-shadow: 0 0 calc(var(--u) * 16) var(--c-glow); }
+
+/* ------------------------------------------------------------------ attract
+   The call to action: brand green with black lettering inside a white rim; a light band runs
+   across it, white rings pulse out with a green glow. The event logo sits above it on its plate. */
+.pp-root[data-theme="gpu"] .pp-cta {
+  --face-a: var(--g-green);
+  --face-b: var(--g-green);
+  --face-c: var(--c-glow);
+  border-radius: calc(var(--u) * 20);
+  border-color: #fff;
+  color: #000;
+  text-shadow: none;
+  box-shadow:
+    0 calc(var(--u) * 12) 0 var(--g-green-deep),
+    0 calc(var(--u) * 30) calc(var(--u) * 60) rgba(0, 0, 0, 0.6),
+    0 0 calc(var(--u) * 60) color-mix(in srgb, var(--c-glow) 70%, transparent);
+}
+.pp-root[data-theme="gpu"] .pp-cta:active { box-shadow: 0 calc(var(--u) * 4) 0 var(--g-green-deep), 0 0 calc(var(--u) * 50) color-mix(in srgb, var(--c-glow) 70%, transparent); }
+.pp-root[data-theme="gpu"] .pp-cta .title { font-weight: 800; letter-spacing: 0.03em; text-shadow: none; }
+.pp-root[data-theme="gpu"] .pp-cta .sub { font-weight: 600; text-shadow: none; opacity: 1; }
+.pp-root[data-theme="gpu"] .pp-cta .shine::before { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent); }
+.pp-root[data-theme="gpu"] .pp-cta-box .pp-cta-ring { border-radius: calc(var(--u) * 20); border-color: #fff; box-shadow: 0 0 calc(var(--u) * 30) color-mix(in srgb, var(--c-glow) 80%, transparent), inset 0 0 calc(var(--u) * 20) color-mix(in srgb, var(--c-glow) 55%, transparent); }
+.pp-root[data-theme="gpu"] .pp-cta .spark { filter: drop-shadow(0 0 calc(var(--u) * 6) var(--c-glow)); }
+.pp-root[data-theme="gpu"] .pp-cta-hand svg { filter: drop-shadow(0 calc(var(--u) * 6) calc(var(--u) * 6) rgba(0, 0, 0, 0.6)); }
+.pp-root[data-theme="gpu"] .pp-cta-hand svg path { stroke: #000; }
+.pp-root[data-theme="gpu"] .pp-cta-keys { border-radius: calc(var(--u) * 8); background: rgba(0, 0, 0, 0.82); box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-600); }
+
+/* Event logo and welcome headline above the call to action (src/ui/AttractOverlay.tsx). */
+.pp-attract-brand {
+  position: absolute; left: 50%; width: max-content; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center;
+  gap: max(6px, calc(var(--u) * 10)); pointer-events: none; text-align: center;
+}
+.pp-attract-welcome {
+  margin: 0; font-family: var(--font-display); font-weight: 800; font-size: var(--headline, 30px); line-height: 1.2; letter-spacing: 0.01em; white-space: nowrap;
+  color: #fff; text-shadow: 0 2px 0 #000, 0 0 calc(var(--u) * 18) rgba(0, 0, 0, 0.9), 0 0 calc(var(--u) * 36) color-mix(in srgb, var(--c-glow) 45%, transparent);
+  animation: pp-g-rise 600ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* A kit logo (src/ui/BrandLogo.tsx): uniform scale inside a box of the slot's aspect, the clear space
+   as padding, on a black plate. Never filtered, tinted or animated: only its surroundings move. */
+.pp-brand-logo {
+  --logo-h: 48px;
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: content-box;
+  width: calc(var(--logo-h) * var(--logo-aspect, 1)); height: var(--logo-h);
+  padding: calc(var(--logo-h) * var(--logo-clear-k, 0.5));
+}
+.pp-brand-logo[data-plate="true"] { background: #000; border-radius: calc(var(--logo-h) * 0.12); box-shadow: 0 0 0 1px #333, 0 calc(var(--logo-h) * 0.2) calc(var(--logo-h) * 0.6) rgba(0, 0, 0, 0.6); }
+.pp-brand-logo img { display: block; width: 100%; height: 100%; object-fit: contain; animation: none !important; transition: none !important; filter: none !important; }
+.pp-brand-logo .slot { display: block; width: 100%; height: 100%; }
+.pp-brand-logo[data-ready="false"] { visibility: hidden; }
+
+/* ------------------------------------------------------------------ boot
+   Loading screen when the starting theme is the kit's (src/ui/BootScreen.tsx): black, the event logo
+   with its clear space, the product name, a green progress bar with a light sweep and a slow field
+   of light behind everything. The logo itself does not move. */
+.pp-boot[data-brand] { background: #000; color: #fff; font-family: var(--font-display); }
+.pp-boot-inner { position: relative; display: flex; flex-direction: column; align-items: center; }
+.pp-boot-field {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 46%, color-mix(in srgb, var(--c-glow) 16%, transparent), transparent 70%),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--c-primary) 7%, transparent) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--c-primary) 5%, transparent) 0 1px, transparent 1px 64px);
+}
+.pp-boot-field::before {
+  content: ""; position: absolute; left: -30%; right: -30%; top: 0; height: 40%;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--c-glow) 10%, transparent) 50%, transparent);
+  animation: pp-g-scan 4.8s ease-in-out infinite;
+}
+.pp-boot-mark { display: flex; flex-direction: column; align-items: center; }
+.pp-boot-mark .pp-brand-logo { --logo-h: clamp(56px, 13vmin, 170px); }
+.pp-boot .pp-boot-product { margin: 0; font-weight: 800; letter-spacing: 0.32em; font-size: clamp(13px, 2.2vmin, 24px); color: #fff; padding-left: 0.32em; }
+.pp-boot .pp-boot-product i { font-style: normal; color: var(--c-primary); }
+.pp-boot[data-brand] .bar {
+  height: 8px; border-radius: 0; margin: clamp(22px, 5vmin, 54px) auto 14px; background: #262626; box-shadow: inset 0 0 0 1px #333; position: relative;
+}
+.pp-boot[data-brand] .bar i {
+  border-radius: 0; position: relative; overflow: hidden;
+  background: var(--c-primary); box-shadow: 0 0 18px color-mix(in srgb, var(--c-glow) 70%, transparent);
+}
+.pp-boot[data-brand] .bar i::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 120px; left: -120px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: pp-g-sweep 1.6s ease-in-out infinite;
+}
+.pp-boot[data-brand] .pp-boot-inner > p { color: #ccc; font-weight: 600; letter-spacing: 0.02em; }
+.pp-boot[data-brand] .error p:first-child { color: #fff; }
+.pp-root[data-frame="simulate916"] .pp-boot-mark .pp-brand-logo { --logo-h: clamp(56px, 13cqmin, 170px); }
+.pp-root[data-frame="simulate916"] .pp-boot .pp-boot-product { font-size: clamp(13px, 2.2cqmin, 24px); }
+.pp-root[data-frame="simulate916"] .pp-boot[data-brand] .bar { margin-top: clamp(22px, 5cqmin, 54px); }
+
+/* -------------------------------------------------------------- calibration */
+.pp-root[data-theme="gpu"] .pp-cal-card { border-radius: calc(var(--cal-font) * 0.7); background: rgba(0, 0, 0, 0.84); color: #fff; box-shadow: inset 0 0 0 2px #333, inset 0 4px 0 var(--g-green), 0 calc(var(--cal-font) * 0.4) calc(var(--cal-font) * 1.4) rgba(0, 0, 0, 0.5); }
+.pp-root[data-theme="gpu"] .pp-cal-ring .track { fill: rgba(26, 26, 26, 0.9); stroke: var(--g-700); }
+.pp-root[data-theme="gpu"] .pp-cal-ring .arc { stroke: var(--g-green); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c-glow) 80%, transparent)); }
+.pp-root[data-theme="gpu"] .pp-cal-ring .arc.capture { stroke: #fff; }
+.pp-root[data-theme="gpu"] .pp-cal-number { color: #fff; text-shadow: 0 0 calc(var(--cal-ring) * 0.08) color-mix(in srgb, var(--c-glow) 70%, transparent); }
+.pp-root[data-theme="gpu"] .pp-cal-eye path { fill: #000; stroke: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-cal-eye circle { fill: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-cal-face .dot { background: var(--g-600); box-shadow: 0 0 0 0.15em rgba(255, 255, 255, 0.25); }
+.pp-root[data-theme="gpu"] .pp-cal-face[data-face="found"] .dot { background: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-cal-face[data-face="searching"] .dot { background: #fff; }
+.pp-root[data-theme="gpu"] .pp-cal-icon circle { fill: rgba(0, 0, 0, 0.7); }
+.pp-root[data-theme="gpu"] .pp-cal-icon.tick circle, .pp-root[data-theme="gpu"] .pp-cal-icon.tick path { stroke: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-cal-icon.cross circle { stroke: var(--g-300); }
+.pp-root[data-theme="gpu"] .pp-cal-icon.cross path { stroke: #fff; }
+.pp-root[data-theme="gpu"] .pp-cal-icon.rotate rect, .pp-root[data-theme="gpu"] .pp-cal-icon.rotate path { stroke: #fff; }
+.pp-root[data-theme="gpu"] .pp-cal-notice { border-radius: 10px; background: var(--g-900); color: #fff; box-shadow: inset 0 0 0 2px #333, 0 0.4em 1.2em rgba(0, 0, 0, 0.45); }
+.pp-root[data-theme="gpu"] .pp-cal-notice strong { color: var(--g-green); }
+
+/* -------------------------------------------------------------- diagnostics */
+.pp-root[data-theme="gpu"] .pp-perf { border-radius: 8px; background: rgba(0, 0, 0, 0.86); color: #eee; box-shadow: inset 0 0 0 1px #333; }
+.pp-root[data-theme="gpu"] .pp-guides i { border-top-color: rgba(118, 185, 0, 0.9); }
+.pp-root[data-theme="gpu"] .pp-guides i.anchor { border-top-color: rgba(255, 255, 255, 0.9); }
+.pp-root[data-theme="gpu"] .pp-guides i.floor { border-top-color: rgba(179, 179, 179, 0.9); }
+
+@keyframes pp-g-rail { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+@keyframes pp-g-sweep { 0% { left: -120px; } 70%, 100% { left: 100%; } }
+@keyframes pp-g-scan { 0%, 100% { transform: translateY(-40%); opacity: 0.4; } 50% { transform: translateY(190%); opacity: 1; } }
+@keyframes pp-g-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Reduced motion: no sweeps, scans or rises (the global rule in hud.css shortens the rest). */
+.pp-root[data-reduced="true"] .pp-attract-welcome { animation: none !important; }
+.pp-root[data-reduced="true"] .pp-boot-field::before { animation: none !important; opacity: 0.6; transform: translateY(70%); }
+.pp-root[data-reduced="true"] .pp-boot[data-brand] .bar i::after,
+.pp-root[data-reduced="true"] .pp-curtain::before { animation: none !important; display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pp-boot-field::before, .pp-attract-welcome, .pp-boot[data-brand] .bar i::after, .pp-curtain[data-to="gpu"]::before { animation: none !important; }
+}
