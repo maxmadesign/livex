@@ -100,7 +100,7 @@ export const en: LangBank = {
       all: [
         ['Missed that one. Try moving the claw a bit more {dir} next time.', 'think'],
         ['Nothing there this time. The nearest plush was a little {dir}.', 'think'],
-        ["Empty claw! Slide a little {dir} and you'll be right above {near}.", 'think'],
+        ["Empty claw! Slide a little {dir} and you'll be directly above {near}.", 'think'],
         ['Not quite lined up. Go a bit further {dir} before you drop.', 'think'],
         ['The claw landed in a gap. Aim slightly {dir} to cover a plush.', 'oops'],
       ],

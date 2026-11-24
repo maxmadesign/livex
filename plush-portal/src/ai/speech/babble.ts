@@ -29,7 +29,8 @@ export function createBabbleSpeech(audio: AudioPort | null): SpeechProvider {
         const source = context.createBufferSource();
         source.buffer = buffer;
         const gain = context.createGain();
-        gain.gain.value = 0.9;
+        // The tone is dense; keep it a little under the level of a recorded voice.
+        gain.gain.value = 0.8;
         source.connect(gain);
         gain.connect(input);
 

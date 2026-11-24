@@ -83,8 +83,9 @@ export interface PhysicsOptions {
 }
 
 const TOY_GROUPS = groups(GROUP.TOY, GROUP.STATIC | GROUP.TOY | GROUP.CLAW | GROUP.SENSOR);
-const STATIC_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.CLAW);
-const SENSOR_GROUPS = groups(GROUP.SENSOR, GROUP.TOY);
+const TOY_SOFT_GROUPS = groups(GROUP.TOY_SOFT, GROUP.STATIC | GROUP.CLAW | GROUP.SENSOR);
+const STATIC_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.TOY_SOFT | GROUP.CLAW);
+const SENSOR_GROUPS = groups(GROUP.SENSOR, GROUP.TOY | GROUP.TOY_SOFT);
 const NO_GROUPS = groups(GROUP.NONE, GROUP.NONE);
 
 /**
@@ -318,7 +319,7 @@ export class PhysicsWorld {
         .setMass(Math.max(1e-4, totalMass * proxy.massFraction))
         .setFriction(0.9 * this.options.toyFriction)
         .setRestitution(0.04)
-        .setCollisionGroups(TOY_GROUPS)
+        .setCollisionGroups(proxy.role === 'appendage' ? TOY_SOFT_GROUPS : TOY_GROUPS)
         .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
       const collider = this.world.createCollider(desc, body);
       const entry: ToyCollider = { collider, part: proxy.part, role: proxy.role };

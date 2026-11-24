@@ -370,7 +370,7 @@ export const settingsSpec = {
     current: en('sakura', THEME_IDS, 'rebuild'),
     /** Character type ids the player switched off. */
     disabledToys: strList(48, 64, 'rebuild'),
-    toyScale: num(1, 0.8, 1.25, 0.01, 'rebuild'),
+    toyScale: num(0.92, 0.8, 1.25, 0.01, 'rebuild'),
     /** 0 = one tidy layer, 1 = a tall pile. */
     stackDensity: num(0.2, 0, 1, 0.05, 'rebuild'),
     customModels: {

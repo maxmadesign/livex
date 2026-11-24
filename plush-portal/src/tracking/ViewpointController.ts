@@ -69,6 +69,8 @@ export class ViewpointController {
   private sampleIntervalMs = 60;
   private readonly velocity: Vec3 = [0, 0, 0];
   private readonly follower: Vec3 = [0, 0, 0];
+  /** Target of the previous render frame (the follower integrates a linearly moving target exactly). */
+  private readonly prevTarget: Vec3 = [0, 0, 0];
 
   private readonly holdFrom: Vec3 = [0, 0, 0];
   private lossStartMs = 0;
@@ -136,6 +138,7 @@ export class ViewpointController {
     this.t1 = timeMs;
     this.velocity[0] = this.velocity[1] = this.velocity[2] = 0;
     copy(this.follower, eye);
+    copy(this.prevTarget, eye);
     this.mode = 'reacquire';
   }
 
@@ -191,7 +194,7 @@ export class ViewpointController {
     }
 
     if (this.test) {
-      this.approach(this.out, this.test, SETTLE_TAU * 0.5, dt);
+      this.approach(this.out, this.test, SETTLE_TAU, dt);
       copy(out, this.out);
       return 'test';
     }
@@ -215,16 +218,25 @@ export class ViewpointController {
         const tx = this.p1[0] + this.velocity[0]! * k;
         const ty = this.p1[1] + this.velocity[1]! * k;
         const tz = this.p1[2] + this.velocity[2]! * k;
-        if (this.smoothMs > 0.5) {
-          const a = 1 - Math.exp(-dt / (this.smoothMs / 1000));
-          this.follower[0] += (tx - this.follower[0]) * a;
-          this.follower[1] += (ty - this.follower[1]) * a;
-          this.follower[2] += (tz - this.follower[2]) * a;
-        } else {
+        if (this.smoothMs > 0.5 && dt > 0) {
+          // First-order follower, integrated exactly for a target that moved linearly during the
+          // frame. Unlike the usual `y += (t - y) * alpha` this has the same lag at any frame rate.
+          const tau = this.smoothMs / 1000;
+          const decay = Math.exp(-dt / tau);
+          const vx = ((tx - this.prevTarget[0]) / dt) * tau;
+          const vy = ((ty - this.prevTarget[1]) / dt) * tau;
+          const vz = ((tz - this.prevTarget[2]) / dt) * tau;
+          this.follower[0] = tx - vx + (this.follower[0] - this.prevTarget[0] + vx) * decay;
+          this.follower[1] = ty - vy + (this.follower[1] - this.prevTarget[1] + vy) * decay;
+          this.follower[2] = tz - vz + (this.follower[2] - this.prevTarget[2] + vz) * decay;
+        } else if (this.smoothMs <= 0.5) {
           this.follower[0] = tx;
           this.follower[1] = ty;
           this.follower[2] = tz;
         }
+        this.prevTarget[0] = tx;
+        this.prevTarget[1] = ty;
+        this.prevTarget[2] = tz;
         if (this.mode === 'reacquire') {
           const w = smooth((now - this.blendStartMs) / this.blendDurationMs);
           this.out[0] = this.blendFrom[0] + (this.follower[0] - this.blendFrom[0]) * w;

@@ -133,6 +133,7 @@ export function arpEvents(
     pattern?: string;
     durBeats?: number;
     accentEvery?: number;
+    rootless?: boolean;
   },
 ): NoteEvent[] {
   const out: NoteEvent[] = [];
@@ -140,7 +141,7 @@ export function arpEvents(
   const baseVel = opts.vel ?? 0.6;
   const levels = opts.pattern ? [...opts.pattern].filter((c) => c !== '|' && c !== ' ') : null;
   for (const s of spans) {
-    const voicing = voiceChord(s.chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev });
+    const voicing = voiceChord(s.chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev, rootless: opts.rootless });
     prev = voicing;
     const steps = Math.round(s.beats / opts.stepBeats);
     const offset = Math.round(s.beat / opts.stepBeats);
@@ -170,7 +171,7 @@ export function arpEvents(
 export function stabEvents(
   spans: ChordSpan[],
   pattern: string,
-  opts: { stepBeats: number; lo: number; hi: number; count: number; vel?: number; durBeats: number; beatsPerBar: number; startBar: number; bars: number },
+  opts: { stepBeats: number; lo: number; hi: number; count: number; vel?: number; durBeats: number; beatsPerBar: number; startBar: number; bars: number; rootless?: boolean },
 ): NoteEvent[] {
   const out: NoteEvent[] = [];
   const hits = stepPattern(pattern, opts.stepBeats);
@@ -182,7 +183,7 @@ export function stabEvents(
     for (const h of hits) {
       const chord = chordAt(spans, barStart + h.beat);
       if (chord.symbol !== prevSymbol) {
-        voicing = voiceChord(chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev });
+        voicing = voiceChord(chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev, rootless: opts.rootless });
         prev = voicing;
         prevSymbol = chord.symbol;
       }
@@ -197,11 +198,11 @@ export function padSpans(
   stem: Stem,
   tl: Timeline,
   spans: ChordSpan[],
-  opts: { lo: number; hi: number; count: number; vel: number; gain: number; pad: PadOptions; rng: Rng; overlapBeats?: number },
+  opts: { lo: number; hi: number; count: number; vel: number; gain: number; pad: PadOptions; rng: Rng; overlapBeats?: number; rootless?: boolean },
 ): void {
   let prev: number[] | null = null;
   for (const s of mergeSpans(spans)) {
-    const voicing = voiceChord(s.chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev });
+    const voicing = voiceChord(s.chord, { lo: opts.lo, hi: opts.hi, count: opts.count, prev, rootless: opts.rootless });
     prev = voicing;
     const dur = tl.seconds(s.beats + (opts.overlapBeats ?? 0));
     // Continue the slow filter sweep across chords instead of restarting it.

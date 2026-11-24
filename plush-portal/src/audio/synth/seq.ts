@@ -89,8 +89,14 @@ export function pcAbove(pc: number, lo: number): number {
  * Close-position voicing with `count` notes. When a previous voicing is given
  * the inversion with the least total movement is chosen (smooth voice leading).
  */
-export function voiceChord(chord: Chord, opts: { lo: number; hi: number; count: number; prev?: number[] | null }): number[] {
-  const tones = chordTones(chord, opts.lo, opts.hi + 12);
+export function voiceChord(
+  chord: Chord,
+  opts: { lo: number; hi: number; count: number; prev?: number[] | null; rootless?: boolean },
+): number[] {
+  let tones = chordTones(chord, opts.lo, opts.hi + 12);
+  // Rootless voicing of four-note chords: the bass already plays the root, and
+  // leaving it out avoids the root/seventh semitone rub in close position.
+  if (opts.rootless && chord.pcs.length >= 4) tones = tones.filter((n) => ((n % 12) + 12) % 12 !== chord.root);
   const candidates: number[][] = [];
   for (let i = 0; i + opts.count <= tones.length; i++) {
     const v = tones.slice(i, i + opts.count);
@@ -98,15 +104,20 @@ export function voiceChord(chord: Chord, opts: { lo: number; hi: number; count: 
     candidates.push(v);
   }
   if (candidates.length === 0) return tones.slice(0, opts.count);
+  // Neighbouring semitones inside a close voicing sound rough; prefer inversions without them.
+  const rub = (v: number[]) => {
+    let r = 0;
+    for (let i = 1; i < v.length; i++) if (v[i]! - v[i - 1]! === 1) r += 100;
+    return r;
+  };
   if (!opts.prev || opts.prev.length === 0) {
     const mid = (opts.lo + opts.hi) / 2;
-    return candidates.reduce((best, v) =>
-      Math.abs(v[0]! + v[v.length - 1]! - 2 * mid) < Math.abs(best[0]! + best[best.length - 1]! - 2 * mid) ? v : best,
-    );
+    const centre = (v: number[]) => Math.abs(v[0]! + v[v.length - 1]! - 2 * mid) + rub(v);
+    return candidates.reduce((best, v) => (centre(v) < centre(best) ? v : best));
   }
   const prev = opts.prev;
   const cost = (v: number[]) => {
-    let c = 0;
+    let c = rub(v);
     for (let i = 0; i < v.length; i++) c += Math.abs(v[i]! - prev[Math.min(i, prev.length - 1)]!);
     return c;
   };

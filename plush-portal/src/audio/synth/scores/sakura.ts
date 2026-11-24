@@ -37,9 +37,9 @@ const MEL_A = [
   'f5:1.5 r:0.5 g5:0.5 a5:0.5 c6:0.5 eb6:0.5',
 ];
 const MEL_A2 = [
-  'd6:0.5 c6:0.5 a5:0.5 f5:0.5 a5:1 r:1',
+  'd6:0.5 c6:0.5 a5:0.75 f5:0.25 a5:1 r:1',
   'g5:0.5 a5:0.5 c6:0.5 g5:0.5 e5:0.5 g5:0.5 c6:1',
-  'c6:0.5 a5:0.5 g5:0.5 e5:0.5 g5:1 r:1',
+  'c6:0.5 a5:0.5 g5:0.75 e5:0.25 g5:1 r:1',
   'f5:0.5 g5:0.5 a5:0.5 c6:0.5 d6:1 f6:1!',
   'g6:1! f6:0.5 d6:0.5 bb5:1 d6:1',
   'e6:1 d6:0.5 c6:0.5 bb5:0.5 g5:0.5 e5:1',
@@ -57,9 +57,9 @@ const MEL_B = [
   'g5:0.5 bb5:0.5 eb6:1 c6:0.5 eb6:0.5 f6:0.5 eb6:0.5',
 ];
 const MEL_A3 = [
-  'd6:0.5 c6:0.5 a5:0.5 f5:0.5 a5:1 r:1',
-  'g5:0.5 a5:0.5 c6:0.5 g5:0.5 e5:1 r:1',
-  'c6:0.5 a5:0.5 g5:0.5 e5:0.5 g5:1 r:1',
+  'd6:0.5 c6:0.5 a5:0.75 f5:0.25 a5:1 r:1',
+  'g5:0.5 a5:0.5 c6:0.75 g5:0.25 e5:1 r:1',
+  'c6:0.5 a5:0.5 g5:0.75 e5:0.25 g5:1 r:1',
   'f5:0.5 g5:0.5 a5:0.5 c6:0.5 d6:1.5! r:0.5',
   'd6:0.5 c6:0.5 a5:0.5 f5:0.5 a5:1 c6:0.5 d6:0.5',
   'e6:1! d6:0.5 c6:0.5 g5:0.5 c6:0.5 e6:1',
@@ -158,7 +158,7 @@ export function renderSakura(): MixResult {
 
   /* -------------------------------------------------------- chord plucks */
   const kawaii = memoRenderer((f, d, v) => softPluck(SOFT_PLUCKS.kawaii, f, d, v));
-  const stabOpts = { stepBeats: 0.25, lo: 62, hi: 81, count: 3, durBeats: 0.3, beatsPerBar: 4 };
+  const stabOpts = { stepBeats: 0.25, lo: 62, hi: 81, count: 3, durBeats: 0.3, beatsPerBar: 4, rootless: true };
   const panByPitch = (ev: NoteEvent) => Math.max(-0.7, Math.min(0.7, (ev.midi - 71) / 12));
   schedule(plucks, tl, stabEvents(spansA, 'x--x--x---x--x--', { ...stabOpts, startBar: 0, bars: 8, vel: 0.62 }), kawaii, { rng, humanizeMs: 3, velJitter: 0.05, pan: panByPitch });
   schedule(plucks, tl, stabEvents(spansA2, 'x--x--x---x--x--', { ...stabOpts, startBar: 8, bars: 8, vel: 0.66 }), kawaii, { rng, humanizeMs: 3, velJitter: 0.05, pan: panByPitch });
@@ -178,8 +178,8 @@ export function renderSakura(): MixResult {
     pan: (ev) => (ev.midi % 2 === 0 ? -0.5 : 0.5),
   });
   const padOpts = { voices: 3, detuneCents: 10, cutoff: 1350, q: 0.5, lfoDepth: 0.16, lfoHz: 0.11, attack: 0.3, release: 0.7, soft: 0.5 };
-  padSpans(pad, tl, spansB, { lo: 55, hi: 72, count: 4, vel: 0.7, gain: 0.95, pad: padOpts, rng });
-  padSpans(pad, tl, spansA3, { lo: 55, hi: 72, count: 4, vel: 0.6, gain: 0.6, pad: padOpts, rng });
+  padSpans(pad, tl, spansB, { lo: 55, hi: 72, count: 3, vel: 0.7, gain: 0.95, pad: padOpts, rng, rootless: true });
+  padSpans(pad, tl, spansA3, { lo: 55, hi: 72, count: 3, vel: 0.6, gain: 0.6, pad: padOpts, rng, rootless: true });
 
   /* ---------------------------------------------------------------- bass */
   const bassR = memoRenderer((f, d, v) => subBass(f, d, v, { harm2: 0.26, harm3: 0.1, drive: 1.3, release: 0.05 }));

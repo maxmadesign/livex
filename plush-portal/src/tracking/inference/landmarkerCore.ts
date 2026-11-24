@@ -6,6 +6,7 @@
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { drawUpright, type SensorRotation } from '../frameGeometry';
 import { FLOATS_PER_FACE, FLOATS_PER_LANDMARK, MAX_LANDMARK_ID, TRACKED_LANDMARK_IDS } from '../landmarks';
+import { disableUsageLogging, withQuietMediaPipeLogs } from './mediapipeGuards';
 import type { BackendInfo, Delegate, InferenceResult } from './protocol';
 
 export interface CoreOptions {
@@ -40,43 +41,6 @@ export function probeGl(): { available: boolean; renderer: string | null; softwa
     return { available: true, renderer, software: /swiftshader|llvmpipe|software|softpipe|basic render/i.test(renderer) };
   } catch {
     return { available: false, renderer: null, software: false };
-  }
-}
-
-/** glog style lines ("W1124 04:58:52.08 … file.cc:181] …") and TFLite "INFO:" chatter. */
-const MEDIAPIPE_LOG = /^(?:[IWEF]\d{4} \d\d:\d\d:\d\d\.\d+|INFO: |WARNING: |ERROR: )/;
-
-type ConsoleMethod = 'log' | 'info' | 'warn' | 'error';
-const CONSOLE_METHODS: readonly ConsoleMethod[] = ['log', 'info', 'warn', 'error'];
-
-/**
- * MediaPipe's WASM runtime prints its start-up chatter through console.error /
- * console.warn (Emscripten binds stdout/stderr to the console methods that
- * exist while the module is created). While `fn` runs, those methods are
- * wrapped so MediaPipe's own lines go to console.debug – real MediaPipe errors
- * ("E…"/"F…" lines) are kept as warnings – and every other message passes
- * through untouched. The wrappers stay bound inside the WASM module after the
- * originals are restored.
- */
-export async function withQuietMediaPipeLogs<T>(fn: () => Promise<T>): Promise<T> {
-  const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
-  for (const method of CONSOLE_METHODS) {
-    const original = console[method] as (...args: unknown[]) => void;
-    originals.set(method, original);
-    console[method] = (...args: unknown[]) => {
-      const first = args[0];
-      if (typeof first === 'string' && MEDIAPIPE_LOG.test(first)) {
-        if (/^[EF]\d{4} |^ERROR: /.test(first)) originals.get('warn')!.call(console, '[mediapipe]', ...args);
-        else console.debug('[mediapipe]', ...args);
-        return;
-      }
-      original.apply(console, args);
-    };
-  }
-  try {
-    return await fn();
-  } finally {
-    for (const method of CONSOLE_METHODS) console[method] = originals.get(method)! as never;
   }
 }
 
@@ -116,6 +80,8 @@ export class LandmarkerCore {
       outputFacialTransformationMatrixes: false,
     });
     const initMs = performance.now() - t0;
+    const loggingDisabled = disableUsageLogging(landmarker);
+    if (!loggingDisabled) console.debug('[tracking] MediaPipe usage logger not found (nothing to disable)');
     const core = new LandmarkerCore(landmarker, {
       delegate: options.delegate,
       glRenderer: gl.renderer,

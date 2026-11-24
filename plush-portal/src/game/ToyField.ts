@@ -21,7 +21,7 @@ interface Slot {
   layer: number;
 }
 
-const WALL_MARGIN = 0.1;
+const WALL_MARGIN = 0.092;
 const CHUTE_MARGIN = 0.115;
 
 function yawQuat(yaw: number): Quat {
@@ -119,14 +119,15 @@ export class ToyField {
     if (this.assets.length === 0) return [];
 
     const { count, scale, density } = this.options;
-    const maxFootprint = Math.max(...this.assets.map((a) => a.footprint)) * scale;
+    // The grid is sized by the solid body of the toys; floppy ears and tails may overlap neighbours.
+    const maxFootprint = Math.max(...this.assets.map((a) => a.footprint * scale));
     // Denser settings squeeze the grid a little; the rest of the density goes into a second layer.
-    const loosePitch = Math.max(0.17, maxFootprint * 2.12);
-    const tightPitch = Math.max(0.15, maxFootprint * 1.86);
+    const loosePitch = Math.max(0.168, maxFootprint * 2.1);
+    const tightPitch = Math.max(0.158, maxFootprint * 1.95);
     let pitch = loosePitch + (tightPitch - loosePitch) * density;
     let slots = hexSlots(pitch);
     // Prefer one layer: tighten the grid before stacking.
-    const firstLayerShare = 1 - 0.45 * density;
+    const firstLayerShare = 1 - 0.45 * Math.max(0, density - 0.2) / 0.8;
     const wantFirst = Math.ceil(count * firstLayerShare);
     while (slots.length < wantFirst && pitch > tightPitch + 1e-4) {
       pitch = Math.max(tightPitch, pitch - 0.005);

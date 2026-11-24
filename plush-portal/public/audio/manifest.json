@@ -1,0 +1,544 @@
+{
+  "version": 1,
+  "generator": "tools/audio/bake.ts",
+  "sampleRate": 44100,
+  "music": {
+    "sakura": {
+      "file": "music/sakura.mp3",
+      "title": "Petal Parade",
+      "bpm": 112,
+      "beatsPerBar": 4,
+      "bars": 32,
+      "key": "F major",
+      "feel": "straight 16ths, light syncopation",
+      "instruments": [
+        "xylophone",
+        "glockenspiel",
+        "kawaii synth pluck",
+        "koto",
+        "soft pad",
+        "sine bass",
+        "snaps",
+        "shaker",
+        "woodblocks",
+        "triangle",
+        "tambourine"
+      ],
+      "sections": [
+        {
+          "name": "A",
+          "bars": 8
+        },
+        {
+          "name": "A'",
+          "bars": 8
+        },
+        {
+          "name": "B",
+          "bars": 8
+        },
+        {
+          "name": "A''",
+          "bars": 8
+        }
+      ],
+      "duration": 70.321429,
+      "loopStart": 0.25,
+      "loopEnd": 68.82142857142857,
+      "loopStartSample": 11025,
+      "loopEndSample": 3035025,
+      "lufs": -16.05,
+      "peakDb": -1.34,
+      "rmsDb": -18.73,
+      "credits": "original, synthesised by tools/audio",
+      "bytes": 1407497
+    },
+    "storybook": {
+      "file": "music/storybook.mp3",
+      "title": "Storybook Stroll",
+      "bpm": 108,
+      "beatsPerBar": 4,
+      "bars": 32,
+      "key": "G major",
+      "feel": "swung 8ths, oom-pah bounce",
+      "instruments": [
+        "clarinet",
+        "flute",
+        "felt piano",
+        "pizzicato strings",
+        "pizzicato bass",
+        "celesta",
+        "brushes",
+        "wood blocks",
+        "triangle",
+        "tambourine"
+      ],
+      "sections": [
+        {
+          "name": "A",
+          "bars": 8
+        },
+        {
+          "name": "A'",
+          "bars": 8
+        },
+        {
+          "name": "B",
+          "bars": 8
+        },
+        {
+          "name": "A''",
+          "bars": 8
+        }
+      ],
+      "duration": 72.855306,
+      "loopStart": 0.25,
+      "loopEnd": 71.35530612244898,
+      "loopStartSample": 11025,
+      "loopEndSample": 3146769,
+      "lufs": -16.01,
+      "peakDb": -1.56,
+      "rmsDb": -19.06,
+      "credits": "original, synthesised by tools/audio",
+      "bytes": 1458175
+    },
+    "ocean": {
+      "file": "music/ocean.mp3",
+      "title": "Drift Glass",
+      "bpm": 84,
+      "beatsPerBar": 4,
+      "bars": 24,
+      "key": "D major",
+      "feel": "half-time, 3-3-2 ostinato",
+      "instruments": [
+        "glass bowls",
+        "marimba",
+        "soft synth pad",
+        "celesta",
+        "mellow synth pluck",
+        "sine sub",
+        "lo-fi kick",
+        "rim",
+        "soft hats",
+        "bubbles",
+        "surf noise"
+      ],
+      "sections": [
+        {
+          "name": "A",
+          "bars": 8
+        },
+        {
+          "name": "B",
+          "bars": 8
+        },
+        {
+          "name": "A'",
+          "bars": 8
+        }
+      ],
+      "duration": 70.321429,
+      "loopStart": 0.25,
+      "loopEnd": 68.82142857142857,
+      "loopStartSample": 11025,
+      "loopEndSample": 3035025,
+      "lufs": -16.01,
+      "peakDb": -1.73,
+      "rmsDb": -18.45,
+      "credits": "original, synthesised by tools/audio",
+      "bytes": 1407497
+    },
+    "cosmic": {
+      "file": "music/cosmic.mp3",
+      "title": "Neon Orbit",
+      "bpm": 126,
+      "beatsPerBar": 4,
+      "bars": 32,
+      "key": "F# minor / A major",
+      "feel": "four-on-the-floor, 16th arpeggios, side-chain pump",
+      "instruments": [
+        "pulse lead",
+        "arcade arpeggio",
+        "detuned saw pad",
+        "synth bass",
+        "FM bells",
+        "pop kick",
+        "arcade snare and clap",
+        "hats",
+        "blips, zaps and arcade toms"
+      ],
+      "sections": [
+        {
+          "name": "verse",
+          "bars": 8
+        },
+        {
+          "name": "chorus",
+          "bars": 8
+        },
+        {
+          "name": "verse'",
+          "bars": 8
+        },
+        {
+          "name": "chorus'",
+          "bars": 8
+        }
+      ],
+      "duration": 62.693673,
+      "loopStart": 0.25,
+      "loopEnd": 61.193673469387754,
+      "loopStartSample": 11025,
+      "loopEndSample": 2698641,
+      "lufs": -16,
+      "peakDb": -2.95,
+      "rmsDb": -18.92,
+      "credits": "original, synthesised by tools/audio",
+      "bytes": 1254942
+    }
+  },
+  "sfx": {
+    "ui_click": {
+      "files": [
+        "sfx/ui_click_1.wav",
+        "sfx/ui_click_2.wav",
+        "sfx/ui_click_3.wav"
+      ],
+      "gain": 0.45,
+      "pitchVar": 0.04,
+      "gainVar": 0.08,
+      "duration": 0.0537,
+      "peakDb": -4,
+      "rmsDb": -18.11
+    },
+    "ui_toggle": {
+      "files": [
+        "sfx/ui_toggle_1.wav",
+        "sfx/ui_toggle_2.wav"
+      ],
+      "gain": 0.4,
+      "pitchVar": 0.02,
+      "gainVar": 0.05,
+      "duration": 0.1889,
+      "peakDb": -4,
+      "rmsDb": -13.87
+    },
+    "ui_open": {
+      "files": [
+        "sfx/ui_open_1.wav"
+      ],
+      "gain": 0.45,
+      "pitchVar": 0.01,
+      "gainVar": 0.03,
+      "duration": 0.4738,
+      "peakDb": -4,
+      "rmsDb": -16.35
+    },
+    "ui_close": {
+      "files": [
+        "sfx/ui_close_1.wav"
+      ],
+      "gain": 0.4,
+      "pitchVar": 0.01,
+      "gainVar": 0.03,
+      "duration": 0.3889,
+      "peakDb": -4,
+      "rmsDb": -14.89
+    },
+    "ui_error": {
+      "files": [
+        "sfx/ui_error_1.wav"
+      ],
+      "gain": 0.45,
+      "pitchVar": 0.01,
+      "gainVar": 0.03,
+      "duration": 0.4539,
+      "peakDb": -4,
+      "rmsDb": -16.24
+    },
+    "dir_press": {
+      "files": [
+        "sfx/dir_press_1.wav",
+        "sfx/dir_press_2.wav"
+      ],
+      "gain": 0.45,
+      "pitchVar": 0.04,
+      "gainVar": 0.08,
+      "duration": 0.0748,
+      "peakDb": -4,
+      "rmsDb": -16.06
+    },
+    "dir_tick": {
+      "files": [
+        "sfx/dir_tick_1.wav",
+        "sfx/dir_tick_2.wav",
+        "sfx/dir_tick_3.wav"
+      ],
+      "gain": 0.14,
+      "pitchVar": 0.05,
+      "gainVar": 0.15,
+      "duration": 0.016,
+      "peakDb": -4,
+      "rmsDb": -20.57
+    },
+    "grab_confirm": {
+      "files": [
+        "sfx/grab_confirm_1.wav"
+      ],
+      "gain": 0.8,
+      "pitchVar": 0.01,
+      "gainVar": 0.02,
+      "duration": 0.5787,
+      "peakDb": -4,
+      "rmsDb": -20.18
+    },
+    "claw_descend": {
+      "files": [
+        "sfx/claw_descend_1.wav"
+      ],
+      "gain": 0.3,
+      "pitchVar": 0.02,
+      "gainVar": 0.04,
+      "duration": 0.5989,
+      "peakDb": -4,
+      "rmsDb": -9.76
+    },
+    "claw_touch": {
+      "files": [
+        "sfx/claw_touch_1.wav",
+        "sfx/claw_touch_2.wav",
+        "sfx/claw_touch_3.wav"
+      ],
+      "gain": 0.45,
+      "pitchVar": 0.05,
+      "gainVar": 0.1,
+      "duration": 0.0999,
+      "peakDb": -4,
+      "rmsDb": -15.64
+    },
+    "claw_close": {
+      "files": [
+        "sfx/claw_close_1.wav",
+        "sfx/claw_close_2.wav"
+      ],
+      "gain": 0.42,
+      "pitchVar": 0.03,
+      "gainVar": 0.05,
+      "duration": 0.3839,
+      "peakDb": -4,
+      "rmsDb": -14.42
+    },
+    "claw_open": {
+      "files": [
+        "sfx/claw_open_1.wav",
+        "sfx/claw_open_2.wav"
+      ],
+      "gain": 0.3,
+      "pitchVar": 0.03,
+      "gainVar": 0.05,
+      "duration": 0.2559,
+      "peakDb": -4,
+      "rmsDb": -10.46
+    },
+    "plush_rub": {
+      "files": [
+        "sfx/plush_rub_1.wav",
+        "sfx/plush_rub_2.wav",
+        "sfx/plush_rub_3.wav"
+      ],
+      "gain": 0.28,
+      "pitchVar": 0.08,
+      "gainVar": 0.15,
+      "duration": 0.32,
+      "peakDb": -4,
+      "rmsDb": -17.73
+    },
+    "plush_land": {
+      "files": [
+        "sfx/plush_land_1.wav",
+        "sfx/plush_land_2.wav",
+        "sfx/plush_land_3.wav",
+        "sfx/plush_land_4.wav"
+      ],
+      "gain": 0.6,
+      "pitchVar": 0.07,
+      "gainVar": 0.12,
+      "duration": 0.1798,
+      "peakDb": -4,
+      "rmsDb": -15.46
+    },
+    "glass_tap": {
+      "files": [
+        "sfx/glass_tap_1.wav",
+        "sfx/glass_tap_2.wav",
+        "sfx/glass_tap_3.wav"
+      ],
+      "gain": 0.4,
+      "pitchVar": 0.05,
+      "gainVar": 0.12,
+      "duration": 0.1436,
+      "peakDb": -4,
+      "rmsDb": -20.2
+    },
+    "chute_drop": {
+      "files": [
+        "sfx/chute_drop_1.wav",
+        "sfx/chute_drop_2.wav"
+      ],
+      "gain": 0.65,
+      "pitchVar": 0.04,
+      "gainVar": 0.08,
+      "duration": 0.7206,
+      "peakDb": -4,
+      "rmsDb": -18.32
+    },
+    "prize_out": {
+      "files": [
+        "sfx/prize_out_1.wav",
+        "sfx/prize_out_2.wav"
+      ],
+      "gain": 0.75,
+      "pitchVar": 0.03,
+      "gainVar": 0.06,
+      "duration": 0.6437,
+      "peakDb": -4,
+      "rmsDb": -19.12
+    },
+    "empty_grab": {
+      "files": [
+        "sfx/empty_grab_1.wav",
+        "sfx/empty_grab_2.wav"
+      ],
+      "gain": 0.42,
+      "pitchVar": 0.02,
+      "gainVar": 0.04,
+      "duration": 0.7,
+      "peakDb": -4,
+      "rmsDb": -10.06
+    },
+    "slip": {
+      "files": [
+        "sfx/slip_1.wav",
+        "sfx/slip_2.wav"
+      ],
+      "gain": 0.42,
+      "pitchVar": 0.04,
+      "gainVar": 0.06,
+      "duration": 0.4177,
+      "peakDb": -4,
+      "rmsDb": -12.92
+    },
+    "win": {
+      "files": [
+        "sfx/win_sakura.wav"
+      ],
+      "gain": 1,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 1.6,
+      "peakDb": -4,
+      "themes": {
+        "sakura": [
+          "sfx/win_sakura.wav"
+        ],
+        "storybook": [
+          "sfx/win_storybook.wav"
+        ],
+        "ocean": [
+          "sfx/win_ocean.wav"
+        ],
+        "cosmic": [
+          "sfx/win_cosmic.wav"
+        ]
+      },
+      "rmsDb": -17.47
+    },
+    "collect_unlock": {
+      "files": [
+        "sfx/collect_unlock_1.wav"
+      ],
+      "gain": 0.8,
+      "pitchVar": 0,
+      "gainVar": 0.02,
+      "duration": 1.1,
+      "peakDb": -4,
+      "rmsDb": -18.97
+    },
+    "restock_drop": {
+      "files": [
+        "sfx/restock_drop_1.wav",
+        "sfx/restock_drop_2.wav"
+      ],
+      "gain": 0.5,
+      "pitchVar": 0.05,
+      "gainVar": 0.08,
+      "duration": 0.5097,
+      "peakDb": -4,
+      "rmsDb": -17.13
+    },
+    "theme_sting": {
+      "files": [
+        "sfx/theme_sting_sakura.wav"
+      ],
+      "gain": 0.75,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 1.25,
+      "peakDb": -4,
+      "themes": {
+        "sakura": [
+          "sfx/theme_sting_sakura.wav"
+        ],
+        "storybook": [
+          "sfx/theme_sting_storybook.wav"
+        ],
+        "ocean": [
+          "sfx/theme_sting_ocean.wav"
+        ],
+        "cosmic": [
+          "sfx/theme_sting_cosmic.wav"
+        ]
+      },
+      "rmsDb": -15.56
+    },
+    "countdown_tick": {
+      "files": [
+        "sfx/countdown_tick_1.wav",
+        "sfx/countdown_tick_2.wav"
+      ],
+      "gain": 0.4,
+      "pitchVar": 0.01,
+      "gainVar": 0.03,
+      "duration": 0.12,
+      "peakDb": -4,
+      "rmsDb": -18.28
+    },
+    "start_game": {
+      "files": [
+        "sfx/start_game_1.wav"
+      ],
+      "gain": 0.9,
+      "pitchVar": 0,
+      "gainVar": 0,
+      "duration": 1.1,
+      "peakDb": -4,
+      "rmsDb": -20.25
+    }
+  },
+  "loops": {
+    "motor_trolley": {
+      "file": "sfx/loop_motor_trolley.wav",
+      "duration": 1.2,
+      "gain": 0.5,
+      "peakDb": -7,
+      "rmsDb": -17.81
+    },
+    "motor_winch": {
+      "file": "sfx/loop_motor_winch.wav",
+      "duration": 1,
+      "gain": 0.5,
+      "peakDb": -7,
+      "rmsDb": -17.67
+    }
+  }
+}

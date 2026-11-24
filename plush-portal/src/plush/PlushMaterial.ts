@@ -260,7 +260,11 @@ const FRAGMENT_COLOR = /* glsl */ `
   }
 
   // Seams where sewn pieces meet: a soft, slightly darker groove.
-  float seam = 1.0 - smoothstep( 0.0, 0.11, vAux.y );
+  // vAux.y holds a signed distance (0.5 = on the seam); its width follows the pixel size so the
+  // line stays continuous at any distance.
+  float seamDist = abs( vAux.y * 2.0 - 1.0 );
+  float seamWidth = max( 0.085, fwidth( vAux.y ) * 2.5 );
+  float seam = 1.0 - smoothstep( seamWidth * 0.35, seamWidth, seamDist );
   seam *= 1.0 - smoothstep( 0.0012, 0.004, pixel ) * 0.6;
   plushBase *= 1.0 - 0.2 * seam;
   plushAO *= 1.0 - 0.3 * seam;

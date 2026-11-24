@@ -244,7 +244,7 @@ export function renderBabble(plan: BabblePlan, sampleRate: number): Float32Array
     if (a > peak) peak = a;
   }
   if (peak > 1e-6) {
-    const scale = 0.82 / peak;
+    const scale = 0.62 / peak;
     for (let s = 0; s < out.length; s++) out[s]! *= scale;
   }
   return out;

@@ -12,9 +12,9 @@
  */
 import type { Vec3 } from '../core/types';
 import { cameraToScreen } from './cameraTransform';
-import { depthKFromFocal, type FaceMeasurement } from './eyeEstimator';
+import { createMeasurement, depthKFromFocal, measureFace, type FaceMeasurement } from './eyeEstimator';
 import type { UprightFrame } from './frameGeometry';
-import { REFERENCE_FRAME_WIDTH } from './landmarks';
+import { FLOATS_PER_FACE, REFERENCE_FRAME_WIDTH } from './landmarks';
 import type { PhysicalWindow } from './viewMapping';
 
 export interface CalibrationValues {
@@ -29,8 +29,9 @@ export interface AveragedMeasurement {
   eyeX: number;
   eyeY: number;
   pxPerM: number;
-  eyeDepthOffsetM: number;
   samples: number;
+  /** Mean of the packed landmarks over the stable window (one face, FLOATS_PER_FACE floats). */
+  face: Float32Array;
 }
 
 export type CollectorState = 'idle' | 'collecting' | 'done' | 'failed';
@@ -61,7 +62,7 @@ interface Sample {
   eyeX: number;
   eyeY: number;
   pxPerM: number;
-  eyeDepthOffsetM: number;
+  face: Float32Array;
 }
 
 /** Collects measurements until the last `windowMs` of them are stable. */
@@ -102,11 +103,22 @@ export class CalibrationCollector {
     this.samples = [];
   }
 
-  /** Feeds a measurement of the primary player taken at `timeMs`. */
-  push(timeMs: number, m: Pick<FaceMeasurement, 'eyeX' | 'eyeY' | 'pxPerM' | 'eyeDepthOffsetM'>): void {
+  /**
+   * Feeds a measurement of the primary player taken at `timeMs`, together with
+   * its packed landmarks (`packed` from `offset`). The landmarks only live in
+   * this short window and are discarded when the calibration finishes.
+   */
+  push(
+    timeMs: number,
+    m: Pick<FaceMeasurement, 'eyeX' | 'eyeY' | 'pxPerM'>,
+    packed: ArrayLike<number>,
+    offset = 0,
+  ): void {
     if (this.stateValue !== 'collecting') return;
     this.totalSeen++;
-    this.samples.push({ t: timeMs, eyeX: m.eyeX, eyeY: m.eyeY, pxPerM: m.pxPerM, eyeDepthOffsetM: m.eyeDepthOffsetM });
+    const face = new Float32Array(FLOATS_PER_FACE);
+    for (let i = 0; i < FLOATS_PER_FACE; i++) face[i] = packed[offset + i]!;
+    this.samples.push({ t: timeMs, eyeX: m.eyeX, eyeY: m.eyeY, pxPerM: m.pxPerM, face });
     const { windowMs, minSamples } = this.options;
     // Keep only the most recent window.
     while (this.samples.length > 0 && timeMs - this.samples[0]!.t > windowMs) this.samples.shift();
@@ -117,6 +129,7 @@ export class CalibrationCollector {
     if (stats.positionStd <= this.options.maxPositionStd && stats.scaleStd <= this.options.maxScaleStd) {
       this.resultValue = stats.mean;
       this.stateValue = 'done';
+      this.samples = [];
     }
   }
 
@@ -131,22 +144,23 @@ export class CalibrationCollector {
 
   private stats(): { mean: AveragedMeasurement; positionStd: number; scaleStd: number } {
     const n = this.samples.length;
-    let ex = 0, ey = 0, s = 0, d = 0;
+    let ex = 0, ey = 0, s = 0;
     for (const sample of this.samples) {
       ex += sample.eyeX;
       ey += sample.eyeY;
       s += sample.pxPerM;
-      d += sample.eyeDepthOffsetM;
     }
-    ex /= n; ey /= n; s /= n; d /= n;
+    ex /= n; ey /= n; s /= n;
     let vp = 0, vs = 0;
     for (const sample of this.samples) {
       vp += (sample.eyeX - ex) ** 2 + (sample.eyeY - ey) ** 2;
       vs += (sample.pxPerM - s) ** 2;
     }
+    const face = new Float32Array(FLOATS_PER_FACE);
+    for (const sample of this.samples) for (let i = 0; i < FLOATS_PER_FACE; i++) face[i]! += sample.face[i]! / n;
     const ipdPx = s * 0.063;
     return {
-      mean: { eyeX: ex, eyeY: ey, pxPerM: s, eyeDepthOffsetM: d, samples: n },
+      mean: { eyeX: ex, eyeY: ey, pxPerM: s, samples: n, face },
       positionStd: Math.sqrt(vp / n) / Math.max(ipdPx, 1e-6),
       scaleStd: Math.sqrt(vs / n) / Math.max(s, 1e-6),
     };
@@ -154,7 +168,8 @@ export class CalibrationCollector {
 }
 
 export interface SolveInput {
-  measurement: Pick<AveragedMeasurement, 'eyeX' | 'eyeY' | 'pxPerM' | 'eyeDepthOffsetM'>;
+  /** Mean packed landmarks of the player while standing still (see AveragedMeasurement.face). */
+  face: ArrayLike<number>;
   frame: UprightFrame;
   /** Camera → screen rotation (see mountMatrix) and camera position. */
   matrix: Float64Array;
@@ -162,6 +177,8 @@ export interface SolveInput {
   /** Known distance between the eyes and the screen plane during calibration, metres. */
   refDistanceM: number;
   window: PhysicalWindow;
+  /** Starting value for the focal length (reference pixels), e.g. the current effective focal length. */
+  focalGuess: number;
 }
 
 export type SolveResult =
@@ -177,39 +194,51 @@ export function hfovFromFocal(focalRef: number): number {
  * Solves the focal constant so that the measured eye lies `refDistanceM` in
  * front of the screen plane, then evaluates the neutral position with it.
  *
- * With ray r = (ex, ey, f)/f and depth Z = f/S + δ the screen-space depth is
- *   z = pz + (m6·ex + m7·ey)/f · Z + m8 · Z
- * which is a quadratic in f:  (m8/S)·f² + (c/S + m8·δ + pz − D)·f + δ·c = 0,
- * c = m6·ex + m7·ey.
+ * The estimated depth is (almost exactly) proportional to the focal length,
+ * so a secant iteration on  g(f) = z_screen(f) − refDistance  converges in a
+ * handful of steps; the weak dependence of the face fit on f is included
+ * because the fit is re-evaluated for every candidate.
  */
 export function solveCalibration(input: SolveInput): SolveResult {
-  const { measurement: m, frame, matrix, cameraPos, refDistanceM, window } = input;
-  const ex = m.eyeX - frame.width / 2;
-  const ey = m.eyeY - frame.height / 2;
-  const S = m.pxPerM;
-  const delta = m.eyeDepthOffsetM;
-  const m6 = matrix[6]!, m7 = matrix[7]!, m8 = matrix[8]!;
-  const c = m6 * ex + m7 * ey;
-  const a = m8 / S;
-  const b = c / S + m8 * delta + cameraPos[2] - refDistanceM;
-  const cc = delta * c;
-  let focal: number;
-  if (Math.abs(a) < 1e-12) return { ok: false, reason: 'geometry' };
-  const disc = b * b - 4 * a * cc;
-  if (disc < 0) return { ok: false, reason: 'geometry' };
-  const root = Math.sqrt(disc);
-  // The physical solution is the large positive root (the other one is ≈ 0).
-  focal = (-b + root) / (2 * a);
-  if (!(focal > 0)) focal = (-b - root) / (2 * a);
-  if (!Number.isFinite(focal) || !(focal > 0)) return { ok: false, reason: 'geometry' };
+  const { face, frame, matrix, cameraPos, refDistanceM, window } = input;
+  const scratch = createMeasurement();
+  const ps: Vec3 = [0, 0, 0];
+  const evaluate = (focal: number): boolean => {
+    const m = measureFace(face, 0, frame, focal, scratch);
+    if (!m) return false;
+    cameraToScreen([m.camX, m.camY, m.camZ], matrix, cameraPos, ps);
+    return Number.isFinite(ps[2]);
+  };
+  const MIN_FOCAL = 40;
+  const MAX_FOCAL = 20000;
+  const clampFocal = (f: number) => Math.min(MAX_FOCAL, Math.max(MIN_FOCAL, f));
+
+  let f0 = clampFocal(input.focalGuess > 0 ? input.focalGuess : REFERENCE_FRAME_WIDTH * 0.8);
+  if (!evaluate(f0)) return { ok: false, reason: 'geometry' };
+  let g0 = ps[2] - refDistanceM;
+  // Second point: scale the focal length by the depth ratio (exact for an untilted camera).
+  const along0 = ps[2] - cameraPos[2];
+  if (!(along0 > 1e-6) || !(refDistanceM - cameraPos[2] > 1e-6)) return { ok: false, reason: 'geometry' };
+  let f1 = clampFocal((f0 * (refDistanceM - cameraPos[2])) / along0);
+  if (!evaluate(f1)) return { ok: false, reason: 'geometry' };
+  let g1 = ps[2] - refDistanceM;
+  for (let i = 0; i < 20 && Math.abs(g1) > 1e-7; i++) {
+    const denom = g1 - g0;
+    if (Math.abs(denom) < 1e-15) break;
+    const f2 = clampFocal(f1 - (g1 * (f1 - f0)) / denom);
+    f0 = f1;
+    g0 = g1;
+    f1 = f2;
+    if (!evaluate(f1)) return { ok: false, reason: 'geometry' };
+    g1 = ps[2] - refDistanceM;
+  }
+  if (Math.abs(g1) > 1e-3) return { ok: false, reason: 'geometry' };
+  const focal = f1;
 
   const hfov = hfovFromFocal(focal);
   // Guard against a wildly wrong reference distance or mounting geometry.
   if (hfov < 15 || hfov > 150) return { ok: false, reason: 'implausible' };
 
-  const z = focal / S + delta;
-  const pc: Vec3 = [(ex * z) / focal, (ey * z) / focal, z];
-  const ps = cameraToScreen(pc, matrix, cameraPos);
   const neutral: Vec3 = [ps[0] - window.centerOffsetM[0], ps[1] - window.centerOffsetM[1], ps[2]];
   return {
     ok: true,

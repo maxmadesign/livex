@@ -111,8 +111,8 @@ export function renderOcean(): MixResult {
   const pad = song.stem('pad', { gain: 0.4, reverb: 0.4, hp: 150, lp: 5200, chorus: { rateHz: 0.22, depthMs: 3.5, baseMs: 16, mix: 0.45 } });
   const sub = song.stem('sub', { gain: 0.4, hp: 32 });
   const kickStem = song.stem('kick', { gain: 0.42 });
-  const drums = song.stem('drums', { gain: 0.95, reverb: 0.22, hp: 300 });
-  const bell = song.stem('bell', { gain: 0.46, reverb: 0.55, delay: 0.36 });
+  const drums = song.stem('drums', { gain: 1.25, reverb: 0.22, hp: 300 });
+  const bell = song.stem('bell', { gain: 0.6, reverb: 0.55, delay: 0.36 });
   const fx = song.stem('fx', { gain: 0.45, reverb: 0.6, delay: 0.3, hp: 160 });
   const surf = song.stem('surf', { gain: 0.085, reverb: 0.3 });
 
@@ -160,7 +160,7 @@ export function renderOcean(): MixResult {
   schedule(marimba, tl, arpEvents(spansA2, { ...ost, vel: 0.34, pattern: 'X--X--X-' }), marR, { rng, humanizeMs: 7, transpose: 12, pan: (ev, i) => -panAlt(ev, i) });
 
   const padOpts = { voices: 3, detuneCents: 12, cutoff: 1250, q: 0.6, lfoDepth: 0.36, lfoHz: 0.07, attack: 1.1, release: 1.6, soft: 0.6 };
-  padSpans(pad, tl, all, { lo: 57, hi: 76, count: 4, vel: 0.7, gain: 1, pad: padOpts, rng, overlapBeats: 0.5 });
+  padSpans(pad, tl, all, { lo: 57, hi: 76, count: 4, vel: 0.7, gain: 1, pad: padOpts, rng, overlapBeats: 0.5, rootless: true });
 
   /* ---------------------------------------------------------------- bass */
   const subR = memoRenderer((f, d, v) => subBass(f, d, v, { harm2: 0.3, harm3: 0.12, drive: 1.2, attack: 0.02, release: 0.12, sag: 2.5 }));
@@ -196,6 +196,6 @@ export function renderOcean(): MixResult {
     delay: { beats: 1.5, feedback: 0.38, damping: 2400, toReverb: 0.5 },
     targetLufs: -16,
     ceilingDb: -1.5,
-    highShelfDb: 2,
+    highShelfDb: 3.5,
   });
 }

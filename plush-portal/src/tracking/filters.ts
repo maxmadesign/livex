@@ -100,7 +100,8 @@ export class OutlierGate {
 
   private hasReference = false;
   private readonly reference: Vec3 = [0, 0, 0];
-  private referenceTime = 0;
+  /** Time of the previous sample, accepted or not: only a real gap in the data widens the gate. */
+  private lastSampleTime = 0;
   private pendingCount = 0;
   private pendingStart = 0;
   private readonly pending: Vec3 = [0, 0, 0];
@@ -120,7 +121,8 @@ export class OutlierGate {
       this.setReference(timeMs, p);
       return 'accept';
     }
-    const dtSec = Math.max(0, (timeMs - this.referenceTime) / 1000);
+    const dtSec = Math.max(0, (timeMs - this.lastSampleTime) / 1000);
+    this.lastSampleTime = timeMs;
     const allowed = Math.max(this.threshold, this.speedLimit * dtSec);
     const d = Math.hypot(p[0] - this.reference[0], p[1] - this.reference[1], p[2] - this.reference[2]);
     if (d <= allowed) {
@@ -158,7 +160,7 @@ export class OutlierGate {
     this.reference[0] = p[0];
     this.reference[1] = p[1];
     this.reference[2] = p[2];
-    this.referenceTime = timeMs;
+    this.lastSampleTime = timeMs;
   }
 }
 

@@ -25,6 +25,10 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
+    "@fontsource-variable/fredoka": "5.3.0",
+    "@fontsource/m-plus-rounded-1c": "5.3.0",
+    "@fontsource/noto-sans-sc": "5.3.1",
+    "@fontsource/zcool-kuaile": "5.3.0",
     "@hono/node-server": "2.1.11",
     "@mediapipe/tasks-vision": "1.2.3",
     "hono": "4.13.21",

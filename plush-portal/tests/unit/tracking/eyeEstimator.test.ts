@@ -10,11 +10,12 @@ const DEG = Math.PI / 180;
 const frame = uprightFrame(640, 480, 0, false);
 const focal = focalForHfov(63);
 
+/** Full estimate, as the tracker runs it. */
 function estimate(eye: Vec3, extra: Partial<Parameters<typeof synthFace>[0]> = {}, f = focal, fr = frame): Vec3 {
   const packed = synthFace({ eye, frame: fr, focal: f, ...extra });
-  const m = measureFace(packed, 0, fr);
+  const m = measureFace(packed, 0, fr, f);
   expect(m).not.toBeNull();
-  return eyeInCamera(m!, fr, f);
+  return eyeInCamera(m!);
 }
 
 /** Depth from the plain 2D inter-ocular distance (what a naive tracker would do). */
@@ -40,11 +41,42 @@ describe('effectiveFocalRef', () => {
 
 describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
   it('recovers the eye position of a frontal face at several distances', () => {
-    for (const z of [0.4, 0.6, 0.9, 1.4, 2.5]) {
+    for (const z of [0.3, 0.4, 0.6, 0.9, 1.4, 2.5]) {
       const got = estimate([0, 0, z]);
-      expect(Math.abs(got[2] - z) / z).toBeLessThan(0.012);
-      expect(Math.abs(got[0])).toBeLessThan(0.003);
-      expect(Math.abs(got[1])).toBeLessThan(0.004);
+      expect(Math.abs(got[2] - z) / z).toBeLessThan(0.002);
+      expect(Math.abs(got[0])).toBeLessThan(0.002);
+      expect(Math.abs(got[1])).toBeLessThan(0.002);
+    }
+  });
+
+  it('covers the whole frame, including wide-angle cameras', () => {
+    for (const hfov of [50, 63, 90, 110]) {
+      const f = focalForHfov(hfov);
+      for (const z of [0.35, 0.8, 2]) {
+        for (const u of [0.08, 0.5, 0.92]) {
+          for (const v of [0.08, 0.5, 0.92]) {
+            const eye: Vec3 = [((u - 0.5) * frame.width * z) / f, ((v - 0.5) * frame.height * z) / f, z];
+            const got = estimate(eye, {}, f);
+            expect(Math.hypot(got[0] - eye[0], got[1] - eye[1], got[2] - eye[2])).toBeLessThan(0.001);
+          }
+        }
+      }
+    }
+  });
+
+  it('a wrong focal length only rescales depth; it does not make rotation fake a depth change', () => {
+    // The estimator believes in a focal length that is 25 % too long / too short (uncalibrated camera).
+    for (const believed of [focal * 1.25, focal * 0.8]) {
+      const depthOf = (yawDeg: number, pitchDeg: number) =>
+        measureFace(synthFace({ eye: [0, 0, 0.5], yaw: yawDeg * DEG, pitch: pitchDeg * DEG, frame, focal }), 0, frame, believed)!.camZ;
+      const base = depthOf(0, 0);
+      // Depth is off by (roughly) the focal ratio – that is what calibration fixes …
+      expect(base / 0.5).toBeGreaterThan((believed / focal) * 0.97);
+      expect(base / 0.5).toBeLessThan((believed / focal) * 1.03);
+      // … but turning the head in place still barely changes it.
+      let worst = 0;
+      for (const yawDeg of [-30, 0, 30]) for (const pitchDeg of [-20, 0, 20]) worst = Math.max(worst, Math.abs(depthOf(yawDeg, pitchDeg) - base) / base);
+      expect(worst).toBeLessThan(0.012);
     }
   });
 
@@ -59,17 +91,17 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
     ];
     for (const eye of cases) {
       const got = estimate(eye);
-      expect(Math.abs(got[0] - eye[0])).toBeLessThan(0.012);
-      expect(Math.abs(got[1] - eye[1])).toBeLessThan(0.012);
-      expect(Math.abs(got[2] - eye[2]) / eye[2]).toBeLessThan(0.025);
+      expect(Math.abs(got[0] - eye[0])).toBeLessThan(0.004);
+      expect(Math.abs(got[1] - eye[1])).toBeLessThan(0.004);
+      expect(Math.abs(got[2] - eye[2]) / eye[2]).toBeLessThan(0.006);
       if (eye[0] !== 0) expect(Math.sign(got[0])).toBe(Math.sign(eye[0]));
       if (eye[1] !== 0) expect(Math.sign(got[1])).toBe(Math.sign(eye[1]));
     }
   });
 
   it('halving the distance doubles the measured scale (depth ∝ 1 / scale)', () => {
-    const near = measureFace(synthFace({ eye: [0, 0, 0.6], frame, focal }), 0, frame)!;
-    const far = measureFace(synthFace({ eye: [0, 0, 1.2], frame, focal }), 0, frame)!;
+    const near = measureFace(synthFace({ eye: [0, 0, 0.6], frame, focal }), 0, frame, focal)!;
+    const far = measureFace(synthFace({ eye: [0, 0, 1.2], frame, focal }), 0, frame, focal)!;
     expect(near.pxPerM / far.pxPerM).toBeGreaterThan(1.96);
     expect(near.pxPerM / far.pxPerM).toBeLessThan(2.04);
     expect(near.ipdPx).toBeCloseTo(near.pxPerM * REFERENCE_IPD_M, 9);
@@ -84,14 +116,14 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
       for (const pitchDeg of [-25, -12, 0, 12, 25]) {
         const options = { eye: [0, 0, z] as Vec3, yaw: yawDeg * DEG, pitch: pitchDeg * DEG, frame, focal };
         const packed = synthFace(options);
-        const m = measureFace(packed, 0, frame)!;
-        const depth = eyeInCamera(m, frame, focal)[2];
+        const m = measureFace(packed, 0, frame, focal)!;
+        const depth = m.camZ;
         worst = Math.max(worst, Math.abs(depth - frontal) / frontal);
         worstNaive = Math.max(worstNaive, Math.abs(naiveDepth(packed, focal) - frontal) / frontal);
       }
     }
-    // The rigid fit stays within a few percent over ±35° yaw / ±25° pitch …
-    expect(worst).toBeLessThan(0.03);
+    // The rigid fit stays within a fraction of a percent over ±35° yaw / ±25° pitch …
+    expect(worst).toBeLessThan(0.005);
     // … where the plain inter-ocular distance is off by well over 15 %.
     expect(worstNaive).toBeGreaterThan(0.15);
   });
@@ -106,17 +138,17 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
   });
 
   it('reports head yaw / pitch / roll with the documented signs', () => {
-    const m1 = measureFace(synthFace({ eye: [0, 0, 0.8], yaw: 20 * DEG, frame, focal }), 0, frame)!;
+    const m1 = measureFace(synthFace({ eye: [0, 0, 0.8], yaw: 20 * DEG, frame, focal }), 0, frame, focal)!;
     expect(m1.yaw / DEG).toBeGreaterThan(16);
     expect(m1.yaw / DEG).toBeLessThan(24);
     expect(Math.abs(m1.pitch / DEG)).toBeLessThan(4);
-    const m2 = measureFace(synthFace({ eye: [0, 0, 0.8], pitch: 15 * DEG, frame, focal }), 0, frame)!;
+    const m2 = measureFace(synthFace({ eye: [0, 0, 0.8], pitch: 15 * DEG, frame, focal }), 0, frame, focal)!;
     expect(m2.pitch / DEG).toBeGreaterThan(11);
     expect(m2.pitch / DEG).toBeLessThan(19);
-    const m3 = measureFace(synthFace({ eye: [0, 0, 0.8], roll: 12 * DEG, frame, focal }), 0, frame)!;
+    const m3 = measureFace(synthFace({ eye: [0, 0, 0.8], roll: 12 * DEG, frame, focal }), 0, frame, focal)!;
     expect(m3.roll / DEG).toBeGreaterThan(10);
     expect(m3.roll / DEG).toBeLessThan(14);
-    const m4 = measureFace(synthFace({ eye: [0, 0, 0.8], yaw: -20 * DEG, frame, focal }), 0, frame)!;
+    const m4 = measureFace(synthFace({ eye: [0, 0, 0.8], yaw: -20 * DEG, frame, focal }), 0, frame, focal)!;
     expect(m4.yaw).toBeLessThan(0);
   });
 
@@ -124,8 +156,8 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
     const rng = makeRng(7);
     const a = synthFace({ eye: [0.1, 0.05, 0.7], yaw: 0.3, frame, focal });
     const b = synthFace({ eye: [0.1, 0.05, 0.7], yaw: 0.3, frame, focal, zFill: () => (rng() - 0.5) * 50 });
-    const ma = measureFace(a, 0, frame)!;
-    const mb = measureFace(b, 0, frame)!;
+    const ma = measureFace(a, 0, frame, focal)!;
+    const mb = measureFace(b, 0, frame, focal)!;
     expect(mb.pxPerM).toBe(ma.pxPerM);
     expect(mb.eyeX).toBe(ma.eyeX);
     expect(mb.eyeY).toBe(ma.eyeY);
@@ -135,8 +167,8 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
   it('a mirrored camera image yields the same true eye position and yaw sign', () => {
     const mirrored = uprightFrame(640, 480, 0, true);
     const eye: Vec3 = [0.22, -0.08, 0.85];
-    const plain = measureFace(synthFace({ eye, yaw: 0.25, roll: 0.1, frame, focal }), 0, frame)!;
-    const flipped = measureFace(synthFace({ eye, yaw: 0.25, roll: 0.1, frame: mirrored, focal }), 0, mirrored)!;
+    const plain = measureFace(synthFace({ eye, yaw: 0.25, roll: 0.1, frame, focal }), 0, frame, focal)!;
+    const flipped = measureFace(synthFace({ eye, yaw: 0.25, roll: 0.1, frame: mirrored, focal }), 0, mirrored, focal)!;
     expect(flipped.eyeX).toBeCloseTo(plain.eyeX, 3);
     expect(flipped.eyeY).toBeCloseTo(plain.eyeY, 3);
     expect(flipped.pxPerM).toBeCloseTo(plain.pxPerM, 3);
@@ -144,8 +176,9 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
     expect(flipped.roll).toBeCloseTo(plain.roll, 4);
     // The face centre used for association / preview stays in delivered (mirrored) coordinates.
     expect(flipped.centerU).toBeCloseTo(1 - plain.centerU, 4);
-    const got = eyeInCamera(flipped, mirrored, focal);
-    expect(Math.abs(got[0] - eye[0])).toBeLessThan(0.012);
+    expect(Math.abs(flipped.camX - eye[0])).toBeLessThan(0.002);
+    expect(flipped.camX).toBeCloseTo(plain.camX, 4);
+    expect(flipped.camZ).toBeCloseTo(plain.camZ, 4);
   });
 
   it('works for an upright frame from a rotated sensor (portrait frame)', () => {
@@ -154,29 +187,30 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
     expect(portrait.height).toBeCloseTo(640, 9);
     const eye: Vec3 = [0.1, 0.25, 0.9];
     const got = estimate(eye, {}, focal, portrait);
-    expect(Math.abs(got[0] - eye[0])).toBeLessThan(0.012);
-    expect(Math.abs(got[1] - eye[1])).toBeLessThan(0.012);
-    expect(Math.abs(got[2] - eye[2]) / eye[2]).toBeLessThan(0.025);
+    expect(Math.abs(got[0] - eye[0])).toBeLessThan(0.002);
+    expect(Math.abs(got[1] - eye[1])).toBeLessThan(0.002);
+    expect(Math.abs(got[2] - eye[2]) / eye[2]).toBeLessThan(0.003);
   });
 
   it('is resolution independent (reference pixels)', () => {
     const hd = uprightFrame(1280, 720, 0, false);
-    const a = measureFace(synthFace({ eye: [0.05, 0, 0.8], frame, focal }), 0, frame)!;
-    const b = measureFace(synthFace({ eye: [0.05, 0, 0.8], frame: hd, focal }), 0, hd)!;
-    expect(b.pxPerM).toBeCloseTo(a.pxPerM, 6);
-    expect(b.eyeX - hd.width / 2).toBeCloseTo(a.eyeX - frame.width / 2, 6);
+    const a = measureFace(synthFace({ eye: [0.05, 0, 0.8], frame, focal }), 0, frame, focal)!;
+    const b = measureFace(synthFace({ eye: [0.05, 0, 0.8], frame: hd, focal }), 0, hd, focal)!;
+    // Landmarks are float32, so compare with a relative tolerance.
+    expect(Math.abs(b.pxPerM - a.pxPerM) / a.pxPerM).toBeLessThan(1e-5);
+    expect(b.eyeX - hd.width / 2).toBeCloseTo(a.eyeX - frame.width / 2, 3);
   });
 
   it('a face with different proportions only changes a constant scale factor, not the rotation robustness', () => {
     const shape: Vec3 = [1.08, 0.93, 1.15]; // wider, shorter face with a more prominent nose
     const z = 0.8;
-    const base = measureFace(synthFace({ eye: [0, 0, z], frame, focal, shape }), 0, frame)!;
+    const base = measureFace(synthFace({ eye: [0, 0, z], frame, focal, shape }), 0, frame, focal)!;
     // The person's own constant (what calibration absorbs).
     const k = base.pxPerM;
     let worst = 0;
     for (const yawDeg of [-30, -15, 15, 30]) {
       for (const pitchDeg of [-20, 0, 20]) {
-        const m = measureFace(synthFace({ eye: [0, 0, z], yaw: yawDeg * DEG, pitch: pitchDeg * DEG, frame, focal, shape }), 0, frame)!;
+        const m = measureFace(synthFace({ eye: [0, 0, z], yaw: yawDeg * DEG, pitch: pitchDeg * DEG, frame, focal, shape }), 0, frame, focal)!;
         worst = Math.max(worst, Math.abs(m.pxPerM - k) / k);
       }
     }
@@ -188,8 +222,8 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
     const rng = makeRng(42);
     const depths: number[] = [];
     for (let i = 0; i < 300; i++) {
-      const m = measureFace(synthFace({ eye: [0, 0, 0.8], frame, focal, noisePx: 0.5, rng }), 0, frame)!;
-      depths.push(eyeInCamera(m, frame, focal)[2]);
+      const m = measureFace(synthFace({ eye: [0, 0, 0.8], frame, focal, noisePx: 0.5, rng }), 0, frame, focal)!;
+      depths.push(m.camZ);
     }
     const mean = depths.reduce((a, b) => a + b, 0) / depths.length;
     const std = Math.sqrt(depths.reduce((a, b) => a + (b - mean) ** 2, 0) / depths.length);
@@ -198,17 +232,18 @@ describe('measureFace + eyeInCamera (synthetic pinhole camera)', () => {
   });
 
   it('gives a small fit residual for a real face shape and a large one for garbage', () => {
-    const good = measureFace(synthFace({ eye: [0, 0, 0.8], frame, focal }), 0, frame)!;
+    const good = measureFace(synthFace({ eye: [0, 0, 0.8], frame, focal }), 0, frame, focal)!;
     expect(good.residual).toBeLessThan(0.03);
     const rng = makeRng(3);
     const junk = new Float32Array(synthFace({ eye: [0, 0, 0.8], frame, focal }).length);
     for (let i = 0; i < junk.length; i++) junk[i] = rng();
-    const bad = measureFace(junk, 0, frame);
+    const bad = measureFace(junk, 0, frame, focal);
     expect(bad === null || bad.residual > 0.5).toBe(true);
   });
 
   it('returns null for degenerate landmarks', () => {
     const zeros = new Float32Array(synthFace({ eye: [0, 0, 0.8], frame, focal }).length);
-    expect(measureFace(zeros, 0, frame)).toBeNull();
+    expect(measureFace(zeros, 0, frame, focal)).toBeNull();
+    expect(measureFace(synthFace({ eye: [0, 0, 0.8], frame, focal }), 0, frame, 0)).toBeNull();
   });
 });

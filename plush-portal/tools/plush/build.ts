@@ -25,7 +25,7 @@ export interface Mesh {
   mask: Float32Array;
   /** roughness, sheen, gloss, fur length. */
   surf: Float32Array;
-  /** softness, seam distance (0 = on a seam), metalness, thread amount. */
+  /** softness, signed seam distance (0.5 = on a seam, 0 / 1 = far), metalness, thread amount. */
   aux: Float32Array;
   indices: Uint32Array;
 }
@@ -187,6 +187,10 @@ function buildLayerMesh(field: LayerField, design: PlushDesign, unionFn: DistFn,
   const colors = field.add.map((p) => hexToLinear(p.color));
   const paints = (design.paints ?? []).filter((p) => (p.layer ?? 'body') === layer.name);
   const ds = new Float64Array(field.add.length);
+  const pieceOrder = new Map<string, number>();
+  for (const p of field.add) if (!pieceOrder.has(p.piece)) pieceOrder.set(p.piece, pieceOrder.size);
+  const seamPiece = new Int16Array(count).fill(-1);
+  const seamNeighbours: Set<number>[] = Array.from({ length: pieceOrder.size }, () => new Set<number>());
   const aoDist = [0.5, 1.2, 2.6];
   const aoWeight = [0.5, 0.32, 0.18];
 
@@ -215,14 +219,27 @@ function buildLayerMesh(field: LayerField, design: PlushDesign, unionFn: DistFn,
       b += c[2] * w;
       wSum += w;
     }
-    // Seam: where the two closest *different pieces* are equally near.
+    // Seam: where the two closest *different pieces* are equally near. The distance is stored
+    // signed (its sign flips across the junction) so that interpolation between vertices passes
+    // exactly through zero and the shader can draw a continuous line.
     let seam = SEAM_RANGE_CM;
     if (layer.seams !== false) {
       const piece = field.add[iMin]!.piece;
+      let other = -1;
       for (let i = 0; i < field.add.length; i++) {
         if (field.add[i]!.piece === piece) continue;
         const gap = ds[i]! - dMin;
-        if (gap < seam) seam = gap;
+        if (gap < seam) {
+          seam = gap;
+          other = i;
+        }
+      }
+      // The sign is assigned per piece after the adjacency of all pieces is known (see below).
+      seamPiece[v] = pieceOrder.get(piece)!;
+      if (other >= 0) {
+        const o = pieceOrder.get(field.add[other]!.piece)!;
+        seamNeighbours[seamPiece[v]!]!.add(o);
+        seamNeighbours[o]!.add(seamPiece[v]!);
       }
     }
     // Ambient occlusion from the union of every layer.
@@ -250,6 +267,29 @@ function buildLayerMesh(field: LayerField, design: PlushDesign, unionFn: DistFn,
     mesh.aux[v * 4 + 2] = s.metal;
     mesh.aux[v * 4 + 3] = s.thread;
   }
+  // Signed seam distance: every piece gets one sign, chosen by two-colouring the piece adjacency
+  // graph (body +, parts sewn onto it −, parts sewn onto those +, …). Across a junction between
+  // differently coloured pieces the value passes through zero, so the shader draws one continuous
+  // line; inside a piece the sign never changes, so no stray lines appear.
+  const colour = new Int8Array(pieceOrder.size);
+  for (let start = 0; start < colour.length; start++) {
+    if (colour[start] !== 0) continue;
+    colour[start] = 1;
+    const queue = [start];
+    while (queue.length > 0) {
+      const a = queue.shift()!;
+      for (const b of seamNeighbours[a]!) {
+        if (colour[b] !== 0) continue;
+        colour[b] = -colour[a]! as 1 | -1;
+        queue.push(b);
+      }
+    }
+  }
+  for (let v = 0; v < count; v++) {
+    const piece = seamPiece[v]!;
+    const sign = piece >= 0 ? colour[piece]! : 1;
+    mesh.aux[v * 4 + 1] = 0.5 + 0.5 * sign * mesh.aux[v * 4 + 1]!;
+  }
   return { mesh, dominant };
 }
 
@@ -258,16 +298,19 @@ function buildLayerMesh(field: LayerField, design: PlushDesign, unionFn: DistFn,
 function simplify(mesh: Mesh, targetTriangles: number): Mesh {
   const triCount = mesh.indices.length / 3;
   if (triCount <= targetTriangles) return mesh;
-  // Attributes that matter for the look: normal (3), colour (3), masks (4), softness (1).
-  const stride = 11;
+  // Attributes that matter for the look: normal (3), colour (3), masks (4), softness (1) and the
+  // seam distance (1) — without it the simplifier leaves large triangles across seams and the
+  // interpolated seam line turns into a zigzag.
+  const stride = 12;
   const attrs = new Float32Array(mesh.count * stride);
   for (let v = 0; v < mesh.count; v++) {
     attrs.set(mesh.normal.subarray(v * 3, v * 3 + 3), v * stride);
     attrs.set(mesh.color.subarray(v * 4, v * 4 + 3), v * stride + 3);
     attrs.set(mesh.mask.subarray(v * 4, v * 4 + 4), v * stride + 6);
     attrs[v * stride + 10] = mesh.aux[v * 4]!;
+    attrs[v * stride + 11] = mesh.aux[v * 4 + 1]!;
   }
-  const weights = [0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.9, 0.9, 0.9, 0.9, 0.2];
+  const weights = [0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.9, 0.9, 0.9, 0.9, 0.2, 1.4];
   const [indices] = MeshoptSimplifier.simplifyWithAttributes(
     mesh.indices,
     mesh.position,
@@ -418,6 +461,14 @@ function onSurface(fn: DistFn, f: Frame, u: number, v: number, height: number): 
 }
 
 const LOD_LIFT = [1, 2.2, 4.5];
+/**
+ * Coarser LODs need extra clearance above the simplified surface. Small lifts scale as before
+ * (base × LOD_LIFT); for deliberately raised details (eye highlights) only the first 0.06 cm is
+ * scaled, otherwise they would fly off the eye as spikes at LOD1/LOD2.
+ */
+function lodLift(base: number, lod: number): number {
+  return base + Math.min(base, 0.06) * (LOD_LIFT[lod]! - 1);
+}
 
 function addDisc(pb: PatchBuilder, fn: DistFn, soft: (p: V3) => number, d: DiscPatch, lod: number, mirrored: boolean): void {
   const at: V3 = mirrored ? [-d.at[0], d.at[1], d.at[2]] : d.at;
@@ -425,7 +476,7 @@ function addDisc(pb: PatchBuilder, fn: DistFn, soft: (p: V3) => number, d: DiscP
   const rx = d.rx, ry = d.ry ?? d.rx;
   const rings = [5, 3, 2][lod]!;
   const segs = [22, 12, 8][lod]!;
-  const lift = (d.lift ?? 0.04) * LOD_LIFT[lod]!;
+  const lift = lodLift(d.lift ?? 0.04, lod);
   const dome = (d.dome ?? 0) * Math.min(rx, ry);
   const color = hexToLinear(d.color);
   const softness = soft(frame.o);
@@ -466,9 +517,15 @@ function addPoly(pb: PatchBuilder, fn: DistFn, soft: (p: V3) => number, d: PolyP
       outline.push([(a[0] + (b[0] - a[0]) * t) * scale * (mirrored ? -1 : 1), (a[1] + (b[1] - a[1]) * t) * scale]);
     }
   }
-  if (mirrored) outline.reverse();
+  // Triangles are wound for counter-clockwise outlines: accept either winding (mirroring flips it too).
+  let signedArea = 0;
+  for (let i = 0; i < outline.length; i++) {
+    const a = outline[i]!, b = outline[(i + 1) % outline.length]!;
+    signedArea += a[0] * b[1] - b[0] * a[1];
+  }
+  if (signedArea < 0) outline.reverse();
   const rings = [3, 2, 1][lod]!;
-  const lift = (d.lift ?? 0.04) * LOD_LIFT[lod]!;
+  const lift = lodLift(d.lift ?? 0.04, lod);
   let extent = 0;
   for (const [u, v] of outline) extent = Math.max(extent, Math.hypot(u, v));
   const dome = (d.dome ?? 0) * extent;
@@ -515,7 +572,7 @@ function addStroke(pb: PatchBuilder, fn: DistFn, soft: (p: V3) => number, d: Str
   const closed = d.closed ?? false;
   const line = catmull(src, closed, [5, 3, 2][lod]!).map((p) => projectToSurface(fn, p, EPS, 8));
   const count = line.length;
-  const lift = (d.lift ?? 0.035) * LOD_LIFT[lod]!;
+  const lift = lodLift(d.lift ?? 0.035, lod);
   const color = hexToLinear(d.color);
   const across = lod === 0 ? 5 : 3;
   let prev: number[] = [];
@@ -738,6 +795,24 @@ function buildProxies(layers: { field: LayerField; mesh: Mesh; dominant: Int16Ar
       const y = Math.max(0, cy + (g.points[bi * 3 + 1]! - cy) * inset);
       const z = cz + (g.points[bi * 3 + 2]! - cz) * inset;
       hull.push(x, y, z);
+    }
+    // Flat sitting base: the lowest centimetre of a stuffed toy spreads out on the floor, so its
+    // outline is added as a ring of floor-level points. Without it the lowest hull point is a single
+    // vertex and the toy rocks / leans a few degrees at rest.
+    for (let a = 0; a < 12; a++) {
+      const ax = Math.cos((a / 12) * Math.PI * 2);
+      const az = Math.sin((a / 12) * Math.PI * 2);
+      let best = -Infinity;
+      let bi = -1;
+      for (let i = 0; i < n; i++) {
+        if (g.points[i * 3 + 1]! > 1.0) continue;
+        const s = (g.points[i * 3]! - cx) * ax + (g.points[i * 3 + 2]! - cz) * az;
+        if (s > best) {
+          best = s;
+          bi = i;
+        }
+      }
+      if (bi >= 0) hull.push(cx + (g.points[bi * 3]! - cx) * inset, 0, cz + (g.points[bi * 3 + 2]! - cz) * inset);
     }
     if (hull.length < 12) continue;
     const dims: V3 = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];

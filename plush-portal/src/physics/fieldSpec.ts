@@ -99,6 +99,8 @@ export const GROUP = {
   TOY: 0x0002,
   CLAW: 0x0004,
   SENSOR: 0x0008,
+  /** Floppy toy parts (ears, tails): touched by the claw and the cabinet, but they do not prop toys apart. */
+  TOY_SOFT: 0x0010,
   /** Mass-only colliders (never collide). */
   NONE: 0x0000,
 } as const;

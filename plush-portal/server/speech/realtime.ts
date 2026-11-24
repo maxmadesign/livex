@@ -17,6 +17,7 @@
 import type OpenAI from 'openai';
 import { OpenAIRealtimeWS } from 'openai/realtime/ws';
 import type { RealtimeClientEvent, RealtimeServerEvent } from 'openai/resources/realtime/realtime';
+import type { ClientOptions } from 'ws';
 import { buildVoiceStyle } from '../../src/ai/prompt';
 import { ApiFailure } from '../errors';
 import type { ServerSpeechProvider, SpeechJob, SpeechResult } from './types';
@@ -37,10 +38,14 @@ export interface RealtimeConnection {
 }
 export type RealtimeConnect = (model: string) => RealtimeConnection;
 
-/** Opens Realtime sessions with the official SDK's WebSocket helper (needs the `ws` package). */
-export function openAiRealtimeConnect(client: OpenAI): RealtimeConnect {
+/**
+ * Opens Realtime sessions with the official SDK's WebSocket helper (needs the
+ * `ws` package). `wsOptions` are passed to the underlying socket; production
+ * uses the defaults, tests supply the CA of their local mock server.
+ */
+export function openAiRealtimeConnect(client: OpenAI, wsOptions?: ClientOptions): RealtimeConnect {
   return (model: string) => {
-    const rt = new OpenAIRealtimeWS({ model }, client);
+    const rt = new OpenAIRealtimeWS({ model, options: wsOptions }, client);
     const opened = new Promise<void>((resolve, reject) => {
       rt.socket.once('open', () => resolve());
       rt.socket.once('error', (error) => reject(error));

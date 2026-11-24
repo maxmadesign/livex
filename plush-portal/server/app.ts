@@ -111,7 +111,13 @@ export function createApp(deps: AppDeps): Hono {
     return isSameOrigin(c, normalized) || config.allowedOrigins.includes(normalized) || config.allowedOrigins.includes('*');
   };
 
-  // Browsers from other origins get CORS headers only when the origin is on the allow list…
+  // Requests that announce a foreign origin are refused outright (CORS headers alone would still let them run)…
+  app.use('/api/*', async (c, next) => {
+    const origin = c.req.header('origin');
+    if (origin && !originAllowed(c, origin)) throw new ApiFailure(403, 'forbidden', 'This origin is not allowed to use the AI proxy.');
+    await next();
+  });
+  // …and allowed cross-origin browsers get the CORS headers they need.
   app.use(
     '/api/*',
     cors({
@@ -122,12 +128,6 @@ export function createApp(deps: AppDeps): Hono {
       maxAge: 600,
     }),
   );
-  // …and requests that announce a foreign origin are refused outright (CORS alone would still run them).
-  app.use('/api/*', async (c, next) => {
-    const origin = c.req.header('origin');
-    if (origin && !originAllowed(c, origin)) throw new ApiFailure(403, 'forbidden', 'This origin is not allowed to use the AI proxy.');
-    await next();
-  });
   app.use(
     '/api/*',
     bodyLimit({
@@ -258,8 +258,16 @@ export function createApp(deps: AppDeps): Hono {
   app.post('/api/ai/test', async (c) => {
     rateLimit(c, 3);
     if (!isAdmin(c)) throw new ApiFailure(401, 'forbidden', 'This endpoint needs the admin token (Authorization: Bearer …).');
+    // The body is optional: an empty POST runs the text test only.
     let raw: unknown = {};
-    if ((c.req.header('content-length') ?? '0') !== '0') raw = await readJson(c);
+    const text = await c.req.text();
+    if (text.trim()) {
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        throw new ApiFailure(400, 'bad_request', 'The request body must be JSON.');
+      }
+    }
     const parsed = TestRequestSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiFailure(400, 'bad_request', describeIssue(parsed.error));
     if (!client) {

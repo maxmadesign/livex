@@ -56,7 +56,7 @@ export function countUnits(text: string, lang: Lang): number {
 export function normalizeLineText(raw: string): string {
   let text = raw
     // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f​-‏  ﻿]/g, ' ')
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\ufeff]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   // Models sometimes wrap the whole line in quotes.

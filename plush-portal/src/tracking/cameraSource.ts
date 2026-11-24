@@ -69,6 +69,8 @@ export function classifyCameraError(error: unknown, env: CameraEnvironment): { s
     case 'DevicesNotFoundError':
     case 'OverconstrainedError':
     case 'ConstraintNotSatisfiedError':
+    // Browsers / shells that cannot capture at all (e.g. headless without a prompt UI).
+    case 'NotSupportedError':
       return { state: 'no_device', detail: base };
     case 'NotReadableError':
     case 'TrackStartError':

@@ -560,7 +560,7 @@ class FaceTrackerImpl implements FaceTracker {
     this.candidates.length = 0;
     const measured: (FaceMeasurement | null)[] = [];
     for (let i = 0; i < faces; i++) {
-      const m = measureFace(result.faces, i * FLOATS_PER_FACE, this.frame, this.measurements[i]);
+      const m = measureFace(result.faces, i * FLOATS_PER_FACE, this.frame, this.focalRef, this.measurements[i]);
       measured.push(m);
       // Faces that could not be measured stay in the list (with a residual no gate accepts) so indices line up.
       this.candidates.push(m ? { u: m.centerU, v: m.centerV, size: m.sizeU, residual: m.residual } : { u: 0, v: 0, size: 0, residual: 1e9 });
@@ -578,7 +578,7 @@ class FaceTrackerImpl implements FaceTracker {
         this.filter.reset();
         this.hasFiltered = false;
       }
-      eyeInCamera(primary, this.frame, this.focalRef, this.pc);
+      eyeInCamera(primary, this.pc);
       cameraToScreen(this.pc, this.matrix, this.view.camPos, this.ps);
       screenToWindow(this.ps, this.window, this.pw);
       const filterResult = this.filter.push(result.captureMs, this.pw, this.filtered);
@@ -591,7 +591,7 @@ class FaceTrackerImpl implements FaceTracker {
         this.pendingJump = false;
       }
       if (this.collector.state === 'collecting') {
-        this.collector.push(result.captureMs, primary);
+        this.collector.push(result.captureMs, primary, result.faces, index * FLOATS_PER_FACE);
         this.checkCalibration();
       }
     } else {
@@ -663,12 +663,13 @@ class FaceTrackerImpl implements FaceTracker {
     if (this.collector.state === 'done' && this.collector.result) {
       const average = this.collector.result;
       const solved = solveCalibration({
-        measurement: average,
+        face: average.face,
         frame: this.frame,
         matrix: this.matrix,
         cameraPos: this.view.camPos,
         refDistanceM: this.view.refDistance,
         window: this.window,
+        focalGuess: this.focalRef,
       });
       if (!solved.ok) {
         this.finishCalibration({ ok: false, detail: solved.reason, samples: average.samples });

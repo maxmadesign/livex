@@ -5,7 +5,7 @@
  */
 import type { Lang, Quat, ThemeId, Vec3 } from '../core/types';
 
-export const MANIFEST_VERSION = 2;
+export const MANIFEST_VERSION = 3;
 
 export type ProxyGeometry =
   | { type: 'ball'; r: number }
@@ -128,7 +128,7 @@ export interface PlushManifest {
  *   COLOR_0  linear RGB base colour, A = baked ambient occlusion
  *   _MASK    signed distance to paint regions 0..3, normalised to ±1 over `maskRange`
  *   _SURF    roughness, sheen, gloss (clear coat), fur length
- *   _AUX     softness, seam distance (0 = on a seam), metalness, thread amount
+ *   _AUX     softness, signed seam distance (0.5 = on a seam), metalness, thread amount
  */
 export const PLUSH_ATTRIBUTES = ['COLOR_0', '_MASK', '_SURF', '_AUX'] as const;
 

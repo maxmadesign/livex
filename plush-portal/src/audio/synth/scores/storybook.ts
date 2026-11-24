@@ -158,7 +158,7 @@ export function renderStorybook(): MixResult {
 
   /* --------------------------------------------------- strings and piano */
   const pizzChord = memoRenderer((f, _d, v) => pluck(PLUCKS.pizzViolin, f, v, rng));
-  const stab = { stepBeats: 0.5, lo: 55, hi: 74, count: 3, durBeats: 0.5, beatsPerBar: 4 };
+  const stab = { stepBeats: 0.5, lo: 55, hi: 74, count: 3, durBeats: 0.5, beatsPerBar: 4, rootless: true };
   const panSpread = (ev: NoteEvent) => Math.max(-0.6, Math.min(0.6, (ev.midi - 64) / 11));
   schedule(pizz, tl, stabEvents(spansA, '--x---x-', { ...stab, startBar: 0, bars: 8, vel: 0.6 }), pizzChord, { ...sw, humanizeMs: 6, velJitter: 0.06, pan: panSpread });
   schedule(pizz, tl, stabEvents(spansA2, '--xo--x-', { ...stab, startBar: 8, bars: 8, vel: 0.64 }), pizzChord, { ...sw, humanizeMs: 6, velJitter: 0.06, pan: panSpread });
@@ -166,7 +166,7 @@ export function renderStorybook(): MixResult {
   schedule(pizz, tl, stabEvents(spansA3, '--xo--xo', { ...stab, startBar: 24, bars: 8, vel: 0.7 }), pizzChord, { ...sw, humanizeMs: 6, velJitter: 0.06, pan: panSpread });
 
   // Piano: gentle comping in A' and A'', broken left-hand chords under its own melody in B.
-  const comp = { stepBeats: 0.5, lo: 52, hi: 69, count: 4, durBeats: 1.4, beatsPerBar: 4 };
+  const comp = { stepBeats: 0.5, lo: 52, hi: 69, count: 3, durBeats: 1.4, beatsPerBar: 4, rootless: true };
   schedule(piano, tl, stabEvents(spansA2, 'x----o--', { ...comp, startBar: 8, bars: 8, vel: 0.46 }), pianoR, { ...sw, humanizeMs: 9, velJitter: 0.05, pan: (ev) => (ev.midi - 60) / 30 });
   schedule(piano, tl, stabEvents(spansA3, 'x----o--', { ...comp, startBar: 24, bars: 8, vel: 0.52 }), pianoR, { ...sw, humanizeMs: 9, velJitter: 0.05, pan: (ev) => (ev.midi - 60) / 30 });
   schedule(piano, tl, arpEvents(spansB, { stepBeats: 0.5, shape: [0, 2, 1, 2], lo: 45, hi: 62, count: 3, vel: 0.45, durBeats: 0.9, accentEvery: 4 }), pianoR, {

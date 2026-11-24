@@ -10,7 +10,7 @@ import { AI_LIMITS, GUIDE_EMOTIONS } from '../src/ai/protocol';
 
 // Control characters would only serve prompt formatting tricks; drop them.
 // eslint-disable-next-line no-control-regex
-const stripControl = (value: string) => value.replace(/[\u0000-\u001f\u007f  ]/g, ' ').trim();
+const stripControl = (value: string) => value.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').trim();
 const text = (max: number) => z.string().max(max).transform(stripControl);
 const modelId = z
   .string()
@@ -89,10 +89,16 @@ export const LineOutputSchema = z.object({
 });
 export type LineOutput = z.infer<typeof LineOutputSchema>;
 
-/** First validation problem as a short, safe message ("event.facts.phase: Invalid option"). */
+/** First validation problem as a short, safe message ("event.type: value not allowed"). */
 export function describeIssue(error: z.ZodError): string {
   const issue = error.issues[0];
-  if (!issue) return 'Invalid request body';
+  if (!issue) return 'Invalid request body.';
   const where = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
-  return `${where}${issue.message}`.slice(0, 200);
+  const what =
+    issue.code === 'invalid_value'
+      ? 'value not allowed'
+      : issue.code === 'invalid_type'
+        ? 'missing or of the wrong type'
+        : issue.message.slice(0, 120);
+  return `${where}${what}`;
 }

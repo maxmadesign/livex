@@ -29,6 +29,8 @@ export default defineConfig({
       '/api': { target: `http://127.0.0.1:${API_PORT}`, changeOrigin: false },
     },
   },
+  // Crawl both HTML entry points up front so the dev server never re-optimises mid-session.
+  optimizeDeps: { entries: ['index.html', 'viewer.html'] },
   worker: { format: 'es' },
   build: {
     target: 'es2022',

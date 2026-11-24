@@ -44,7 +44,7 @@ export interface Finger {
   angularSpeed: number;
 }
 
-const CLAW_GROUPS = groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY);
+const CLAW_GROUPS = groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY | GROUP.TOY_SOFT);
 const ROPE_STIFFNESS = 2600; // N/m
 const ROPE_DAMPING = 46; // N·s/m
 const FINGER_STIFFNESS = 4.2; // N·m/rad
@@ -466,7 +466,7 @@ export class ClawRig {
       maxDistance,
       true,
       undefined,
-      groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY),
+      groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY | GROUP.TOY_SOFT),
       undefined,
       this.hub,
     );
