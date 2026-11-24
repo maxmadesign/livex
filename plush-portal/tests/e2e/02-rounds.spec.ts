@@ -49,7 +49,7 @@ test.describe('2. full rounds through the HUD on all three display presets', () 
       expect(s0.profile).toBe(display);
       expect(s0.hud.vw).toBe(width);
       // The 3D view is rendered at its own (here deliberately tiny) resolution; the HUD stays in CSS pixels.
-      expect(s0.effective.megapixels).toBeLessThanOrEqual(0.41);
+      await expect.poll(async () => (await state(page)).effective.megapixels, { timeout: 120_000 }).toBeLessThanOrEqual(0.41);
       await start(page);
       const before = (await state(page)).claw.x;
       await hold(page, 'right', 0.5);

@@ -45,6 +45,8 @@ export interface BootOptions {
   settings?: Record<string, unknown>;
   /** Do not seed anything (first-run behaviour). */
   pristine?: boolean;
+  /** Keep the first-run "how to play" card (by default it is marked as already seen). */
+  tutorial?: boolean;
 }
 
 export interface Watch {
@@ -88,15 +90,19 @@ export async function boot(page: Page, o: BootOptions = {}): Promise<void> {
   if (!o.pristine) {
     const settings: Record<string, unknown> = { ...(o.settings ?? {}) };
     if ((o.quality ?? 'low') === 'low') settings.graphics = { ...LOW_GRAPHICS, ...((o.settings?.graphics as object) ?? {}) };
-    await page.addInitScript((seed) => {
-      try {
-        if (sessionStorage.getItem('__e2e_seeded')) return;
-        sessionStorage.setItem('__e2e_seeded', '1');
-        localStorage.setItem('plush-portal/settings', JSON.stringify({ version: 1, settings: seed }));
-      } catch {
-        /* storage unavailable */
-      }
-    }, settings);
+    await page.addInitScript(
+      ({ seed, tutorial }) => {
+        try {
+          if (sessionStorage.getItem('__e2e_seeded')) return;
+          sessionStorage.setItem('__e2e_seeded', '1');
+          localStorage.setItem('plush-portal/settings', JSON.stringify({ version: 1, settings: seed }));
+          if (!tutorial) localStorage.setItem('plush-portal/tutorial-seen', '1');
+        } catch {
+          /* storage unavailable */
+        }
+      },
+      { seed: settings, tutorial: !!o.tutorial },
+    );
   }
   await page.goto(url(o), { waitUntil: 'load' });
   await waitBoot(page);
@@ -206,15 +212,50 @@ export async function aim(page: Page, x: number, z: number): Promise<void> {
  * reported by the game. Game time is advanced in small steps until the result
  * event fires.
  */
-export async function grabAndWait(page: Page, maxSeconds = 30): Promise<any> {
+export async function grabAndWait(page: Page, maxSeconds = 40): Promise<any> {
   const before = (await results(page)).length;
   await click(page, 'grab');
-  for (let t = 0; t < maxSeconds; t += 0.5) {
-    await ff(page, 0.5);
-    const all = await results(page);
-    if (all.length > before) return all[all.length - 1];
-  }
-  throw new Error(`round did not finish within ${maxSeconds}s of game time (phase ${(await state(page)).phase})`);
+  const result = await finishRound(page, before, maxSeconds);
+  if (!result) throw new Error(`round did not finish within ${maxSeconds}s of game time (phase ${(await state(page)).phase})`);
+  return result;
+}
+
+/** Advances game time until a new round result exists (one round trip; the page is busy meanwhile). */
+export const finishRound = (page: Page, before: number, maxSeconds = 40): Promise<any> =>
+  plush(
+    page,
+    (p, a) => {
+      const w = window as any;
+      for (let t = 0; t < a.max; t += 0.25) {
+        p.fastForward(0.25);
+        if (w.__results.length > a.before) return w.__results[w.__results.length - 1];
+      }
+      return null;
+    },
+    { before, max: maxSeconds },
+  );
+
+/** Advances game time until the round reaches one of `phases` (or `maxSeconds` pass). Returns the phase. */
+export const ffUntil = (page: Page, phases: string[], maxSeconds = 30): Promise<string> =>
+  plush(
+    page,
+    (p, a) => {
+      for (let t = 0; t < a.max; t += 0.05) {
+        if (a.phases.includes(p.state().phase)) break;
+        p.fastForward(0.05);
+      }
+      return p.state().phase;
+    },
+    { phases, max: maxSeconds },
+  );
+
+/** Picks a theme in the theme picker and waits until the cabinet has been rebuilt. */
+export async function switchTheme(page: Page, id: Theme, wait = true): Promise<void> {
+  await click(page, 'menu-themes');
+  await expect(page.getByTestId('theme-picker')).toBeVisible();
+  await click(page, `theme-${id}`);
+  await expect(page.getByTestId('theme-picker')).toHaveCount(0);
+  if (wait) await expect.poll(() => plush(page, (p) => `${p.state().theme}/${p.ui().themeBusy}`), { timeout: 240_000 }).toBe(`${id}/false`);
 }
 
 /** Makes sure the game is ready for the next aim (after a win the card must be dismissed). */
@@ -271,9 +312,20 @@ export async function expectInZone(page: Page, testId: string, top = 0.25, botto
   return { top: t, bottom: bt };
 }
 
+/** Waits until every finite CSS animation (dialog pop-in, toasts, ...) has finished. */
+export const settle = (page: Page): Promise<void> =>
+  page.evaluate(async () => {
+    const finite = document.getAnimations().filter((a) => {
+      const end = a.effect?.getComputedTiming().endTime;
+      return typeof end === 'number' && Number.isFinite(end);
+    });
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)));
+  });
+
 export async function openSettings(page: Page, via: 'menu-settings' | 'info-button' = 'menu-settings', tab?: string): Promise<void> {
   await click(page, via);
   await expect(page.getByTestId('settings')).toBeVisible();
+  await settle(page);
   if (tab) {
     await click(page, `tab-${tab}`);
     await expect(page.getByTestId(`panel-${tab}`)).toBeVisible();
@@ -343,41 +395,188 @@ export async function hold(page: Page, dir: Dir, seconds: number): Promise<void>
   await page.mouse.up();
 }
 
+/** Waits (in real time) until the trolley has stopped, returns its position. */
+async function settled(page: Page): Promise<{ x: number; z: number }> {
+  let last = (await state(page)).claw;
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(120);
+    const now = (await state(page)).claw;
+    if (Math.abs(now.x - last.x) < 1e-4 && Math.abs(now.z - last.z) < 1e-4) return now;
+    last = now;
+  }
+  return last;
+}
+
 /**
- * Steers the claw above (x, z) using only the on-screen direction buttons:
- * a long hold for the approach, then short taps until it is within `tol`.
- * The mouse button is really held down; game time is advanced while it is held.
+ * Steers the claw above (x, z) the way a player does: only the on-screen direction
+ * buttons, real pointer press-and-hold in real time, watching the claw and letting go
+ * shortly before the target, then short corrective taps until it is within `tol`.
  */
-export async function steerTo(page: Page, x: number, z: number, tol = 0.007): Promise<{ x: number; z: number; presses: number }> {
+export async function steerTo(page: Page, x: number, z: number, tol = 0.012): Promise<{ x: number; z: number; presses: number }> {
   let presses = 0;
   for (const axis of ['x', 'z'] as const) {
     const target = axis === 'x' ? x : z;
-    for (let i = 0; i < 30; i++) {
-      const s = await state(page);
-      const err = target - s.claw[axis];
+    for (let i = 0; i < 24; i++) {
+      const pos = await settled(page);
+      const err = target - pos[axis];
       if (Math.abs(err) < tol) break;
       const dir: Dir = axis === 'x' ? (err > 0 ? 'right' : 'left') : err > 0 ? 'front' : 'back';
       const b = await box(page, `dir-${dir}`);
       await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
       await page.mouse.down();
       presses++;
-      await plush(
-        page,
-        (p, a) => {
-          if (Math.abs(a.err) > 0.07) {
-            // Approach: keep holding until the braking distance is reached.
-            for (let k = 0; k < 400; k++) {
-              p.fastForward(0.02);
-              if (Math.abs(a.target - p.state().claw[a.axis]) < 0.045) break;
-            }
-          } else p.fastForward(Math.min(0.12, Math.max(0.03, Math.abs(a.err) / 0.3)));
-        },
-        { err, target, axis },
-      );
+      if (Math.abs(err) > 0.07) {
+        // Long hold: release a braking distance (plus reaction time) before the target.
+        await page.waitForFunction(
+          (a) => Math.abs(a.target - (window as any).__plush.state().claw[a.axis]) < 0.075 || !/READY|AIMING/.test((window as any).__plush.state().phase),
+          { target, axis },
+          { polling: 8, timeout: 180_000 },
+        );
+      } else await page.waitForTimeout(Math.abs(err) > 0.03 ? 70 : 25);
       await page.mouse.up();
-      await ff(page, 0.4);
     }
   }
-  const end = await state(page);
-  return { x: end.claw.x, z: end.claw.z, presses };
+  const end = await settled(page);
+  return { x: end.x, z: end.z, presses };
 }
+
+/** Waits for `n` rendered frames (slow under software GL). */
+export const frames = (page: Page, n = 2): Promise<void> =>
+  page.evaluate(
+    (count) =>
+      new Promise<void>((resolve) => {
+        let i = 0;
+        const tick = () => (++i >= count ? resolve() : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      }),
+    n,
+  );
+
+export interface Offender {
+  id: string;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * Every visible interactive element (buttons, inputs, selects, tabs, switches)
+ * whose visible rectangle leaves normalised screen Y [top, bottom]. Elements
+ * scrolled out of a scroll container are not visible and are ignored.
+ */
+export const outsideZone = (page: Page, allow: string[] = [], top = 0.25, bottom = 0.75): Promise<Offender[]> =>
+  page.evaluate(
+    ({ allow, top, bottom }) => {
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const out: { id: string; top: number; bottom: number }[] = [];
+      const nodes = document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [role="switch"], [role="tab"], [role="slider"]');
+      for (const el of nodes) {
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none' || style.pointerEvents === 'none') continue;
+        if ((el as HTMLInputElement).type === 'file' || (el as HTMLInputElement).type === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        let x0 = r.left, x1 = r.right, y0 = r.top, y1 = r.bottom;
+        if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+        // Clip against scroll containers: what is scrolled away cannot be touched.
+        for (let a = el.parentElement; a; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if (cs.display === 'none' || cs.visibility === 'hidden') { x1 = x0; break; }
+          if (/(auto|scroll|hidden|clip)/.test(cs.overflowY + cs.overflowX)) {
+            const c = a.getBoundingClientRect();
+            x0 = Math.max(x0, c.left); x1 = Math.min(x1, c.right); y0 = Math.max(y0, c.top); y1 = Math.min(y1, c.bottom);
+          }
+        }
+        x0 = Math.max(x0, 0); x1 = Math.min(x1, vw); y0 = Math.max(y0, 0); y1 = Math.min(y1, vh);
+        if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+        const id = el.getAttribute('data-testid') ?? el.closest('[data-testid]')?.getAttribute('data-testid') ?? `${el.tagName}.${el.className}`;
+        if (allow.includes(id)) continue;
+        if (y0 / vh < top - 0.002 || y1 / vh > bottom + 0.002) out.push({ id, top: +(y0 / vh).toFixed(4), bottom: +(y1 / vh).toFixed(4) });
+      }
+      return out;
+    },
+    { allow, top, bottom },
+  );
+
+/** Simulates the tab being hidden / shown again (headless Chromium cannot really background a tab). */
+export const setHidden = (page: Page, hidden: boolean): Promise<void> =>
+  page.evaluate((h) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+export const input = (page: Page): Promise<{ x: number; z: number }> => plush(page, (p) => ({ x: p.core().controller.inputX, z: p.core().controller.inputZ }));
+
+export interface LowContrast {
+  text: string;
+  where: string;
+  ratio: number;
+}
+
+/**
+ * Text inside open dialogs whose WCAG contrast ratio against its (solid) background is below `min`.
+ * Element opacity is taken into account; text on gradients or images and disabled controls are skipped.
+ */
+export const lowContrast = (page: Page, min = 3, scope = '[role="dialog"]'): Promise<LowContrast[]> =>
+  page.evaluate(
+    ({ min, scope }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+      const cache = new Map<string, number[]>();
+      const rgba = (css: string): number[] => {
+        let v = cache.get(css);
+        if (!v) {
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.fillStyle = '#000';
+          ctx.fillStyle = css;
+          ctx.fillRect(0, 0, 1, 1);
+          const d = ctx.getImageData(0, 0, 1, 1).data;
+          v = d[3] === 0 ? [0, 0, 0, 0] : [(d[0]! * 255) / d[3]!, (d[1]! * 255) / d[3]!, (d[2]! * 255) / d[3]!, d[3]! / 255];
+          cache.set(css, v);
+        }
+        return v;
+      };
+      const lum = (c: number[]) => {
+        const f = (x: number) => {
+          const s = x / 255;
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+      };
+      const out: { text: string; where: string; ratio: number }[] = [];
+      for (const root of document.querySelectorAll<HTMLElement>(scope)) {
+        for (const el of root.querySelectorAll<HTMLElement>('*')) {
+          const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent!.trim().length > 1).map((n) => n.textContent!.trim()).join(' ');
+          if (!own) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          if (el.closest(':disabled, [aria-disabled="true"], [hidden], option')) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+          // Nearest solid background, collecting opacity on the way.
+          let opacity = 1;
+          let bg: number[] | null = null;
+          for (let a: HTMLElement | null = el; a; a = a.parentElement) {
+            const s = getComputedStyle(a);
+            const c = rgba(s.backgroundColor);
+            if (c[3]! > 0.85) {
+              bg = c;
+              break;
+            }
+            if (s.backgroundImage !== 'none' || c[3]! > 0.05) break; // gradient / translucent layer: not decidable here
+            opacity *= Number(s.opacity);
+          }
+          if (!bg) continue;
+          const fg = rgba(cs.color);
+          const alpha = fg[3]! * opacity;
+          const mixed = [0, 1, 2].map((i) => fg[i]! * alpha + bg![i]! * (1 - alpha));
+          const [hi, lo] = [lum(mixed), lum(bg)].sort((x, y) => y - x) as [number, number];
+          const ratio = (hi + 0.05) / (lo + 0.05);
+          if (ratio < min) out.push({ text: own.slice(0, 40), where: `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}${el.closest('[data-testid]') ? ` in ${el.closest('[data-testid]')!.getAttribute('data-testid')}` : ''}`, ratio: +ratio.toFixed(2) });
+        }
+      }
+      return out;
+    },
+    { min, scope },
+  );

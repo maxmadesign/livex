@@ -100,13 +100,13 @@ export function AiTab() {
   const runTest = async () => {
     setTest({ state: 'running' });
     const r = await app.guide.testConnection();
-    setTest({ state: 'done', ok: r.ok, text: r.ok ? `${t('ai.test.ok')}${r.latencyMs !== null ? ` · ${Math.round(r.latencyMs)} ms` : ''}${r.sample ? ` · “${r.sample}”` : ''}` : `${t('ai.test.fail')} · ${r.detail}` });
+    setTest({ state: 'done', ok: r.ok, text: r.ok ? `${t('ai.test.ok', { detail: r.detail })}${r.sample ? ` · ${t('ai.test.sample', { text: r.sample })}` : ''}` : t('ai.test.fail', { detail: r.detail }) });
   };
   const runVoice = async () => {
     void app.audio.unlock();
     setVoiceTest({ state: 'running' });
     const r = await app.guide.previewVoice();
-    setVoiceTest({ state: 'done', ok: r.ok, text: r.ok ? `${t('ai.preview.ok')} · ${r.detail}` : `${t('ai.preview.fail')} · ${r.detail}` });
+    setVoiceTest({ state: 'done', ok: r.ok, text: r.ok ? t('ai.preview.ok', { voice: r.detail }) : t('ai.preview.fail', { detail: r.detail }) });
   };
   const cloudOff = provider === 'local' ? t('ai.connection.hint.local') : null;
   return (
