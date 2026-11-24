@@ -5,8 +5,10 @@ import {
   Box3,
   Color,
   DirectionalLight,
+  Group,
   HalfFloatType,
   HemisphereLight,
+  InstancedMesh,
   Mesh,
   NeutralToneMapping,
   PCFShadowMap,
@@ -776,6 +778,20 @@ export class Stage {
     try {
       pending.push(renderer.compileAsync(this.scene, this.camera));
       for (const object of extra) pending.push(renderer.compileAsync(object, this.camera, this.scene));
+      // The ambient-occlusion pass redraws the scene with its normal material: the late objects
+      // (instanced fur shells) need that material's instanced variant as well.
+      const aoNormal = this.aoPass?.normalMaterial;
+      if (aoNormal && extra.length > 0) {
+        const standIns = new Group();
+        for (const object of extra) {
+          object.traverse((o) => {
+            const mesh = o as Mesh;
+            if (!mesh.isMesh) return;
+            standIns.add((mesh as InstancedMesh).isInstancedMesh ? new InstancedMesh(mesh.geometry, aoNormal, 1) : new Mesh(mesh.geometry, aoNormal));
+          });
+        }
+        pending.push(renderer.compileAsync(standIns, this.camera, this.scene));
+      }
       // Height materials of the contact pass (binds its own target): the claw's is otherwise built
       // the first time the claw comes down to the toys.
       if (CONTACT_SHADOWS[this.graphics.shadows].size > 0 && this.contact.mesh.visible) {

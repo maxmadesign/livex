@@ -315,9 +315,28 @@ during the runs: 4–15 (other jobs on the same four cores), which affects nothi
 | **Medium, ready** | 516 485 – 732 556 | **228 455 – 300 511** | 130–152 → 130–152 | 215 997 → 71 982 | 221 605 → 77 590 | 216 001 → 71 986 |
 | **Medium, held** | 694 994 – 940 282 | **385 693 – 457 697** | 118–140 → 118–140 | 365 268 → 229 253 | 250 876 → 77 590 | 245 272 → 71 986 |
 | Medium, GPU Party, attract | 530 653 – 746 657 (Cosmic stand-ins) | 242 175 – 314 159 (own characters) | 149–171 → 149–171 | 215 994 → 71 974 | 221 602 → 77 582 | 215 998 → 71 978 |
+| Medium, GPU Party, held (review) | not measured | 399 141 – 471 129 | → 150–172 | → 228 984 | → 77 582 | → 0 / 71 974 (refreshed in 2 of 4 frames) |
 | High, attract | 4 064 818 | 2 210 799 | 336 → 273 | 741 471 → 741 471 | 1 606 142 (drawn twice: 126 calls) → 277 597 (once: 63 calls) | 741 475 → 216 001 |
-| High, held | 2 645 171 – 4 544 863 | 1 474 239 | 178–327 → 177 | 861 471 → 861 471 | 923 071 – 1 846 142 → 277 597 | 741 475 → 216 001 |
+| High, held (see the note below) | 2 645 171 – 4 544 863 | 1 474 239 | 178–327 → 177 | 861 471 → 861 471 | 923 071 – 1 846 142 → 277 597 | 741 475 → 216 001 |
+| High, held, optimiser off (review) | not measured | 2 450 759 – 2 450 813 | → 275 | → 861 471 | → 277 597 | → 215 997 |
 | Ultra, attract (960 × 540) | 8 033 850 | 5 007 831 | 499 → 400 | 1 317 327 → 1 317 327 | 2 798 430 → 297 885 (63 calls; shells left out) | 741 475 → 216 001 |
+
+**Note on the High "held" rows (review).** Software rendering takes seconds per frame, so the
+automatic optimiser (*Auto-optimise*, on by default) starts switching effects off during a run;
+by the time a toy is held on High it had turned ambient occlusion off, which removes the AO
+pass's second drawing of the whole scene (≈ 1 M triangles, ~100 calls). The first High "held"
+row was measured that way (177 calls), and its "before" range mixes optimiser states, so it is
+not a like-for-like comparison. With the optimiser switched off after boot
+(`graphics.autoOptimize = false`), High measured 1 994 834 – 2 210 853 triangles in attract
+(251–273 calls, the same as the row above) and 2 450 759 – 2 450 813 with a held toy (275 calls,
+Sakura, every frame refreshing the contact map). A "before" build of High with the optimiser off
+did not finish its round within 50 minutes of software rendering and has no row. The Medium rows
+are hardly affected in triangles: before *Shadows* (the ninth step, which would also remove the
+contact map) the optimiser only reduces particles, bloom, glass and resolution there, and the
+contact map was still being refreshed in every Medium run of the review. Not in any of these
+counts: the cabinet capture of *Reflections* "refresh" / "live" (High once after a change, Ultra
+every 0.75 s: six cube faces of the whole scene) runs in `Stage.render` before `renderer.info` is
+reset, so it never shows up in a per-frame reading.
 
 Medium now stays under 500 000 triangles in every measured frame (the highest is a held toy on a
 frame that also refreshes the contact map). Where the triangles of a held-toy frame on Medium go:
@@ -347,6 +366,22 @@ variant, which used to be built on the first aim:
 | Medium | 58 / 52 (21) | 39 / 33 (1) |
 | High | 71 / 63 (23) | 50 / 41 (1) |
 | Ultra (attract only) | 74 (23) | 50 (0) |
+
+Review of round 3: two programs were still built during the first round, i.e. as a hitch on the
+first grab — the contact pass's plain height material (only the claw uses it, and only once it
+comes within 20 cm of the floor) on Medium and High, and on High / Ultra the instanced variant of
+the ambient-occlusion pass's normal material (first drawn for the fur shells of the aimed toy).
+`Stage.warmUp()` now compiles both (`ContactShadows.compile`, and the AO normal material on the
+late objects). Counted by wrapping `linkProgram` / `useProgram` of the WebGL context from page
+load (Sakura, 1280 × 720, automatic optimiser off for High):
+
+| Tier | Before the fix: linked during warm-up / first frames / first round | After |
+| --- | --- | --- |
+| Medium | 40 / 3 (both contact blur passes, the toys' contact height material) / 1 (claw contact height) | 42 / 2 (both blur passes, first frame) / 0 |
+| High (before = with the contact fix already in) | 55 / 0 / 1 (AO normal material, instanced) | 56 / 0 / 0 |
+
+Every program linked during warm-up was used by a later frame (none wasted); the only one keyed
+for the canvas is the final FXAA / SMAA pass.
 
 **Textures of the textured toys** (GPU memory, RGBA8 with mip chains; three maps per character,
 the roughness map capped at 1024²; display-bay toys share their characters' textures):

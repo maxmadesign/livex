@@ -306,8 +306,15 @@ to watch while changing a design:
 - **Decoration the generated model does not have** (a wind-up key, a thin antenna) should be
   `collide: 'none'`.
 - The flat-base ring of every hull (points at y = 0) spans the gap between two feet under a toy;
-  the gap statistic counts it (`fit-diagnose` also prints the value without it). It is under the
-  toy, where neither the claw nor another toy can reach, and it keeps toys from rocking.
+  the gap statistic counts it (`fit-diagnose` also prints the value without it). While the toy
+  stands upright it is under the toy, where neither the claw nor another toy can reach, and it
+  keeps toys from rocking. **But where the generated model's own floor contact is smaller than
+  the ring** — it rests on its legs or on its front edge with the back of its base lifted — the
+  ring's edge becomes the contact point as soon as the toy leans, and the drawn toy then hovers
+  above the floor. Check this as well as the gap: for tilts of 5–45° in every direction, compare
+  how far the hulls and the drawn mesh reach towards the floor (support functions). The review of
+  round 3 measured it for all 31 models (see the GPU Party note under
+  [Imported textured models](#imported-textured-models)).
 
 Changes made with this procedure in round 3 (verdict before → after; grab regression in
 [PERFORMANCE.md](PERFORMANCE.md#physics-after-the-proxy-changes) and below):
@@ -594,3 +601,32 @@ ratings mean:
 - GPU Party: the generated models are 2–9 % larger than their designs, and most of their gap is
   the flat-base ring between two feet under the toy (without it the gap p95 is 0.0–1.2 cm, the
   pixel's arms 1.0 cm).
+
+**Floating when leaning (review of round 3, open).** Upright, every drawn model touches the floor
+exactly where its hulls do (difference ≤ 0.4 cm for all 31 in browser piles of all five themes).
+Tilted, the GPU Party models differ from the other 24: how far the hulls reach beyond the drawn
+mesh towards the floor, worst direction, at a tilt of
+
+| Tilt | 10° | 15° | 20° | 30° | 45° |
+| --- | --- | --- | --- | --- | --- |
+| `gpu.chief` | 1.6 cm | 2.2 | 2.2 | 2.1 | 1.7 |
+| `gpu.pixel` | 1.3 | 1.6 | 1.9 | 2.0 | 1.8 |
+| `gpu.chip` | 0.7 | 1.0 | 1.2 | 1.7 | 1.7 |
+| `gpu.rack` | 0.7 | 1.1 | 1.4 | 1.7 | 1.1 |
+| `gpu.fan` | 0.6 | 0.9 | 1.2 | 1.7 | 1.9 |
+| `gpu.card` | 0.4 | 0.6 | 0.8 | 1.2 | 1.6 |
+| `gpu.bot` | 0.2 | 0.3 | 0.4 | 0.6 | 0.8 |
+| the other 24 (highest) | 0.6 | 0.8 | 0.9 | 1.2 | 1.2 |
+
+The cause is the base: the generated chief sits on its legs with the seat lifted (nothing of the
+mesh within 1 cm of the floor behind z = +0.8 cm, while the body hull's floor ring reaches
+z = −4.5 cm), the chip stands on its front bottom edge, and the pixel's bottom corners are much
+rounder than the box hull's. Leaning back, the toy rests on the ring's edge and the drawn model
+hovers. In headless play (real physics, 3 seeds × 4 rounds per theme, every resting toy whose
+hulls touch the floor) this happened in about 1 of 30 resting samples of the chief (1.7 cm at a
+13° lean) and of the chip (1.6 cm at 43°); the other GPU Party models stayed ≤ 0.4 cm, the other
+24 characters ≤ 0.23 cm (their worst cases are the other way round: ears and horns without a
+collider sink up to 1.4 cm into the floor when the toy lies on its side). A browser pile after one
+grab showed the same chief 1.7 cm above the floor. Fixing it means making the hulls follow the
+generated base, which changes how these toys rest (the chief would lean back on its seat), or
+importing the model with a pitch correction so that its base sits flat; neither is done yet.
