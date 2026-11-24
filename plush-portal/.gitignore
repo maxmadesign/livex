@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-e2e/
+# extra e2e / review builds (PLUSH_E2E_DIST=dist-<name>)
+dist-*/
 .env
 .env.local
 .data/
