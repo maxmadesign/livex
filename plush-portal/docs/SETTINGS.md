@@ -19,8 +19,9 @@ below are generated from that specification, so paths, defaults and ranges are t
 - **Apply** saves the draft. **Cancel**, `Esc`, the close button and tapping
   outside the dialog discard it and restore what was applied before.
 - **Reset this tab** restores the defaults of the current tab (in the draft —
-  it still needs Apply). On *Layout* it resets the active display preset; on
-  *Camera & Parallax* it resets tracking and viewing values but keeps the preset's layout.
+  it still needs Apply). On *Layout* it resets only the layout of the active
+  display preset; on *Camera & Parallax* it resets the tracking settings plus
+  that preset's viewing geometry and calibration, and keeps its layout.
 - The **Applies** column:
 
 | Value | Meaning |
@@ -59,6 +60,7 @@ Sections: Difficulty · Claw movement · Grip · Round · Player help.
 - *Cable swing*: `0` = stiff cable, `1` = free swinging.
 - *Aim time limit*: `0` = no limit; when time runs out the claw drops where it is.
 - *Restocking*: `afterWin` refills the field after every win, `whenLow` when 60 % or fewer of the toys are left, `manual` only with the button.
+- *Show how-to-play on first start*: the how-to-play card appears once, the first time a player presses START on this device.
 - Buttons: **Restart this round**, **Restock now**.
 
 ## 2. Themes & Toys
@@ -98,7 +100,7 @@ the **active display preset**; each preset keeps its own
 | Auto-fit | `autoFit` | on | on | on | on / off |
 | Zone top | `safeTop` | 0 | 0 | 0.25 | 0 … 0.6 (step 0.01) |
 | Zone bottom | `safeBottom` | 1 | 1 | 0.75 | 0.4 … 1 (step 0.01) |
-| Control panel height | `anchorY` | 0.855 | 0.865 | 0.6 | 0.2 … 0.95 (step 0.005) |
+| Control panel height | `anchorY` | 0.84 | 0.865 | 0.6 | 0.2 … 0.95 (step 0.005) |
 | Control panel width | `panelWidth` | 0.94 | 0.94 | 0.6 | 0.3 … 1 (step 0.01) |
 | Grab button side | `handedness` | `right` | `right` | `right` | `right` · `left` |
 | Show safe-zone guides | `showGuides` | off | off | off | on / off |
@@ -113,7 +115,7 @@ the **active display preset**; each preset keeps its own
 - Positions are fractions of the screen (0 = top / left, 1 = bottom / right); the dialog shows them as percentages. *Button size* is in design units.
 - The tab shows a miniature of the solved layout, the viewport read-out
   ("Viewport … CSS px · pixel ratio … · design … · 1 unit = … px") and a note when auto-fit had to adjust something.
-- **Reset this preset** restores all values of the active preset, including its screen geometry and calibration (Camera tab).
+- **Reset this preset** restores the layout values of the active preset. Its screen geometry, camera mounting and calibration are not touched (reset those from the Camera tab).
 - Background and guidance: [DISPLAYS.md](DISPLAYS.md).
 
 ## 4. Graphics
@@ -134,7 +136,7 @@ Sections: Quality · 3D resolution · Detail · Image. All are *live*.
 | Ambient occlusion | `graphics.ao` | `off` | `off` · `low` · `high` | live |
 | Glass | `graphics.glass` | `medium` | `low` Simple · `medium` Reflective · `high` Transmission | live |
 | Reflections | `graphics.reflections` | `static` | `static` Studio · `refresh` Cabinet (per round) · `live` Cabinet (live) | live |
-| Plush detail | `graphics.fur` | `sheen` | `flat` · `sheen` · `shell` Fuzzy (held toy) · `shellHigh` Fuzzy (all toys) | live |
+| Plush detail | `graphics.fur` | `shell` | `flat` · `sheen` · `shell` Fuzzy (held toy) · `shellHigh` Fuzzy (all toys) | live |
 | Softness detail | `graphics.deform` | `basic` | `basic` · `fine` · `ultra` | live |
 | Decor particles | `graphics.particles` | 60 | 0 … 300 (step 10) | live |
 | Bloom | `graphics.bloom` | 0.25 | 0 … 1 (step 0.05) | live |
@@ -164,11 +166,11 @@ Sections: Volume · Music · Output. All are *live*.
 | Momo’s voice | `audio.voice` | 0.9 | 0 … 1 (step 0.01) | live |
 | Lower music while Momo talks | `audio.ducking` | 0.6 | 0 … 1 (step 0.05) | live |
 | Music track | `audio.track` | `theme` | `theme` Follow theme · `sakura` Sakura Kawaii · `storybook` Storybook Friends · `ocean` Ocean Dream · `cosmic` Cosmic Arcade | live |
-| Output device | `audio.outputDevice` | *(empty)* | text ≤ 256 | live |
+| Output device | `audio.outputDevice` | *(empty)* | text ≤ 256 (never exported) | live |
 
 - *Music track*: follow the theme, or pin one of the four tracks. **Preview / Stop** plays it in the dialog.
 - *Lower music while Momo talks* is the ducking depth.
-- *Output device* lists devices only in browsers that support choosing one; otherwise the system default is used.
+- *Output device* lists devices only in browsers that support choosing one; otherwise the system default is used. The id is never exported.
 - The tab shows the audio state (locked until the first tap, loading, running, suspended, failed) and whether the built-in synthesiser replaced missing files.
 - Details: [AUDIO.md](AUDIO.md).
 
@@ -215,7 +217,7 @@ Tracking (shared by all presets):
 | Setting | Path | Default | Range / options | Applies |
 | --- | --- | --- | --- | --- |
 | Head tracking | `camera.enabled` | on | on / off | live |
-| Camera | `camera.deviceId` | *(empty)* | text ≤ 256 | live |
+| Camera | `camera.deviceId` | *(empty)* | text ≤ 256 (never exported) | live |
 | Follow smoothing | `camera.smoothMs` | 70 | 0 … 400 (step 5) ms | live |
 | Jitter filter cutoff | `camera.filterMinCutoff` | 1.4 | 0.2 … 6 (step 0.1) Hz | live |
 | Jitter filter speed gain | `camera.filterBeta` | 6 | 0 … 40 (step 0.5) | live |
@@ -257,12 +259,14 @@ Viewing geometry (per display preset, under `profiles.<preset>.view`):
 | Neutral measurement (x, y, z) | `calNeutral` | [0, 0.14, 0.62] | [0, 0.2, 0.62] | [0, 0.5, 0.95] | each -5 … 5 m |
 
 - Positions are metres relative to the centre of the screen: x right, y up, z towards the viewer.
-- *Camera* (`camera.deviceId`) is chosen from the detected cameras; empty = the browser's default.
+  `calNeutral` is measured relative to the centre of the game window, which is the same point when the game fills the screen.
+- *Camera* (`camera.deviceId`) is chosen from the detected cameras; empty = the browser's default. The id is never exported.
 - **Start camera now / Stop camera**, a mirrored **preview that is shown only in this tab**, and the status line.
 - **Calibrate current position** averages about a second of stable samples and stores `calibrated`, `calDepthK` and `calNeutral`; **Re-centre** makes the current head position the neutral one without changing the depth constant.
   These three are normally written by the calibration, not typed.
 - **Test viewpoint** sliders move the eye by hand to check the projection. They are not camera tracking; **Back to live view** ends the test.
-- **Set eye height from installation** derives the vertical reference eye from the screen's height above the floor and a typical player's eye height.
+- **Set eye height from installation**: four buttons (1.15 / 1.40 / 1.60 / 1.75 m) set the vertical reference eye to
+  that eye height minus the height of the screen centre (*Bottom edge above floor* + half the *Screen height*).
 - The tab shows the effective window ("W × H m · scale").
 - Video only — the microphone is never requested. Frames and landmarks stay on the device; nothing is recorded, stored or sent to the AI guide.
 - Procedure and troubleshooting: [CALIBRATION.md](CALIBRATION.md).
@@ -286,7 +290,8 @@ Sections: General · Configuration · Reset · Public display lock · Diagnostic
 - **Toggle full screen** (also the `F` key).
 - **Export configuration / Import configuration…** — see below.
 - **Reset all settings** (keeps the display preset, the language and the collection) and **Clear collection** (keeps settings); both ask for a second tap.
-- Diagnostics: version line ("physics 120 Hz fixed step · renderer WebGL 2"), asset warnings, the recent redacted log with **Copy diagnostics** / **Clear log**, and *Detailed log*.
+- Diagnostics: version line ("physics 120 Hz fixed step · renderer WebGL 2"), asset warnings, and the recent redacted log with **Copy diagnostics** / **Clear log**.
+  *Detailed log* additionally records every phase change and every round result (outcome, contact level, grip quality, slip reason) there.
 
 ## Presets
 
@@ -322,11 +327,8 @@ how they were tuned, is in [PHYSICS.md](PHYSICS.md).
 | Bloom | 0 | 0.25 | 0.30 | 0.30 |
 | Decor particles | 20 | 60 | 150 | 300 |
 
-`?quality=safe|medium|high|ultra` applies one at launch.
-
-> Note: a fresh installation starts with `graphics.preset = medium` but with
-> *Plush detail* = Sheen (the specification default), whereas choosing the
-> Medium preset sets it to Fuzzy (held toy). Pick the preset once if you want exactly its values.
+`?quality=safe|medium|high|ultra` applies one at launch. A fresh installation
+starts with exactly the Medium values.
 
 **Display presets** are described in [DISPLAYS.md](DISPLAYS.md).
 
@@ -354,11 +356,10 @@ how they were tuned, is in [PHYSICS.md](PHYSICS.md).
 
 (Abbreviated: each object holds all of its settings.)
 
-What is in it: every setting in this document, for all three display presets.
-That includes the calibration numbers (a depth constant and a neutral eye
-position per preset), the device ids of the chosen camera and audio output
-(opaque strings that only mean something in the same browser), your guide prompt
-and personality text, and references to imported models.
+What is in it: every setting in this document except the three marked "never
+exported", for all three display presets. That includes the calibration numbers
+(a depth constant and a neutral eye position per preset), your guide prompt and
+personality text, and references to imported models.
 
 What is **never** in it:
 
@@ -366,6 +367,7 @@ What is **never** in it:
 | --- | --- |
 | OpenAI API key, admin token | They exist only on the server; the browser never has them. |
 | Settings PIN (`system.lockPin`) | Marked `noExport` in the specification. |
+| Camera and audio-output device ids (`camera.deviceId`, `audio.outputDevice`) | Also `noExport`: they identify hardware of one browser on one machine. |
 | Camera images, video, face landmarks | They are never stored anywhere, so there is nothing to export. |
 | Prize collection | Stored separately. |
 | Imported model files | Only the reference is exported; the file stays in this browser's IndexedDB. |
@@ -376,7 +378,7 @@ What is **never** in it:
 
 - unknown keys are dropped, every value is clamped to its range, missing values get defaults;
 - the PIN and the lock state of **this** device are kept, whatever the file says;
-- the display preset from the file is used if it names one, otherwise this device's choice is kept;
+- this device's display preset stays selected if one has been chosen (the file's preset is used only on a device that has none yet); the per-preset values themselves are imported for all three presets;
 - model references whose file is not on this device fall back to the built-in model (with a warning);
 - the result goes into the draft: it is previewed, and only **Apply** saves it.
 
@@ -408,6 +410,7 @@ read or remove it. Protect a public installation with the operating system's kio
 | --- | --- | --- |
 | Settings | `localStorage` | `plush-portal/settings` — an object with `version` (1) and `settings` |
 | Collection | `localStorage` | `plush-portal/collection/v1` |
+| "How-to-play shown" flag | `localStorage` | `plush-portal/tutorial-seen` |
 | Guide line cache (only with *Line cache: Keep on this device*) | `localStorage` | `plush-portal.ai.lines.v1` |
 | Imported models | IndexedDB | database `plush-portal-models` |
 

@@ -133,16 +133,11 @@ export class PlushLibrary {
         geometry.computeBoundingBox();
         lods.push(geometry);
       }
-      if (!plushReady || lods.length === 0) {
-        // An ordinary glTF model referenced from the manifest (for example a licensed character
-        // dropped into a slot): it keeps its own materials and textures and still gets the
-        // soft-body deformation; the slot's collision proxy, mass and names come from the manifest.
-        if (byName.size === 0) throw new Error('the file contains no meshes');
-        const { templateFromScene } = await import('./customModels');
-        const { createFallbackGeometry } = await import('./fallbackGeometry');
-        this.notes.push(`${asset.id} uses a standard glTF model without plush attributes: rendered with its own materials.`);
-        return { asset, lods: [createFallbackGeometry(asset)], fallback: false, custom: templateFromScene(gltf.scene, asset, { scale: 1, yawDeg: 0 }) };
-      }
+      const standard = !plushReady || lods.length === 0;
+      if (standard && byName.size === 0) throw new Error('the file contains no meshes');
+      const { createFallbackGeometry } = standard ? await import('./fallbackGeometry') : { createFallbackGeometry: null };
+      // A standard model has no baked LOD meshes: the slot's stand-in geometry only feeds bounds.
+      const slotLods = standard && createFallbackGeometry ? [createFallbackGeometry(asset)] : lods;
       const entry = this.custom.get(asset.id);
       if (entry) {
         // A broken import never removes the character: the built-in model stays in use.
@@ -150,12 +145,21 @@ export class PlushLibrary {
           const { buildCustomTemplate, loadModelFile } = await import('./customModels');
           const data = await loadModelFile(entry.fileKey);
           if (!data) throw new Error('the stored file is missing');
-          return { asset, lods, fallback: false, custom: await buildCustomTemplate(data, asset, entry) };
+          return { asset, lods: slotLods, fallback: false, custom: await buildCustomTemplate(data, asset, entry) };
         } catch (error) {
           const message = `Imported model for ${asset.id} could not be used (${error instanceof Error ? error.message : String(error)}); showing the built-in model.`;
           this.warnings.push(message);
           console.warn(`[plush] ${message}`);
         }
+      }
+      if (standard) {
+        // An ordinary glTF model referenced from the manifest (for example a licensed character
+        // dropped into a slot): it keeps its own materials and textures and still gets the
+        // soft-body deformation; the slot's collision proxy, mass and names come from the manifest.
+        const { templateFromScene } = await import('./customModels');
+        const note = `${asset.id} uses a standard glTF model without plush attributes: rendered with its own materials.`;
+        if (!this.notes.includes(note)) this.notes.push(note);
+        return { asset, lods: slotLods, fallback: false, custom: templateFromScene(gltf.scene, asset, { scale: 1, yawDeg: 0 }) };
       }
       return { asset, lods, fallback: false };
     } catch (error) {

@@ -77,6 +77,7 @@ export const settingsEn: Record<string, string> = {
   'themes.enabled': 'In the machine',
   'themes.status.original': 'Original character',
   'themes.status.original-replaceable': 'Original — slot ready for a licensed model',
+  'themes.status.licensed': 'Licensed model',
   'themes.status.user-import': 'Your imported model',
   'themes.size': '{h} cm · {g} g',
   'themes.replace': 'Replace model…',

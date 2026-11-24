@@ -71,6 +71,7 @@ export const settingsJa: Record<string, string> = {
   'themes.enabled': '筐体に入れる',
   'themes.status.original': 'オリジナルキャラクター',
   'themes.status.original-replaceable': 'オリジナル — ライセンスモデルに差し替えできる枠',
+  'themes.status.licensed': 'ライセンス取得済みモデル',
   'themes.status.user-import': '取り込んだモデル',
   'themes.size': '{h} cm · {g} g',
   'themes.replace': 'モデルを差し替え…',

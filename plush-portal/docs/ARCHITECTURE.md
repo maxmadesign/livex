@@ -222,7 +222,8 @@ invariants (for example "safe zone at least 30 % tall") are applied on load and 
 | A phase never reaches its milestone | Phase watchdog (see above) forces the sequence forward. |
 | WebGL context lost | `Stage` stops rendering (`preventDefault` on the event so the browser may restore it) and the game pauses with reason `context`; on `webglcontextrestored` the scene, the post-processing chain and the environment map are rebuilt and the game resumes. |
 | Tab hidden | Pauses the simulation and the guide, suspends audio and tracking; resumes without catch-up. |
-| A character GLB is missing or broken | `src/plush/fallbackGeometry.ts` supplies a simple two-ball stand-in in the character's main colour (with every attribute the plush shader expects); physics is unaffected because it uses the manifest proxies. The problem is logged. |
+| A character GLB is missing, corrupt or has no meshes | `src/plush/fallbackGeometry.ts` supplies a simple two-ball stand-in in the character's main colour; physics is unaffected because it uses the manifest proxies. The problem is logged and listed under *System → Warnings*. |
+| A character GLB is an ordinary glTF model without the plush vertex attributes | Not an error: it is rendered with its own materials plus the shared soft-body deformation (see [ASSETS.md](ASSETS.md#adding-or-replacing-a-character)). |
 | Audio files missing / decoding fails | The engine switches to the built-in synthesiser (worker) and reports `usingFallbackSynth`. |
 | No audio permission yet | State `locked`; audio starts on the first user gesture. |
 | Camera denied, absent, busy, insecure context, model load failure | The tracker reports a specific state; the view uses the reference eye position (plus a slow drift on the attract screen, unless reduced motion is on) and the game is fully playable. The HUD chip shows the state. |

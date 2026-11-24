@@ -71,6 +71,8 @@ export type AssetStatus =
   | 'original'
   /** Original character occupying a slot that is meant to be replaceable by a licensed model. */
   | 'original-replaceable'
+  /** Third-party model the operator holds a licence for (the licence goes in `source.license`). */
+  | 'licensed'
   /** Supplied by the user at runtime (never part of the shipped manifest). */
   | 'user-import';
 
@@ -110,7 +112,7 @@ export interface PlushAsset {
   source: {
     status: AssetStatus;
     /** How the asset was made. */
-    method: 'procedural-sdf';
+    method: 'procedural-sdf' | 'external';
     generator: string;
     license: string;
     note: string;

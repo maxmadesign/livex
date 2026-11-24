@@ -31,7 +31,7 @@ editable under *Settings → Layout* and *Settings → Camera & Parallax*.
 | Design size (units) | 1920 × 1080 | 1080 × 1920 | 1080 × 1920 |
 | Panel style | *split*: direction pad and grab button in the lower corners | *bar*: one panel along the bottom | *bar*: one panel in the middle band |
 | Safe zone (top – bottom) | 0 – 1 | 0 – 1 | **0.25 – 0.75** |
-| Panel anchor Y | 0.855 | 0.865 | **0.60** |
+| Panel anchor Y | 0.84 | 0.865 | **0.60** |
 | Panel width | 0.94 | 0.94 | 0.60 |
 | UI scale | 1.00 | 1.00 | 0.66 |
 | Button size (design units) | 84 | 104 | 100 |
@@ -79,7 +79,8 @@ floor line over the game with their numeric values.
    so the layout is identical at any resolution with the same shape.
 2. **Minimum zone.** A safe zone less than 30 % of the height is replaced by 0.35–0.65.
 3. **The panel is inside the safe zone.** Its top and bottom are clamped into
-   the zone (minus half the vertical margin) wherever the anchor asks for.
+   the zone (minus half the vertical margin) wherever the anchor asks for. A move
+   of more than 1 % of the screen height is reported as `adjusted`; smaller nudges are silent.
 4. **The panel fits.** With auto-fit on, a panel taller than 62 % of the zone
    (bar) / 50 % (split), or than 40 % of the screen, shrinks the UI scale until it fits; a bar wider
    than the allowed panel width shrinks likewise. The result reports `adjusted`, shown as a note in the Layout tab.
@@ -106,14 +107,13 @@ Solver output for the default presets (computed with the code above, not measure
 
 | Preset @ viewport (CSS px) | Unit (px) | Button (px) | Panel top – bottom | Panel width | Dialog top – bottom | Momo | Floor line |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| desktop @ 1920 × 1080 | 1.000 | 84 | 0.712 – 0.990 | 0.93 | 0.02 – 0.98 | side, 0.126 – 0.235 | 0.69 |
-| desktop @ 1280 × 720 | 0.667 | 56 | 0.712 – 0.990 | 0.93 | 0.02 – 0.98 | side | 0.69 |
+| desktop @ 1920 × 1080 | 1.000 | 84 | 0.701 – 0.979 | 0.93 | 0.02 – 0.98 | side, 0.126 – 0.235 | 0.69 |
+| desktop @ 1280 × 720 | 0.667 | 56 | 0.701 – 0.979 | 0.93 | 0.02 – 0.98 | side | 0.69 |
 | portrait32 @ 1080 × 1920 | 1.000 | 104 | 0.752 – 0.978 | 0.93 | 0.02 – 0.98 | above panel, 0.685 – 0.747 | 0.60 |
 | portrait86 @ 1080 × 1920 | 0.660 | 66 | 0.528 – 0.672 | 0.60 | 0.258 – 0.742 | below panel, 0.676 – 0.716 | 0.48 |
 | portrait86 @ 2160 × 3840 | 1.320 | 132 | 0.528 – 0.672 | 0.60 | 0.258 – 0.742 | below panel, 0.676 – 0.716 | 0.48 |
 
-(With the desktop defaults the anchor 0.855 asks for a panel a few pixels lower
-than rule 3 allows, so the solver nudges it up and reports `adjusted`.)
+None of the default presets needs an adjustment at these sizes (`adjusted` is false for all five rows).
 
 ## Four different "sizes"
 
@@ -192,6 +192,8 @@ Steps:
    `localhost` or HTTPS for the camera. Allow the camera permanently for that origin.
 3. **Measure the glass** (active area, not the bezel) and the height of its
    bottom edge; enter them under *Camera & Parallax → Screen & installation*.
+   *Set eye height from installation* then sets the vertical reference eye for a
+   typical player (1.15 / 1.40 / 1.60 / 1.75 m) from those two numbers.
 4. **Mount the camera** centred on the top edge, tilted down so that a person
    standing at playing distance is fully in frame. Enter its position relative
    to the screen centre and its tilt, rotation and field of view under *Camera mounting*.
@@ -250,7 +252,8 @@ right-handed players (*Grab button side*), readability at arm's length, camera f
   preset directly, stores it, and skips the chooser. Use it in kiosk start URLs.
 - The preset can be changed any time under *Settings → Layout → Display
   preset*. Switching presets does not copy values between them.
-- *Reset this preset* restores **all** values of the active preset — layout,
-  screen geometry, camera mounting and calibration.
+- *Reset this preset* (Layout tab) restores the layout values of the active
+  preset only. Its screen geometry, camera mounting and calibration are reset
+  from the Camera & Parallax tab (*Reset this tab*), which in turn keeps the layout.
 - Resizing or rotating the window re-solves the layout at once; the cabinet
   shell is rebuilt a quarter of a second later (never in the middle of a grab).

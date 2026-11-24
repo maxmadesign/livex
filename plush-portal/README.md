@@ -50,8 +50,8 @@ copies the MediaPipe WASM runtime from `node_modules` into the git-ignored
 (`public/mediapipe/models/face_landmarker.task`, SHA-256 pinned, downloaded
 again only if it is missing or corrupt). Nothing is loaded from a CDN at run time.
 
-Ports: the API port is `PLUSH_API_PORT` (default 8787). If you change it,
-export it in the shell as well — the Vite proxy reads the shell environment, not `.env`.
+Ports: the API port is `PLUSH_API_PORT` (default 8787), set in `.env` or the
+shell; the server and the Vite proxy both read it.
 To serve other devices on the LAN set `PLUSH_API_HOST=0.0.0.0`. Camera access
 needs a secure context: `localhost` / `127.0.0.1` or HTTPS.
 
@@ -81,15 +81,16 @@ Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
 
 A round: *start → aim → grab*. The claw descends until it lands, closes, lifts,
 carries whatever it holds to the chute at the front-left, opens and returns.
-After a miss the next round is ready about a second later. With nobody playing,
-the machine runs a demo round by itself (can be switched off).
+After a miss the next round is ready about a second later. The first time START
+is pressed on a device a short how-to-play card is shown. With nobody playing,
+the machine runs a demo round by itself. Both can be switched off.
 
 ## Feature overview
 
 | Area | Summary | Details |
 | --- | --- | --- |
 | Physics & rules | 120 Hz fixed step, cable as a one-sided spring, motorised fingers, real contacts, slip reasons, idempotent prize award. | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PHYSICS.md](docs/PHYSICS.md) |
-| Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json`; in-app GLB import per character slot. | [docs/ASSETS.md](docs/ASSETS.md) |
+| Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json`; any character slot also accepts an ordinary `.glb`, through the manifest or by in-app import. | [docs/ASSETS.md](docs/ASSETS.md) |
 | Display presets | Normalised layout solver, safe zone, panel anchor, per-preset settings. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Window Perspective | Off-axis frustum from the tracked eye position; quick calibration. | [docs/CALIBRATION.md](docs/CALIBRATION.md), [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Settings | Eight tabs, 100+ settings, presets, import/export, lock. | [docs/SETTINGS.md](docs/SETTINGS.md) |
@@ -189,7 +190,7 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 - **Storage**: settings and the prize collection live in `localStorage`;
   imported custom models live in IndexedDB. Nothing is sent to a server.
 - **Exports**: the configuration export contains settings only — no keys, no
-  PIN, no camera images, no face data, no collection.
+  PIN, no camera or audio device ids, no camera images, no face data, no collection.
 - **Logs**: the diagnostic log is kept in memory and redacted; the server log never contains keys or full prompts.
 
 ## Verified here / needs real hardware
@@ -215,14 +216,14 @@ What it **cannot** show, and what is therefore **not verified**:
 
 Other known limitations:
 
-- The automatic optimiser ignores frames longer than 250 ms (so that shader
-  compilation hitches do not trigger it); on a machine that is *that* slow it does nothing — pick the Safe preset by hand.
+- The automatic optimiser can only lower quality down to half the internal resolution of the selected preset; on a machine
+  that is still too slow, pick the Safe preset by hand. Its behaviour on real GPUs is untested.
 - In `window` mode (desktop preset) the physical size and position of the browser
   window are estimated from CSS pixels, so the perspective is approximate; kiosk presets assume full screen.
 - GPU time is not shown in the performance panel (WebGL 2 timer queries are not used); it shows frame time, physics time, draw calls and triangles.
-- Imported `.glb` models are static meshes; they keep the collision shape and weight of the slot they replace. Draco-compressed files are rejected.
+- Replacement models (an ordinary `.glb` referenced from the manifest, or imported in the app) are static meshes shown with their own materials; they keep the collision shape and weight of the slot and get no paint masks, shell fur or LODs. Draco-compressed files are not supported.
 - The settings lock PIN is a convenience for public displays, not a security boundary: it is stored in the browser.
-- `sakura.biribi` is an original character in a slot marked *replaceable*; no third-party or licensed character ships with this project.
+- `sakura.biribi` is an original character in a slot marked *replaceable*; no third-party or licensed character ships with this project. To put a licensed model there, point the slot's manifest entry at its `.glb` ([docs/ASSETS.md](docs/ASSETS.md#adding-or-replacing-a-character)).
 
 ## Licences and provenance
 

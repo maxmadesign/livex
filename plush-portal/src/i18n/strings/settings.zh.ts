@@ -71,6 +71,7 @@ export const settingsZh: Record<string, string> = {
   'themes.enabled': '放入机器',
   'themes.status.original': '原创角色',
   'themes.status.original-replaceable': '原创角色 — 此位置可替换为授权模型',
+  'themes.status.licensed': '授权模型',
   'themes.status.user-import': '你导入的模型',
   'themes.size': '{h} 厘米 · {g} 克',
   'themes.replace': '替换模型…',

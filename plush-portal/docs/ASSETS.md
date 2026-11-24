@@ -48,7 +48,7 @@ One asset:
 | `materials` | string[] | Surface kinds present (`fur`, `shortfur`, `felt`, `thread`, `bead`, `satin`, `gloss`, `knit`, `metal`). |
 | `model.path` | string | GLB path relative to the site root. |
 | `model.bytes` | number | File size. |
-| `model.lods[]` | `{ mesh, triangles, vertices }` | Mesh names inside the GLB (`LOD0`…`LOD2`) with their real counts. |
+| `model.lods[]` | `{ mesh, triangles, vertices }` | Mesh names inside the GLB (`LOD0`…`LOD2`) with their real counts. Empty for a standard glTF model. |
 | `model.attributes` | string[] | Custom vertex attributes present (see below). |
 | `paint[]` | objects | Up to four appliqué colour regions: `name`, `channel` (0–3, component of `_MASK`), `color`, `stitch` / `stitchColor` / `stitches` (embroidered border), and `center`, `axisU`, `axisV` (local frame that parameterises the stitches). |
 | `maskRange` | number | Distance in metres that maps to ±1 in `_MASK`. |
@@ -57,7 +57,7 @@ One asset:
 | `deform.dentRadius` | number | Typical finger dent radius. |
 | `deform.sag` / `squash` / `sway` | 0…1 | How much the toy stretches when hanging, flattens on impact, and how far floppy parts lag. |
 | `deform.softParts` | string[] | Names of floppy parts (documentation / tuning). |
-| `source.status` | `original` \| `original-replaceable` | Provenance flag shown in the settings dialog. (`user-import` exists only at run time, never in the shipped manifest.) |
+| `source.status` | `original` \| `original-replaceable` \| `licensed` | Provenance flag shown in the settings dialog. All shipped characters are `original` or `original-replaceable`; `licensed` is for a third-party model you add yourself. (`user-import` exists only at run time, never in the manifest.) |
 | `source.method` | `procedural-sdf` | How it was made. |
 | `source.generator` | string | Design that produced it, e.g. `tools/plush/designs/sakura.ts#bunny`. |
 | `source.license`, `source.note` | string | Licence statement and remarks. |
@@ -211,30 +211,48 @@ bake. The game reads the theme's characters from the manifest; names for the UI
 and the guide come from the manifest entry, so no string tables need editing.
 
 **Replace a slot with an externally made model** (for example a licensed
-character) without the procedural tool. There are two routes:
+character). No procedural tool and no special vertex data are needed: the
+manifest loader (`src/plush/PlushLibrary.ts`) accepts an ordinary glTF model.
 
-*Route A — through the manifest (ships with the build).* The manifest loader
-(`src/plush/PlushLibrary.ts`) renders these files with the plush material, so the GLB must follow the same contract:
+*Route A — through the manifest (recommended; ships with the build).*
 
-1. Meshes named as listed in `model.lods` (`LOD0`, optionally `LOD1`, `LOD2`),
-   each with `POSITION`, `NORMAL`, `COLOR_0`, `_MASK`, `_SURF` and `_AUX`.
-   If a listed LOD lacks one of them the model is rejected and a simple stand-in
-   is shown (with a warning under *Settings → System → Warnings*). Fill
-   attributes you do not need with neutral values (`_MASK` = 1 everywhere means "no paint").
-2. Put the file at `public/assets/plush/<theme>/<slug>.glb`.
-3. Edit the manifest entry: `model.path`, `model.bytes`, `model.lods`, `name`,
-   `kind`, `size`, `mass`, `palette`, `paint`, the `proxies` that match the new
-   shape, and `source` (set the real licence and status).
-4. Keep `id` if the slot should keep its place in saved collections and settings.
+1. Export a standard binary glTF 2.0 file (`.glb`): static meshes, its own PBR
+   materials, embedded textures, the character facing +Z and standing on y = 0.
+   Meshopt compression and quantisation are fine; **Draco is not** (the loader has no Draco decoder).
+2. Put it under `public/assets/plush/<theme>/` — for the prepared slot:
+   `public/assets/plush/sakura/biribi.glb`.
+3. Edit the slot's manifest entry:
+   - `model.path`, `model.bytes`; set `model.lods` and `model.attributes` to `[]` and `paint` to `[]` (they describe plush-shader data the file does not have);
+   - `name`, `kind`, `palette`;
+   - `size` — the model is scaled uniformly so that its height equals `size[1]`, centred and placed on its base;
+   - `mass`, `footprint`, `comHeight` and `proxies` so that the collision shape matches the new silhouette (physics uses only these, never the mesh);
+   - `source.status: "licensed"`, `source.method: "external"`, and `source.license` / `source.note` with the real licence terms.
+4. Keep `id` so the slot keeps its place in saved collections and settings.
 
-`npm run assets:plush` rewrites the manifest entries of the designs it bakes;
-remove the corresponding design (or bake selectively) once a slot is maintained by hand.
+What happens at run time: a file whose meshes do not carry the plush attributes
+is rendered through the same path as an in-app import — its own materials and
+textures, plus the shared soft-body deformation driven by a generated softness
+attribute. Paint masks, seam lines and shell fur do not apply, and it is a
+single mesh set (no LOD switching). The loader records an informational note in
+`PlushLibrary.notes`; this is not a warning.
 
-*Route B — in-app import (per device, no build).* Any ordinary textured `.glb`
-works and keeps its own materials; see [In-app GLB import](#in-app-glb-import).
-This is the practical route for models that were not made for the plush shader.
+A file that cannot be loaded at all — missing, corrupt, Draco-compressed, or
+without any mesh — is replaced by a simple stand-in in the slot's main colour,
+and the reason appears under *Settings → System → Warnings*.
 
-`sakura.biribi` is the slot prepared for this: an original "electric cutie"
+A GLB that *does* follow the plush contract (meshes named as in `model.lods`,
+each with `POSITION`, `NORMAL`, `COLOR_0`, `_MASK`, `_SURF`, `_AUX`) gets the
+full plush material, LODs and shell fur; that is what `npm run assets:plush` produces.
+
+`npm run assets:plush` rewrites the manifest entries of the designs it bakes.
+Once a slot is maintained by hand, remove its design from the theme's list (or
+bake other characters selectively by name) so the entry is not overwritten.
+
+*Route B — in-app import (per device, no build).* See
+[In-app GLB import](#in-app-glb-import). The import is ignored for a slot whose
+manifest model is already a standard glTF model (Route A).
+
+`sakura.biribi` is the slot prepared for Route A: an original "electric cutie"
 character marked `original-replaceable`. It is **not** a third-party character
 and none ships with the project; the settings dialog labels it
 "Original — slot ready for a licensed model".
@@ -252,7 +270,7 @@ slot on this device without touching any file (`src/plush/customModels.ts`).
 | Storage | IndexedDB database `plush-portal-models` on this device. Settings store only a reference (slot id, file key, file name, display name, scale, yaw). Exported configurations carry that reference, never the file. |
 | Fitting | Centred, placed on its base, scaled to the slot's height × the per-model scale, rotated by the per-model yaw. |
 | Physics | Unchanged: the slot keeps its collision proxies, mass and name, so game balance does not change. A model whose silhouette differs a lot from the slot will visibly not match its collisions. |
-| Shading | The model's own materials are kept; soft-body deformation is applied through a generated softness attribute (firmer near the vertical axis and the base). Paint masks, seams and shell fur are not available for imported models. |
+| Shading | The model's own materials are kept; soft-body deformation is applied through a generated softness attribute (firmer near the vertical axis and the base). Paint masks, seams, shell fur and LOD switching are not available for imported models. |
 | Rejections | `too_large`, `not_glb`, `unsupported_version`, `draco`, `no_mesh`, `parse_error` — shown as a message; nothing is stored. |
 
 *Use built-in model* removes the import. You are responsible for having the

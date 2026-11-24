@@ -123,6 +123,7 @@ export class Game {
   private celebrate = 0;
   private toastId = 0;
   private lastImpactSfx = 0;
+  private tickTimer = 0.14;
   private firstStart = true;
   private disposed = false;
   private readonly offs: (() => void)[] = [];
@@ -246,6 +247,7 @@ export class Game {
     this.library.setCustomModels(this.committed.themes.customModels);
     await this.library.loadTheme(themeId, (done, total) => onProgress?.(done / Math.max(1, total)));
     for (const warning of this.library.warnings) log('warn', 'assets', warning);
+    for (const note of this.library.notes) log('info', 'assets', note);
   }
 
   /** (Re)creates everything that depends on the theme or the window layout. */
@@ -975,6 +977,17 @@ export class Game {
     audio.setLoop('motor_trolley', Math.min(1, speed / max), 0.85 + 0.3 * Math.min(1, speed / max));
     const winch = Math.abs(claw.ropeSpeed) / Math.max(0.1, this.core.controller.activeParams.descendSpeed);
     audio.setLoop('motor_winch', Math.min(1, winch), claw.ropeSpeed < 0 ? 1.12 : 0.94);
+    // Light ticking while a direction is held and the trolley is really travelling.
+    const c = this.core.controller;
+    const phase = this.core.machine.phase;
+    const steering = !this.core.machine.demo && (phase === 'AIMING' || phase === 'READY') && Math.abs(c.inputX) + Math.abs(c.inputZ) > 0 && speed > 0.05;
+    if (steering) {
+      this.tickTimer -= dt;
+      if (this.tickTimer <= 0) {
+        this.tickTimer = 0.26;
+        audio.playSfx('dir_tick', { volume: 0.4 });
+      }
+    } else this.tickTimer = 0.14;
     // Soft landings and glass taps, rate limited so a pile settling is not a drum roll.
     this.lastImpactSfx -= dt;
     if (this.lastImpactSfx > 0) return;

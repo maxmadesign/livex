@@ -93,23 +93,25 @@ and gives it back when there is headroom.
 | 9 | Shadows one level down (4096 → 2048, or 2048 → 1024) |
 | 10 – 11 | Internal resolution × 0.6, × 0.5 |
 
-A step that would change nothing for the current settings (for example "AO off"
-when AO is already off) is a no-op but still takes its turn, so reaching the
-resolution steps from Medium takes a few seconds longer than the list suggests.
+Steps that would change nothing for the current settings are skipped on the way
+down: from Medium (AO off, static reflections, reflective glass) the order is
+particles → bloom → resolution × 0.9 … — "AO off" is never waited for.
 
 Rules:
 
 - A sliding window of the last 120 frame times is evaluated about once per
-  second (after at least 0.9 s of frame time and 30 samples).
-- **Reduce** one step when the 80th-percentile frame time is above
+  second: after at least 0.9 s of frame time and 30 samples, or — at very low
+  frame rates — after at least 6 samples and 2.5 s.
+- **Reduce** by one effective step when the 80th-percentile frame time is above
   `1.22 × (1000 / target)` on two evaluations in a row (20.3 ms at 60 fps, 40.7 ms at 30 fps).
-- **Restore** one step when it is below `0.72 ×` the target frame time on seven
+- **Restore** one list position when it is below `0.72 ×` the target frame time on seven
   evaluations in a row (12 ms at 60 fps). The gap between the two thresholds and
   the slow recovery keep it from oscillating.
 - After every change the window is cleared so the new configuration is judged on its own.
-- Frames longer than 250 ms are ignored (shader compilation, tab switches). Side
-  effect: on a device that renders slower than 4 fps the optimiser never acts —
-  select Safe by hand there.
+- A single frame longer than 250 ms is ignored as a hitch (shader compilation,
+  tab switch). Two or more such frames in a row are a slow machine: they count,
+  clamped to 250 ms each, so the optimiser also steps down on a device that
+  renders at only a few frames per second.
 - Changing a graphics setting clears all reductions. Nothing is written to the
   settings; the active reductions are shown in the Graphics tab and the performance panel.
 - It never touches physics, input, the number of toys or the layout.
@@ -166,8 +168,10 @@ How to read this:
   errors, and that cost grows from Safe to Ultra as intended.
 - An earlier single run of Safe @ 1280 × 720 with less competing load measured
   a median of about 1.2 s per frame (load not recorded), which shows how much of the figures above is contention.
-- The automatic optimiser reduced nothing in any run. That is expected here:
-  every frame was longer than 250 ms and was therefore ignored (see above).
+- The automatic optimiser reduced nothing in any of these runs. They were taken
+  with an earlier version that ignored *every* frame over 250 ms; the current
+  version counts consecutive slow frames and is expected to step down in this
+  environment. The runs were not repeated, so that is not shown in the table.
 - **Draw calls, triangle counts, internal resolution and heap size do not depend
   on the hardware** and are the useful part of the table. Shell fur explains the
   jump in triangles from Medium to High and Ultra. "Triangles / frame" counts every pass.
