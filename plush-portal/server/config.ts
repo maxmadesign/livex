@@ -87,6 +87,12 @@ export interface RewardsConfig {
   assetDirs: string[];
 }
 
+/**
+ * Shorter admin tokens get a note in the start-up log (never in `warnings`: those are served by
+ * GET /api/ai/status, and "the token is short" is worth knowing for someone guessing it).
+ */
+export const MIN_ADMIN_TOKEN_CHARS = 16;
+
 /** A public claim base: an http(s) URL without credentials, query or fragment (trailing slashes dropped). */
 export function parseClaimPublicUrl(value: string): string | null {
   const v = value.trim().replace(/\/+$/, '');
@@ -183,6 +189,7 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
   if (keyManagement === 'token' && !clean(env.PLUSH_ADMIN_TOKEN)) {
     warnings.push('PLUSH_KEY_MANAGEMENT=token needs PLUSH_ADMIN_TOKEN; nobody can replace the key until one is set.');
   }
+  const adminTokenRaw = clean(env.PLUSH_ADMIN_TOKEN);
 
   const certFile = clean(env.PLUSH_TLS_CERT) || null;
   const keyFile = clean(env.PLUSH_TLS_KEY) || null;
@@ -206,7 +213,7 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
     realtimeReasoningEffort,
     speechConfigError,
     warnings,
-    adminToken: clean(env.PLUSH_ADMIN_TOKEN) || null,
+    adminToken: adminTokenRaw || null,
     allowClientPrompt: bool(env.PLUSH_ALLOW_CLIENT_PROMPT, true),
     ratePerMin: int(env.PLUSH_RATE_LIMIT_PER_MIN, 60, 1, 6000),
     allowedOrigins: clean(env.PLUSH_ALLOWED_ORIGINS)

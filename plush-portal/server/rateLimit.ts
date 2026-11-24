@@ -6,6 +6,8 @@
 export interface RateLimiter {
   /** Takes `cost` tokens for `key`. Returns ok=false plus the wait time when the bucket is empty. */
   take(key: string, cost?: number): { ok: boolean; retryAfterSec: number; remaining: number };
+  /** Tokens `key` could take right now, without taking any (full capacity for an unknown key). */
+  available(key: string): number;
   size(): number;
 }
 
@@ -53,6 +55,11 @@ export function createRateLimiter(perMinute: number, now: () => number = () => D
       }
       const waitMs = (cost - bucket.tokens) / refillPerMs;
       return { ok: false, retryAfterSec: Math.max(1, Math.ceil(waitMs / 1000)), remaining: 0 };
+    },
+    available(key: string) {
+      const bucket = buckets.get(key);
+      if (!bucket) return capacity;
+      return Math.min(capacity, bucket.tokens + Math.max(0, now() - bucket.updatedAt) * refillPerMs);
     },
     size: () => buckets.size,
   };

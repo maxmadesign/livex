@@ -207,6 +207,8 @@ export interface StaffView {
   records: { record: ClaimRecord; state: RewardState }[];
   query: string;
   notice: { tone: 'ok' | 'warn'; text: string } | null;
+  /** Problems with the rewards file (codes lost at start, blocked or full store), already translated. */
+  store?: string[];
 }
 
 const utc = (iso: string) => iso.slice(0, 16).replace('T', ' ');
@@ -217,6 +219,7 @@ export function renderStaff(ctx: PageContext, view: StaffView): string {
     .map((key) => `<div class="stat"><span class="stat-n">${view.counts[key]}</span><span class="stat-l">${esc(t(lang, `staff.${key}`))}</span></div>`)
     .join('');
   const notice = view.notice ? `<p class="notice ${view.notice.tone}" role="status">${esc(view.notice.text)}</p>` : '';
+  const store = (view.store ?? []).map((text) => `<p class="notice warn store-warning" role="alert">${esc(text)}</p>`).join('\n');
   const rows = view.records
     .map(({ record, state }) => {
       const choice = record.choice ? t(lang, record.choice === 'prize' ? 'staff.choice.prize' : 'staff.choice.swag') : t(lang, 'staff.choice.none');
@@ -239,6 +242,7 @@ export function renderStaff(ctx: PageContext, view: StaffView): string {
   const clear = view.query ? `<a class="link" href="/staff/rewards${ctx.lang === 'en' ? '' : `?lang=${ctx.lang}`}">${esc(t(lang, 'staff.clear'))}</a>` : '';
   const body = `<main class="card staff-card">
 <div class="staff-head"><h1>${esc(t(lang, 'staff.title'))}</h1><a class="link" href="/staff/rewards.csv">${esc(t(lang, 'staff.csv'))}</a></div>
+${store}
 <div class="stats">${stats}</div>
 <form method="get" action="/staff/rewards" class="search" role="search">
 <label for="q">${esc(t(lang, 'staff.search'))}</label>

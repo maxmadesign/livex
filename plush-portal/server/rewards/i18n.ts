@@ -49,6 +49,8 @@ const en = {
   'chosen.show': 'Show my reward',
   'error.title': 'Something went wrong',
   'error.text': 'Your choice could not be saved. Please try again in a moment, or ask at the booth.',
+  'foreign.title': 'Please choose on your claim page',
+  'foreign.text': 'This request came from another website. Scan the QR code again or open your claim link directly.',
   'footer.privacy': 'No personal data is stored. One reward per code.',
   'tier.common': 'Common',
   'tier.rare': 'Rare',
@@ -93,6 +95,10 @@ const en = {
   'staff.signed.title': 'Signed in',
   'staff.signed.text': 'This browser can now open the prize desk.',
   'staff.signed.open': 'Open the prize desk',
+  'staff.store.damaged': 'The rewards file was damaged when the server started. It was kept as {file}, and {n} codes were recovered from it; codes that were not recovered show "Code not found".',
+  'staff.store.blocked': 'The rewards file can not be used safely, so no new codes are issued and no changes are saved. See the server log.',
+  'staff.store.skipped': '{n} stored codes could not be read by this version. They stay in the file but are not shown or accepted.',
+  'staff.store.full': 'The prize store holds its maximum of {max} codes: no new codes are issued until old ones have been expired for 30 days.',
 };
 
 type Key = keyof typeof en;
@@ -140,6 +146,8 @@ const zh: Record<Key, string> = {
   'chosen.show': '查看我的奖励',
   'error.title': '出了点问题',
   'error.text': '你的选择没能保存。请稍后再试，或到展台咨询。',
+  'foreign.title': '请在你的领取页面上选择',
+  'foreign.text': '这个请求来自其他网站。请重新扫描二维码，或直接打开你的领取链接。',
   'footer.privacy': '我们不保存任何个人信息。每个兑换码只能兑换一项奖励。',
   'tier.common': '普通',
   'tier.rare': '稀有',
@@ -184,6 +192,10 @@ const zh: Record<Key, string> = {
   'staff.signed.title': '已登录',
   'staff.signed.text': '这个浏览器现在可以打开奖品台了。',
   'staff.signed.open': '打开奖品台',
+  'staff.store.damaged': '服务器启动时奖励文件已损坏。原文件已保留为 {file}，并从中恢复了 {n} 个兑换码；未能恢复的兑换码会显示“找不到这个兑换码”。',
+  'staff.store.blocked': '奖励文件无法安全使用，因此不会发放新的兑换码，也不会保存任何更改。请查看服务器日志。',
+  'staff.store.skipped': '有 {n} 个已保存的兑换码无法被当前版本读取。它们仍保留在文件中，但不会显示，也无法使用。',
+  'staff.store.full': '奖品记录已达到 {max} 个兑换码的上限：在旧兑换码过期满 30 天之前，不会发放新的兑换码。',
 };
 
 const ja: Record<Key, string> = {
@@ -229,6 +241,8 @@ const ja: Record<Key, string> = {
   'chosen.show': '自分の特典を見る',
   'error.title': '問題が発生しました',
   'error.text': '選択を保存できませんでした。しばらくしてからもう一度お試しいただくか、ブースでお尋ねください。',
+  'foreign.title': '受け取りページで選んでください',
+  'foreign.text': 'このリクエストは別のウェブサイトから送信されました。QR コードをもう一度読み取るか、受け取りリンクを直接開いてください。',
   'footer.privacy': '個人情報は保存しません。1つのコードにつき特典は1つです。',
   'tier.common': 'コモン',
   'tier.rare': 'レア',
@@ -273,6 +287,10 @@ const ja: Record<Key, string> = {
   'staff.signed.title': 'サインインしました',
   'staff.signed.text': 'このブラウザで景品デスクを開けるようになりました。',
   'staff.signed.open': '景品デスクを開く',
+  'staff.store.damaged': 'サーバーの起動時に特典ファイルが破損していました。元のファイルは {file} として保存し、そこから {n} 件のコードを復元しました。復元できなかったコードは「コードが見つかりません」と表示されます。',
+  'staff.store.blocked': '特典ファイルを安全に使えないため、新しいコードの発行と変更の保存を停止しています。サーバーのログを確認してください。',
+  'staff.store.skipped': '保存済みのコード {n} 件をこのバージョンで読み取れませんでした。ファイルには残っていますが、表示も利用もできません。',
+  'staff.store.full': '特典の記録がコードの上限（{max} 件）に達しました。古いコードの期限切れから 30 日たつまで、新しいコードは発行されません。',
 };
 
 export type TextKey = Key;

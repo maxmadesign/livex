@@ -16,7 +16,7 @@ import {
 } from '../../src/rewards/protocol';
 import type { Logger } from '../log';
 import { uniqueCode, type RandomBytes } from './codes';
-import { RewardStore, StorageError, type LoadReport, type RewardStorage } from './store';
+import { MAX_RECORDS, RewardStore, StorageError, type LoadReport, type RewardStorage } from './store';
 import type { IssueRequest } from './validate';
 
 /** A failure with a RewardErrorCode; the routes turn it into JSON or a friendly page. */
@@ -72,6 +72,8 @@ export interface RewardsService {
   readonly brand: BrandKit;
   readonly location: string;
   readonly loadReport: LoadReport;
+  /** True when new codes are refused because the store holds MAX_RECORDS (shown on the staff page). */
+  storeFull(): boolean;
   now(): number;
   claimTarget(): ClaimTarget;
   setClaimTarget(target: ClaimTarget): void;
@@ -133,6 +135,7 @@ export function createRewardsService(options: RewardsServiceOptions): RewardsSer
     brand: options.brand,
     location: store.location,
     loadReport,
+    storeFull: () => store.full(),
     now,
     claimTarget: () => target,
     setClaimTarget(next) {
@@ -168,7 +171,11 @@ export function createRewardsService(options: RewardsServiceOptions): RewardsSer
       try {
         store.insert(record);
       } catch (error) {
-        logger?.error('reward code could not be stored', { store: store.location });
+        const reason = error instanceof StorageError ? error.reason : 'unknown';
+        logger?.error('reward code could not be stored', { store: store.location, reason });
+        if (error instanceof StorageError && error.reason === 'full') {
+          throw new RewardFailure(500, 'storage', `The prize store is full (${MAX_RECORDS} codes), so none was issued.`);
+        }
         if (error instanceof StorageError) throw new RewardFailure(500, 'storage', 'The code could not be saved on the server, so none was issued.');
         throw error;
       }

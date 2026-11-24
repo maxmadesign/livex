@@ -3,7 +3,7 @@
  * OpenAI key. The game works without it: when no key is configured the paid
  * routes answer `no_key` and the browser uses its local lines.
  */
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -20,9 +20,10 @@ import {
 } from '../src/ai/protocol';
 import { BRAND_KITS } from '../src/brand/kits';
 import { classifyModel, textCapability, type LearnedOverride } from './capabilities';
+import { makeClientKey } from './clientKey';
 import type { ServerConfig } from './config';
 import { ApiFailure, mapUpstreamError } from './errors';
-import { createKeyManager, isLocalRequest, maskKey, validateKeyFormat, type KeyManager } from './keys';
+import { FORWARDING_HEADERS, createKeyManager, isLocalRequest, maskKey, validateKeyFormat, type KeyManager } from './keys';
 import { createLogger, type Logger } from './log';
 import { createRateLimiter } from './rateLimit';
 import {
@@ -33,6 +34,7 @@ import {
   createRewardsService,
   createStaffRoutes,
   initialClaimTarget,
+  type AdminTokenCheck,
   type BrandAssets,
   type RewardRouteDeps,
   type RewardAuthDeps,
@@ -97,11 +99,18 @@ export interface AppDeps {
 
 const MODELS_CACHE_MS = 5 * 60_000;
 const MAX_LISTED_MODELS = 600;
+/**
+ * Wrong admin tokens per client and minute. Once they are used up the token is not even compared
+ * for a moment (the right one is refused too), so no route can serve as a fast oracle for it:
+ * GET /api/rewards/status answers `canIssue` and is not rate-limited otherwise.
+ */
+export const ADMIN_TOKEN_FAILURES_PER_MIN = 10;
 
-function sameToken(a: string, b: string): boolean {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
+/** Constant-time comparison that does not reveal the token's length either (digests are compared). */
+export function sameToken(a: string, b: string): boolean {
+  const x = createHash('sha256').update(a).digest();
+  const y = createHash('sha256').update(b).digest();
+  return timingSafeEqual(x, y);
 }
 
 /**
@@ -231,27 +240,38 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
 
-  const clientKey = (c: Context): string => {
-    if (config.trustProxy) {
-      const forwarded = c.req.header('x-forwarded-for');
-      if (forwarded) return forwarded.split(',')[0]!.trim().slice(0, 64) || 'unknown';
-    }
-    try {
-      return getConnInfo(c).remote.address ?? 'unknown';
-    } catch {
-      return 'unknown'; // no socket (in-process tests)
-    }
-  };
+  const clientKey = makeClientKey(config.trustProxy);
   const rateLimit = (c: Context, cost = 1): void => {
     const result = limiter.take(clientKey(c), cost);
     if (!result.ok) {
       throw new ApiFailure(429, 'rate_limited', 'Too many requests. Please slow down.', { 'retry-after': String(result.retryAfterSec) });
     }
   };
+  const tokenFailures = createRateLimiter(ADMIN_TOKEN_FAILURES_PER_MIN, now);
+  // One verdict per request and token, so a route that asks twice does not count a wrong token twice.
+  const tokenVerdicts = new WeakMap<Request, Map<string, AdminTokenCheck>>();
+  /** Compares a presented admin token, counting wrong ones per client (see ADMIN_TOKEN_FAILURES_PER_MIN). */
+  const checkAdminToken = (c: Context, value: string): AdminTokenCheck => {
+    if (!config.adminToken) return 'wrong';
+    let verdicts = tokenVerdicts.get(c.req.raw);
+    const known = verdicts?.get(value);
+    if (known) return known;
+    const key = clientKey(c);
+    let verdict: AdminTokenCheck;
+    if (tokenFailures.available(key) < 1) verdict = 'locked';
+    else if (sameToken(value, config.adminToken)) verdict = 'ok';
+    else {
+      tokenFailures.take(key);
+      verdict = 'wrong';
+    }
+    if (!verdicts) tokenVerdicts.set(c.req.raw, (verdicts = new Map()));
+    verdicts.set(value, verdict);
+    return verdict;
+  };
   const hasAdminToken = (c: Context): boolean => {
     if (!config.adminToken) return false;
     const match = /^Bearer\s+(\S+)$/i.exec(c.req.header('authorization') ?? '');
-    return !!match && sameToken(match[1]!, config.adminToken);
+    return !!match && checkAdminToken(c, match[1]!) === 'ok';
   };
   const isAdmin = (c: Context): boolean => !config.adminToken || hasAdminToken(c);
   /** Client prompt / persona need PLUSH_ALLOW_CLIENT_PROMPT; model overrides additionally need the admin token when one is set. */
@@ -271,7 +291,8 @@ export function createApp(deps: AppDeps): Hono {
       socketAddress: socketAddress(c),
       host: c.req.header('host') ?? null,
       origin: c.req.header('origin') ?? null,
-      forwarded: [c.req.header('x-forwarded-for'), c.req.header('forwarded'), c.req.header('x-real-ip')],
+      forwarded: FORWARDING_HEADERS.map((name) => c.req.header(name)),
+      forwardedHost: c.req.header('x-forwarded-host') ?? null,
     });
   /**
    * Who may replace / test / restore the key: with PLUSH_KEY_MANAGEMENT=local
@@ -637,7 +658,7 @@ export function createApp(deps: AppDeps): Hono {
     clientKey,
     isLocal: isLocalCaller,
     hasAdminToken,
-    isAdminToken: (value) => !!config.adminToken && sameToken(value, config.adminToken),
+    checkAdminToken,
   };
   // Before the /api catch-all and the static fallback, which would otherwise answer these paths.
   app.route('/', createRewardApiRoutes(rewardDeps));

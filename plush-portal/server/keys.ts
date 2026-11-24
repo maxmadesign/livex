@@ -209,9 +209,27 @@ export interface RequestOrigin {
   socketAddress: string | null;
   host: string | null;
   origin: string | null;
-  /** X-Forwarded-For, Forwarded and X-Real-IP, raw. */
+  /** X-Forwarded-For, Forwarded, X-Real-IP and the other client-address headers of FORWARDING_HEADERS, raw. */
   forwarded: (string | null | undefined)[];
+  /** X-Forwarded-Host, raw: the Host the client used before a proxy (the Vite dev proxy sets it). */
+  forwardedHost?: string | null;
 }
+
+/**
+ * Headers in which proxies, tunnels and CDNs name the client they forward for. Any of them naming
+ * an address that is not loopback means the request was not made on this machine.
+ */
+export const FORWARDING_HEADERS = [
+  'x-forwarded-for',
+  'forwarded',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip',
+  'x-client-ip',
+  'x-cluster-client-ip',
+  'fastly-client-ip',
+  'x-original-forwarded-for',
+] as const;
 
 /** Every address a forwarding header names (for X-Forwarded-For, Forwarded `for=` and X-Real-IP). */
 export function forwardedAddresses(values: readonly (string | null | undefined)[]): string[] {
@@ -241,6 +259,9 @@ export function isLocalRequest(request: RequestOrigin): boolean {
   if (!isLoopbackAddress(request.socketAddress)) return false;
   if (forwardedAddresses(request.forwarded).some((address) => !isLoopbackAddress(address))) return false;
   if (!isLoopbackHostName(request.host)) return false;
+  if (request.forwardedHost) {
+    for (const host of request.forwardedHost.split(',')) if (!isLoopbackHostName(host)) return false;
+  }
   if (request.origin) {
     // "null" comes from sandboxed frames and local files: never trusted for key management.
     if (request.origin === 'null') return false;

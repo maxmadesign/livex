@@ -20,11 +20,24 @@ export {
   makeClientKey,
   preferredLang,
   rootOf,
+  storeWarnings,
+  type AdminTokenCheck,
   type RewardAuthDeps,
   type RewardRouteDeps,
 } from './routes';
 export { RewardFailure, allowedChoices, createRewardsService, type ClaimTarget, type RewardCounts, type RewardState, type RewardsService } from './service';
-export { REWARDS_FILE, RewardStore, createFileRewardStorage, createMemoryRewardStorage, type RewardStorage } from './store';
+export {
+  KEEP_EXPIRED_MS,
+  MAX_RECORDS,
+  REWARDS_FILE,
+  RewardStore,
+  StorageError,
+  createFileRewardStorage,
+  createMemoryRewardStorage,
+  salvageRecords,
+  type LoadReport,
+  type RewardStorage,
+} from './store';
 export { parseIssueRequest } from './validate';
 
 /** Where QR links point before the claim listener is up (or when it is off): the external URL or the main server. */
