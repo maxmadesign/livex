@@ -3,9 +3,11 @@ import { boot, ff, plush, start, state, watch, winARound } from './helpers';
 
 /*
  * Momo as a GTC booth host (docs/AI.md, "GTC kit"): the default build dresses the gpu theme with the
- * GTC kit, so Game.facts() sends facts.brand and the local lines talk about the show floor. The claim
- * QR itself is issued by the rewards work; here the reward slice of the UI store is set by hand to
- * check that facts.reward reaches the guide on the win and on the retry prompt, and only then.
+ * GTC kit, so Game.facts() sends facts.brand and the local lines talk about the show floor. A real win
+ * gets a real claim code from the e2e API server, and the win line (which waits for the code, see
+ * Game.emitPrizeWon) invites the scan; with the reward slice set back to idle by hand the same win is
+ * announced without any QR wording. facts.reward reaches the guide on the win and on the retry
+ * prompt, and only then.
  * Runs keyless (local lines), like every e2e spec. PLUSH_GTC_SHOTS=<dir> also saves screenshots.
  */
 const SHOTS = process.env.PLUSH_GTC_SHOTS ?? '';
@@ -83,28 +85,36 @@ test.describe('25. GTC booth host dialogue', () => {
     await expect(page.getByTestId('guide-line')).toBeVisible();
     await shot(page, 'e2e-gtc-opening-line');
 
-    // A real win: the prize_won event carries the brand, and no QR facts while no code is on screen.
+    // A real win: the server issues a claim code, and the prize_won event (held back until the code is
+    // ready) carries the brand and the QR facts; its line invites the scan.
     let seen = (await lines(page)).length;
     const { result, tries } = await winARound(page, 8);
     expect(result.outcome).toBe('won');
+    await expect.poll(async () => (await events(page)).filter((e) => e.type === 'prize_won').length, { timeout: 60_000 }).toBe(1);
+    const reward = await plush(page, (p) => p.ui().reward);
+    expect(reward.state).toBe('ready');
+    expect(reward.roundId).toBe(result.roundId);
     const won = (await events(page)).filter((e) => e.type === 'prize_won');
-    expect(won.length).toBe(1);
     expect(won[0].facts.brand).toEqual({ event: 'GTC', host: 'NVIDIA' });
-    expect(won[0].facts.reward).toBeUndefined();
-    const winLine = await nextLine(page, seen, 'prize_won');
-    console.log(`win after ${tries} tries: "${winLine.text}"`);
-    expect(winLine.text).not.toMatch(QR);
-
-    // The code arrives while the result card is up: the same win, re-announced, now invites a scan.
-    const roundId = await setReward(page, 'both');
-    expect(roundId).toBe(result.roundId);
-    seen = (await lines(page)).length;
-    await emit(page, 'prize_won', result);
-    expect((await events(page)).at(-1)!.facts.reward).toEqual({ qr: true, options: 'both' });
+    expect(won[0].facts.reward).toEqual({ qr: true, options: 'both' });
     const rewardLine = await nextLine(page, seen, 'prize_won');
-    console.log(`win with QR: "${rewardLine.text}"`);
+    console.log(`win after ${tries} tries, with a real code ${reward.code}: "${rewardLine.text}"`);
     expect(rewardLine.text).toMatch(QR);
     await shot(page, 'e2e-gtc-win-reward-line');
+
+    // Without a code on screen (slice back to idle) the same win is announced without QR wording.
+    await plush(page, (p) => p.game.deps.ui.setState({ reward: { ...p.ui().reward, state: 'idle' } }));
+    await plush(page, (p) => p.game.deps.guide.silence());
+    seen = (await lines(page)).length;
+    await emit(page, 'prize_won', result);
+    expect((await events(page)).at(-1)!.facts.reward).toBeUndefined();
+    const plainLine = await nextLine(page, seen, 'prize_won');
+    console.log(`win without QR: "${plainLine.text}"`);
+    expect(plainLine.text).not.toMatch(QR);
+
+    // The code is back on screen for the retry prompt below.
+    const roundId = await setReward(page, 'both');
+    expect(roundId).toBe(result.roundId);
 
     // About seven seconds into the result the retry prompt nudges to scan while the card is up.
     // (A hint never interrupts a line or follows one within 2.5 s, so let the win line go first.)
