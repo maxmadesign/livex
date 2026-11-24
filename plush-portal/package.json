@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n web,api -c magenta,cyan \"vite\" \"tsx watch server/index.ts\"",
-    "dev:web": "vite",
+    "dev:web": "node tools/fetch-tracking-assets.mjs && vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
@@ -21,7 +21,10 @@
     "assets:plush": "tsx tools/plush/bake.ts",
     "assets:audio": "tsx tools/audio/bake.ts",
     "assets:tracking": "node tools/fetch-tracking-assets.mjs",
-    "assets": "npm run assets:plush && npm run assets:audio && npm run assets:tracking"
+    "assets": "npm run assets:plush && npm run assets:audio && npm run assets:tracking",
+    "predev": "node tools/fetch-tracking-assets.mjs",
+    "prebuild": "node tools/fetch-tracking-assets.mjs",
+    "prestart": "node tools/fetch-tracking-assets.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

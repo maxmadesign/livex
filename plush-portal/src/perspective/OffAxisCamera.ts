@@ -42,7 +42,7 @@ export class OffAxisCamera extends PerspectiveCamera {
   /** Sets the eye position in world space and refreshes projection + view matrices. */
   setEyeWorld(x: number, y: number, z: number): void {
     // Keep the eye strictly in front of the window.
-    const minZ = this.windowZ + 0.02;
+    const minZ = this.windowZ + 0.05;
     this.position.set(x, y, z < minZ ? minZ : z);
     this.updateProjectionMatrix();
     this.syncMatrices();
@@ -69,7 +69,7 @@ export class OffAxisCamera extends PerspectiveCamera {
     }
     const ex = this.position.x - this.windowX;
     const ey = this.position.y - this.windowY;
-    const ez = Math.max(this.position.z - this.windowZ, 0.02);
+    const ez = Math.max(this.position.z - this.windowZ, 0.05);
     const { near, far } = chooseClipPlanes(ez, this.sceneDepth);
     const f = offAxisFrustum(ex, ey, ez, this.windowW, this.windowH, near, far, this.frustumScratch);
     this.near = near;

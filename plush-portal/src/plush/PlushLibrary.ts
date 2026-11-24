@@ -1,7 +1,8 @@
-import { BufferGeometry, Mesh } from 'three';
+import { BufferGeometry, Mesh, type Group } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { ThemeId } from '../core/types';
+import type { CustomModelEntry } from '../settings/spec';
 import { MANIFEST_VERSION, type PlushAsset, type PlushManifest } from './manifest';
 
 export interface LoadedPlush {
@@ -10,6 +11,8 @@ export interface LoadedPlush {
   lods: BufferGeometry[];
   /** True when the model file could not be loaded and a stand-in shape is used. */
   fallback: boolean;
+  /** Present when the player replaced this slot with an imported GLB: meshes in slot space. */
+  custom?: Group;
 }
 
 const REQUIRED_ATTRIBUTES = ['position', 'normal', 'color', '_mask', '_surf', '_aux'];
@@ -25,6 +28,7 @@ export class PlushLibrary {
   private readonly loaded = new Map<string, LoadedPlush>();
   /** Problems found while loading (shown in diagnostics, never fatal). */
   readonly warnings: string[] = [];
+  private custom = new Map<string, CustomModelEntry>();
 
   constructor(private readonly baseUrl = import.meta.env?.BASE_URL ?? '/') {
     this.loader.setMeshoptDecoder(MeshoptDecoder);
@@ -45,6 +49,28 @@ export class PlushLibrary {
     }
     this.manifest = manifest;
     return manifest;
+  }
+
+  /**
+   * Sets the locally imported replacement models. Slots whose entry changed are
+   * dropped from the cache so the next load picks the new model up.
+   */
+  setCustomModels(entries: readonly CustomModelEntry[]): void {
+    const next = new Map(entries.map((e) => [e.slotId, e]));
+    for (const id of new Set([...this.custom.keys(), ...next.keys()])) {
+      const a = this.custom.get(id);
+      const b = next.get(id);
+      if (a?.fileKey === b?.fileKey && a?.scale === b?.scale && a?.yawDeg === b?.yawDeg) continue;
+      const loaded = this.loaded.get(id);
+      if (loaded?.custom) disposeGroup(loaded.custom);
+      this.loaded.delete(id);
+      this.cache.delete(id);
+    }
+    this.custom = next;
+  }
+
+  customEntry(id: string): CustomModelEntry | undefined {
+    return this.custom.get(id);
   }
 
   assets(theme?: ThemeId): PlushAsset[] {
@@ -104,6 +130,20 @@ export class PlushLibrary {
         lods.push(geometry);
       }
       if (lods.length === 0) throw new Error('no LOD meshes found');
+      const entry = this.custom.get(asset.id);
+      if (entry) {
+        // A broken import never removes the character: the built-in model stays in use.
+        try {
+          const { buildCustomTemplate, loadModelFile } = await import('./customModels');
+          const data = await loadModelFile(entry.fileKey);
+          if (!data) throw new Error('the stored file is missing');
+          return { asset, lods, fallback: false, custom: await buildCustomTemplate(data, asset, entry) };
+        } catch (error) {
+          const message = `Imported model for ${asset.id} could not be used (${error instanceof Error ? error.message : String(error)}); showing the built-in model.`;
+          this.warnings.push(message);
+          console.warn(`[plush] ${message}`);
+        }
+      }
       return { asset, lods, fallback: false };
     } catch (error) {
       const message = `Model for ${asset.id} could not be loaded (${error instanceof Error ? error.message : String(error)}); using a stand-in.`;
@@ -119,6 +159,7 @@ export class PlushLibrary {
     for (const [id, entry] of this.loaded) {
       if (entry.asset.theme === keep) continue;
       for (const geometry of entry.lods) geometry.dispose();
+      if (entry.custom) disposeGroup(entry.custom);
       this.loaded.delete(id);
       this.cache.delete(id);
     }
@@ -129,4 +170,16 @@ export class PlushLibrary {
     this.loaded.clear();
     this.cache.clear();
   }
+}
+
+function disposeGroup(group: Group): void {
+  group.traverse((object) => {
+    const mesh = object as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry.dispose();
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      for (const value of Object.values(material)) if (value && (value as { isTexture?: boolean }).isTexture) (value as { dispose(): void }).dispose();
+      material.dispose();
+    }
+  });
 }

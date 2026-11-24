@@ -1,4 +1,4 @@
-import { Color, MeshDepthMaterial, MeshPhysicalMaterial, RGBADepthPacking, Vector3, Vector4, type IUniform, type WebGLProgramParametersWithUniforms } from 'three';
+import { Color, MeshDepthMaterial, MeshPhysicalMaterial, RGBADepthPacking, Vector3, Vector4, type IUniform, type Material, type WebGLProgramParametersWithUniforms } from 'three';
 import type { PlushAsset } from './manifest';
 
 /** Maximum number of simultaneous finger dents evaluated by the vertex shader. */
@@ -298,7 +298,7 @@ const FRAGMENT_NORMAL = /* glsl */ `
 const FRAGMENT_MATERIAL = /* glsl */ `
   #ifdef USE_SHEEN
     // Velvet-like back scattering of the pile, tinted by the fabric colour.
-    material.sheenColor = mix( diffuseColor.rgb, vec3( 1.0 ), 0.35 ) * ( vSurf.y * uSheen );
+    material.sheenColor = mix( diffuseColor.rgb, vec3( 1.0 ), 0.2 ) * ( vSurf.y * uSheen * 0.55 );
     material.sheenRoughness = 0.5;
   #endif
   #ifdef USE_CLEARCOAT
@@ -396,4 +396,22 @@ export class PlushDepthMaterial extends MeshDepthMaterial {
   override customProgramCacheKey(): string {
     return 'plush-depth-v1';
   }
+}
+
+/**
+ * Adds the soft-body vertex deformation to a foreign material (imported GLB
+ * models keep their own textures and shading). The geometry needs an `_aux`
+ * attribute whose first component is the softness.
+ */
+export function applyPlushDeformation<T extends Material>(material: T, uniforms: PlushUniforms): T {
+  material.defines = { ...(material.defines ?? {}), PLUSH_DENTS: MAX_DENTS, PLUSH_DEFORM_NORMALS: '' };
+  const previous = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    previous?.call(material, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+    patchVertex(shader);
+  };
+  material.customProgramCacheKey = () => 'plush-deform-foreign-v1';
+  material.needsUpdate = true;
+  return material;
 }

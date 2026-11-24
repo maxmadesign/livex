@@ -83,6 +83,10 @@ const _c = new Vector3();
 const _tip = new Vector3();
 
 const MIN_FINGER_TIME = 0.06;
+/** Aim error (as a fraction of the toy's solid half-width) up to which a grab counts as fully centred… */
+const CENTER_FULL = 0.3;
+/** …and beyond which it counts as not centred at all. */
+const CENTER_NONE = 0.95;
 const LIFT_HEIGHT = 0.03;
 const SLIP_DISTANCE = 0.055;
 
@@ -100,6 +104,7 @@ export class GripMonitor {
   private readonly pool: ClawContact[] = [];
   private readonly states = new Map<ToyBody, ToyContactState>();
   private assist: Assist | null = null;
+  private readonly aimSnapshot = new Map<ToyBody, { x: number; z: number }>();
   settings: GripSettings = { assist: 1, clawForce: 1 };
 
   /* Facts for the round result. */
@@ -124,6 +129,7 @@ export class GripMonitor {
   /** Resets everything for a new round. */
   beginRound(): void {
     this.states.clear();
+    this.aimSnapshot.clear();
     this.assist = null;
     this.target = null;
     this.facts = null;
@@ -135,6 +141,19 @@ export class GripMonitor {
     this.load = 0;
     for (const c of this.contacts) this.pool.push(c);
     this.contacts.length = 0;
+  }
+
+  /**
+   * Remembers where every toy was when the grab started (before the claw
+   * disturbs anything). Call once when the descent begins.
+   */
+  markAim(): void {
+    this.aimSnapshot.clear();
+    for (const toy of this.phys.toys.values()) {
+      if (toy.inBin) continue;
+      const com = toy.body.worldCom(this.phys.scratchV);
+      this.aimSnapshot.set(toy, { x: com.x, z: com.z });
+    }
   }
 
   get assistActive(): boolean {
@@ -255,10 +274,19 @@ export class GripMonitor {
       support += smoothstep(0.03, -0.02, _tip.y - comY);
     }
     support = fingers > 0 ? support / fingers : 0;
-    this.claw.gripCenter(_a);
-    const offset = Math.hypot(comX - _a.x, comZ - _a.z);
-    const reach = Math.max(0.05, toy.asset.footprint * toy.scale);
-    const centering = 1 - smoothstep(0.25 * reach, 1.15 * reach, offset);
+    // Aim error: how far the claw's axis (the trolley, where the player stopped it) was from the
+    // toy's centre of mass before the claw touched anything. A closing claw drags a toy towards its
+    // middle, so measuring after the fact would hide a sloppy aim.
+    const aimed = this.aimSnapshot.get(toy);
+    let offset: number;
+    if (aimed) offset = Math.hypot(aimed.x - this.claw.trolleyX, aimed.z - this.claw.trolleyZ);
+    else {
+      this.claw.gripCenter(_a);
+      offset = Math.hypot(comX - _a.x, comZ - _a.z);
+    }
+    // "Centred" is judged against the solid width of the toy (not just the part that touches the floor).
+    const reach = Math.max(0.06, Math.max(toy.asset.footprint, 0.4 * Math.min(toy.asset.size[0], toy.asset.size[2])) * toy.scale);
+    const centering = 1 - smoothstep(CENTER_FULL * reach, CENTER_NONE * reach, offset);
     const opening = this.claw.fingerOpening();
     const core = clamp01(s.coreShare);
     const palm = s.palmTime > 0.04 && s.palmGap <= 2;

@@ -93,7 +93,7 @@ function ActionButton() {
   }
   if (phase === 'RESULT' && result?.outcome === 'won') {
     return (
-      <button type="button" className="pp-btn pp-grab accent" data-testid="again" onClick={() => app.game.playAgain()} disabled={paused} style={{ fontSize: 'calc(var(--u) * 30 * var(--fs))' }}>
+      <button type="button" className="pp-btn pp-grab accent again" data-testid="again" onClick={() => app.game.playAgain()} disabled={paused}>
         <IconAgain />
         <span>{t('hud.again')}</span>
       </button>

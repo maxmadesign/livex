@@ -4,6 +4,7 @@ import { audioStrings } from './strings/audio';
 import { settingsEn } from './strings/settings.en';
 import { settingsJa } from './strings/settings.ja';
 import { settingsZh } from './strings/settings.zh';
+import { trackingStrings } from './strings/tracking';
 import { uiEn } from './strings/ui.en';
 import { uiJa } from './strings/ui.ja';
 import { uiZh } from './strings/ui.zh';
@@ -22,7 +23,5 @@ export function registerAllStrings(): void {
   registerStrings(core);
   registerStrings(aiStrings);
   registerStrings(audioStrings);
-  // Subsystem namespaces that may be absent in a stripped-down build are picked up when present.
-  const optional = import.meta.glob<{ trackingStrings?: StringTable }>('./strings/tracking.ts', { eager: true });
-  for (const mod of Object.values(optional)) if (mod.trackingStrings) registerStrings(mod.trackingStrings);
+  registerStrings(trackingStrings);
 }

@@ -402,7 +402,7 @@ export const settingsSpec = {
     bloom: num(0.25, 0, 1, 0.05),
     particles: num(60, 0, 300, 10),
     exposure: num(1, 0.6, 1.6, 0.02),
-    toneMapping: en('agx', ['aces', 'agx', 'neutral'] as const),
+    toneMapping: en('neutral', ['aces', 'agx', 'neutral'] as const),
     dof: bool(false),
     motionBlur: bool(false),
     perfPanel: bool(false),

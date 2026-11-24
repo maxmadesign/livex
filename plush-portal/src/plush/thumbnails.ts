@@ -52,7 +52,7 @@ export async function renderThumbnails(library: PlushLibrary, assets: readonly P
       const uniforms = createPlushUniforms();
       applyPaint(uniforms, asset);
       const material = new PlushMaterial(uniforms, { dents: 1, deformNormals: false });
-      const mesh = new Mesh(loaded.lods[0]!, material);
+      const mesh = loaded.custom ? loaded.custom.clone(true) : new Mesh(loaded.lods[0]!, material);
       mesh.rotation.y = -0.38;
       scene.add(mesh);
       const extent = Math.max(asset.size[0], asset.size[1], asset.size[2]);

@@ -35,7 +35,8 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
-    chunkSizeWarningLimit: 2500,
+    // The main chunk contains Rapier with its WASM inlined (about 2 MB) plus Three.js.
+    chunkSizeWarningLimit: 6500,
   },
   test: {
     environment: 'node',

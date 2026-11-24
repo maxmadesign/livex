@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import type { AudioPort, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort } from '../core/contracts';
 import type { DisplayProfileId, Lang, RoundResult, ThemeId, Vec3 } from '../core/types';
-import { log, logError } from '../diagnostics/log';
+import { getLog, log, logError } from '../diagnostics/log';
 import { GameCore } from '../game/GameCore';
 import type { RoundParams } from '../game/RoundController';
 import { solveLayout, type HudLayout } from '../layout/solve';
@@ -243,6 +243,7 @@ export class Game {
   }
 
   private async loadTheme(themeId: ThemeId, onProgress?: (p: number) => void): Promise<void> {
+    this.library.setCustomModels(this.committed.themes.customModels);
     await this.library.loadTheme(themeId, (done, total) => onProgress?.(done / Math.max(1, total)));
     for (const warning of this.library.warnings) log('warn', 'assets', warning);
   }
@@ -591,9 +592,25 @@ export class Game {
       }
       return;
     }
-    this.core.field.setOptions(this.fieldOptions(this.committed));
+    // Same theme: toy selection, size, count or imported models changed.
+    const before = new Map(this.library.assets(this.themeId).map((a) => [a.id, this.library.customEntry(a.id)?.fileKey]));
+    try {
+      await this.loadTheme(this.themeId);
+    } catch (error) {
+      logError('assets', error);
+    }
+    const stale = this.library.assets(this.themeId).filter((a) => before.get(a.id) !== this.library.customEntry(a.id)?.fileKey);
+    this.core.phys.removeAllToys();
+    this.toyVisuals.clear();
     this.populate();
-    ui.setState({ pendingChange: false });
+    if (this.cabinet) this.toyVisuals.setDisplay(this.cabinet.displaySlots, this.library.assets(this.themeId));
+    if (stale.length > 0) {
+      const thumbnails = { ...ui.getState().thumbnails };
+      for (const a of stale) delete thumbnails[a.id];
+      ui.setState({ thumbnails });
+      this.queueThumbnails();
+    }
+    ui.setState({ pendingChange: false, warnings: [...this.library.warnings] });
   }
 
   private stepRestock(dt: number): void {
@@ -1119,6 +1136,7 @@ export class Game {
         if (!this.core.machine.busy) this.core.claw.reset(x, z);
       },
       projection: () => Array.from(this.stage.camera.projectionMatrix.elements),
+      log: () => getLog().map((e) => `[${e.level}] ${e.scope}: ${e.message}`),
       claw: CLAW,
     };
     (window as unknown as { __plush: typeof api }).__plush = api;

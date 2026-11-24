@@ -44,7 +44,10 @@ export interface Finger {
   angularSpeed: number;
 }
 
-const CLAW_GROUPS = groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY | GROUP.TOY_SOFT);
+// The claw is stopped by the solid bodies of the toys only. Floppy parts (ears, tails, tentacles)
+// give way: they neither hold the claw up nor carry weight (the grip monitor still reports where
+// a finger pushes into them so the soft-body shader can show it).
+const CLAW_GROUPS = groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY);
 const ROPE_STIFFNESS = 2600; // N/m
 const ROPE_DAMPING = 46; // N·s/m
 const FINGER_STIFFNESS = 4.2; // N·m/rad
@@ -466,11 +469,26 @@ export class ClawRig {
       maxDistance,
       true,
       undefined,
-      groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY | GROUP.TOY_SOFT),
+      groups(GROUP.CLAW, GROUP.STATIC | GROUP.TOY),
       undefined,
       this.hub,
     );
     return hit ? hit.time_of_impact : maxDistance;
+  }
+
+  /** Straight-line distance from the winch to the rope attachment on the hub (the taut rope length). */
+  tautLength(): number {
+    const t = this.hub.translation(this.phys.scratchV);
+    const r = this.hub.rotation(this.phys.scratchQ);
+    _q.set(r.x, r.y, r.z, r.w);
+    _v.set(0, CLAW.hubTop, 0).applyQuaternion(_q);
+    return Math.hypot(t.x + _v.x - this.trolleyX, t.y + _v.y - CLAW.anchorY, t.z + _v.z - this.trolleyZ);
+  }
+
+  /** Speed of the hub in m/s (used to tell "resting on something" from "still working its way down"). */
+  hubSpeed(): number {
+    const v = this.hub.linvel(this.phys.scratchV);
+    return Math.hypot(v.x, v.y, v.z);
   }
 
   /** World position of the centre of the grasp volume (below the palm). */

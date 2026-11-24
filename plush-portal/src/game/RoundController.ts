@@ -38,6 +38,10 @@ export interface RoundControllerEvents extends Record<string, unknown> {
 }
 
 const _v = new Vector3();
+/** How far the winch may run ahead of the claw while it descends (m). */
+const SLACK_ALLOWANCE = 0.022;
+/** Seconds the claw must sit still on something before the descent is declared finished. */
+const STALL_TIME = 0.2;
 
 /**
  * Drives one round: translates player input into trolley motion, runs the
@@ -60,6 +64,8 @@ export class RoundController {
   private destinationIsChute = false;
   private slipReported = false;
   private releasedHolding = false;
+  private palmTime = 0;
+  private stallTime = 0;
   private awardTime = -1;
   /** Seconds left on the aim timer, or -1 when there is no limit. */
   aimTimeLeft = -1;
@@ -156,6 +162,9 @@ export class RoundController {
         break;
       case 'DESCENDING':
         this.nearest = this.findNearest();
+        this.grip.markAim();
+        this.palmTime = 0;
+        this.stallTime = 0;
         claw.stopTrolley();
         claw.setFingers(1);
         claw.setWinch(CLAW.ropeMax, this.params.descendSpeed);
@@ -266,7 +275,10 @@ export class RoundController {
         const tipClear = hubY - 0.2;
         const near = Math.min(clearance, tipClear);
         const scale = near < 0.08 ? clamp(0.32 + (0.68 * near) / 0.08, 0.32, 1) : 1;
-        claw.setWinch(CLAW.ropeMax, p.descendSpeed * scale);
+        // Pay the cable out only a little ahead of the claw: when a finger rests on something the
+        // claw keeps working its way down under its own weight instead of dropping onto a slack rope.
+        const limit = claw.slackTime > 0 ? Math.min(CLAW.ropeMax, claw.tautLength() + SLACK_ALLOWANCE) : CLAW.ropeMax;
+        claw.setWinch(limit, p.descendSpeed * scale);
         break;
       }
       default:
@@ -288,8 +300,16 @@ export class RoundController {
           this.touched = true;
           this.events.emit('clawTouch', { roundId: m.roundId, onToy: true });
         }
-        const slack = claw.slackTime > 0.07;
-        const bottom = claw.winchArrived() && claw.ropeLength > CLAW.ropeMax - 0.004;
+        // Landed = the palm rests on a toy, or the claw cannot get any lower (it sits on the floor,
+        // the chute guard or wedged between toys), or the cable is fully paid out. A finger tip that
+        // merely touches a neighbour does not count: the claw gets time to slide past it.
+        let palm = false;
+        for (const c of grip.contacts) if (c.part === 3) palm = true;
+        this.palmTime = palm ? this.palmTime + dt : 0;
+        const resting = claw.slackTime > 0.05 && claw.hubSpeed() < 0.035;
+        this.stallTime = resting ? this.stallTime + dt : 0;
+        const slack = (this.palmTime > 0.05 && claw.slackTime > 0.03) || this.stallTime > STALL_TIME;
+        const bottom = claw.ropeLength > CLAW.ropeMax - 0.004 && Math.abs(claw.ropeSpeed) < 0.02;
         if (m.phaseTime > 0.25 && (slack || bottom)) {
           if (!this.touched) {
             this.touched = true;

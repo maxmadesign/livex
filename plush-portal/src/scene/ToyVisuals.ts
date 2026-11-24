@@ -4,7 +4,7 @@ import type { ClawContact } from '../physics/GripMonitor';
 import type { ImpactEvent, ToyBody } from '../physics/PhysicsWorld';
 import type { PlushLibrary } from '../plush/PlushLibrary';
 import { PlushDeformer, type DeformFrame } from '../plush/PlushDeformer';
-import { MAX_DENTS, PlushDepthMaterial, PlushMaterial, applyPaint, createPlushUniforms, type PlushUniforms } from '../plush/PlushMaterial';
+import { MAX_DENTS, PlushDepthMaterial, PlushMaterial, applyPaint, applyPlushDeformation, createPlushUniforms, type PlushUniforms } from '../plush/PlushMaterial';
 import type { PlushAsset } from '../plush/manifest';
 import type { DisplaySlot } from './Cabinet';
 
@@ -131,6 +131,23 @@ export class ToyVisuals {
     mesh.frustumCulled = false;
     const root = new Group();
     root.scale.setScalar(toy.scale);
+    if (loaded.custom) {
+      // Imported model: its own materials, plus the shared soft-body deformation.
+      const copy = loaded.custom.clone(true);
+      copy.traverse((object) => {
+        const part = object as Mesh;
+        if (!part.isMesh) return;
+        part.material = Array.isArray(part.material)
+          ? part.material.map((m) => applyPlushDeformation(m.clone(), uniforms))
+          : applyPlushDeformation(part.material.clone(), uniforms);
+        part.customDepthMaterial = depth;
+        part.castShadow = true;
+        part.receiveShadow = true;
+        part.frustumCulled = false;
+      });
+      root.add(copy);
+      mesh.visible = false;
+    }
     root.add(mesh);
     this.group.add(root);
     const v: ToyVisual = {
@@ -157,6 +174,12 @@ export class ToyVisuals {
 
   private destroy(v: ToyVisual): void {
     v.root.removeFromParent();
+    v.root.traverse((object) => {
+      const part = object as Mesh;
+      if (!part.isMesh || part === v.mesh || part === v.shell) return;
+      // Per-toy clones of an imported model's materials (textures stay with the template).
+      for (const m of Array.isArray(part.material) ? part.material : [part.material]) m.dispose();
+    });
     v.material.dispose();
     v.depth.dispose();
     v.shellMaterial?.dispose();
@@ -250,7 +273,7 @@ export class ToyVisuals {
       }
 
       const focus = v.toy === this.focus || v.toy === this.heldToy;
-      const lod = this.wantedLod(v, focus);
+      const lod = v.mesh.visible ? this.wantedLod(v, focus) : v.lod;
       if (lod !== v.lod) {
         const loaded = this.library.get(v.toy.asset.id);
         if (loaded) {
@@ -258,7 +281,7 @@ export class ToyVisuals {
           v.lod = lod;
         }
       }
-      this.updateShell(v, focus);
+      if (v.mesh.visible) this.updateShell(v, focus);
       const index = v.mesh.geometry.getIndex();
       triangles += (index ? index.count / 3 : 0) * (1 + (v.shell ? v.shell.count : 0));
 
