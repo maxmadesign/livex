@@ -155,6 +155,7 @@ export class Game {
       await this.library.loadManifest();
       const s = this.committed;
       this.stage = new Stage(canvas, this.effectiveGraphics().graphics);
+      this.stage.onSize = (_w, h) => this.effects?.setViewportHeight(h);
       this.stage.onContextLost = () => {
         this.setPaused('context', true);
         ui.setState({ webglLost: true });

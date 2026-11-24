@@ -97,6 +97,9 @@ export class Stage {
   private envTimer = 0;
   private envDirty = false;
   private composerDirty = true;
+  private sizeDirty = true;
+  /** Called when the internal render resolution actually changed. */
+  onSize: ((width: number, height: number) => void) | null = null;
   readonly effective: EffectiveGraphics;
   contextLost = false;
   onContextLost: (() => void) | null = null;
@@ -449,7 +452,17 @@ export class Stage {
     this.applySize();
   }
 
+  /**
+   * Requests a new internal resolution. Resizing a canvas clears it, so the change is applied at
+   * the start of the next rendered frame: a resize that arrived after this frame's render (the
+   * automatic optimiser, a ResizeObserver callback) would otherwise show one blank frame.
+   */
   private applySize(): void {
+    this.sizeDirty = true;
+  }
+
+  private flushSize(): void {
+    this.sizeDirty = false;
     const g = this.graphics;
     let ratio = this.dpr * g.renderScale * this.autoScale;
     // Pixel budget: clamp the internal resolution without touching the canvas' CSS size.
@@ -474,6 +487,7 @@ export class Stage {
     this.effective.autoScale = this.autoScale;
     // Never let the camera fall back to a symmetric frustum after a resize.
     this.camera.updateProjectionMatrix();
+    this.onSize?.(w, h);
   }
 
   /* --------------------------------------------------------------- render */
@@ -481,6 +495,7 @@ export class Stage {
   render(dt: number): void {
     if (this.contextLost) return;
     if (this.composerDirty) this.buildComposer();
+    if (this.sizeDirty) this.flushSize();
     if (this.graphics.reflections !== 'static') {
       this.envTimer += dt;
       const interval = this.graphics.reflections === 'live' ? 0.75 : Infinity;
