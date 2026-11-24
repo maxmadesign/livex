@@ -1,4 +1,4 @@
-import type { GameplaySettings, GraphicsSettings } from '../settings/spec';
+import { GRAPHICS_PRESET_ADDITIONS, type GameplaySettings, type GraphicsSettings } from '../settings/spec';
 
 type GraphicsValues = Omit<GraphicsSettings, 'preset' | 'autoOptimize' | 'perfPanel' | 'exposure' | 'toneMapping' | 'dof' | 'motionBlur'>;
 
@@ -24,8 +24,8 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'fxaa',
     bloom: 0,
     particles: 20,
-    fxIntensity: 0.5,
-    lightShow: false,
+    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    ...GRAPHICS_PRESET_ADDITIONS.safe,
   },
   // Default: ~1080p-equivalent internal pixels, aimed at 60 fps on a Ryzen 7 7840HS / Radeon 780M class iGPU.
   medium: {
@@ -43,8 +43,8 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'fxaa',
     bloom: 0.25,
     particles: 60,
-    fxIntensity: 1,
-    lightShow: true,
+    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    ...GRAPHICS_PRESET_ADDITIONS.medium,
   },
   high: {
     renderScale: 1,
@@ -61,8 +61,8 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'smaa',
     bloom: 0.3,
     particles: 150,
-    fxIntensity: 1.2,
-    lightShow: true,
+    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    ...GRAPHICS_PRESET_ADDITIONS.high,
   },
   ultra: {
     renderScale: 1,
@@ -79,8 +79,8 @@ export const GRAPHICS_PRESETS: Record<Exclude<GraphicsSettings['preset'], 'custo
     aa: 'msaa4',
     bloom: 0.3,
     particles: 300,
-    fxIntensity: 1.5,
-    lightShow: true,
+    // Effects intensity and light show (src/settings/spec.ts, also used to upgrade older stored data).
+    ...GRAPHICS_PRESET_ADDITIONS.ultra,
   },
 };
 

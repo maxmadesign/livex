@@ -242,6 +242,7 @@ describe.each(TRACKS)('music: %s', (theme) => {
     const c = chroma(monos[theme]);
     const order = c.map((v, i) => [v, i] as const).sort((a, b) => b[0] - a[0]);
     const top7 = order.slice(0, 7).map(([, i]) => i);
+    expect(SCALES[theme], `add the scale of the ${theme} track to SCALES`).toBeDefined();
     expect(top7.filter((pc) => SCALES[theme]!.includes(pc)).length).toBeGreaterThanOrEqual(6);
     const total = c.reduce((a, b) => a + b, 0);
     const diatonic = c.reduce((a, v, i) => a + (SCALES[theme]!.includes(i) ? v : 0), 0);
@@ -249,14 +250,14 @@ describe.each(TRACKS)('music: %s', (theme) => {
   });
 });
 
-describe('music: the four tracks are different pieces', () => {
+describe('music: the tracks are different pieces', () => {
   it('differ in tempo, key, title and instrumentation', () => {
     const metas = TRACKS.map((t) => MUSIC_SCORES[t].data.meta);
-    expect(new Set(metas.map((m) => m.bpm)).size).toBe(4);
-    expect(new Set(metas.map((m) => m.key)).size).toBe(4);
-    expect(new Set(metas.map((m) => m.title)).size).toBe(4);
-    for (let a = 0; a < 4; a++) {
-      for (let b = a + 1; b < 4; b++) {
+    expect(new Set(metas.map((m) => m.bpm)).size).toBe(TRACKS.length);
+    expect(new Set(metas.map((m) => m.key)).size).toBe(TRACKS.length);
+    expect(new Set(metas.map((m) => m.title)).size).toBe(TRACKS.length);
+    for (let a = 0; a < TRACKS.length; a++) {
+      for (let b = a + 1; b < TRACKS.length; b++) {
         const ia = new Set(metas[a]!.instruments);
         const shared = metas[b]!.instruments.filter((i) => ia.has(i)).length;
         const union = new Set([...metas[a]!.instruments, ...metas[b]!.instruments]).size;
@@ -270,8 +271,8 @@ describe('music: the four tracks are different pieces', () => {
       const notes = parseLine(MUSIC_SCORES[theme].data.melody.replace(/\|/g, ' ')).notes;
       return notes.slice(1).map((n, i) => `${n.midi - notes[i]!.midi}/${n.dur}`);
     };
-    for (let a = 0; a < 4; a++) {
-      for (let b = a + 1; b < 4; b++) {
+    for (let a = 0; a < TRACKS.length; a++) {
+      for (let b = a + 1; b < TRACKS.length; b++) {
         const A = intervals(TRACKS[a]!);
         const B = intervals(TRACKS[b]!);
         // Share of identical (interval, duration) steps at the same position.
@@ -290,13 +291,13 @@ describe('music: the four tracks are different pieces', () => {
       env[t] = envelope(monos[t]);
       ons[t] = onsets(env[t]);
     }
-    for (let a = 0; a < 4; a++) {
-      for (let b = a + 1; b < 4; b++) {
+    for (let a = 0; a < TRACKS.length; a++) {
+      for (let b = a + 1; b < TRACKS.length; b++) {
         expect(Math.abs(correlation(env[TRACKS[a]!], env[TRACKS[b]!]))).toBeLessThan(0.5);
         expect(Math.abs(correlation(ons[TRACKS[a]!], ons[TRACKS[b]!]))).toBeLessThan(0.5);
       }
     }
-    // Each recording fits its own tempo better than any of the other three tempi.
+    // Each recording fits its own tempo better than any of the other tempi.
     for (const t of TRACKS) {
       const own = tempoScore(ons[t], MUSIC_SCORES[t].data.meta.bpm);
       for (const other of TRACKS) {

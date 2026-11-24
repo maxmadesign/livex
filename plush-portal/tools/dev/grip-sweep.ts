@@ -26,7 +26,8 @@ const value = (name: string, def: string) => {
   return i >= 0 && args[i + 1] ? args[i + 1]! : def;
 };
 
-const themes = (value('themes', THEME_IDS.join(',')).split(',') as ThemeId[]).filter((t) => THEME_IDS.includes(t));
+// Themes without baked characters (a new theme before its assets exist) have nothing to sweep.
+const themes = (value('themes', THEME_IDS.join(',')).split(',') as ThemeId[]).filter((t) => THEME_IDS.includes(t) && themeAssets(t).length > 0);
 const difficulties = (value('difficulty', 'arcade') === 'all' ? ['easy', 'arcade', 'skill'] : value('difficulty', 'arcade').split(',')) as Difficulty[];
 const seeds = Array.from({ length: Number(value('seeds', '2')) }, (_, i) => 11 + i * 17);
 const verbose = flag('verbose');

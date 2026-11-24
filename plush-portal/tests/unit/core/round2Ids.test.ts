@@ -6,7 +6,7 @@ import { createNullTracker } from '../../../src/app/nullPorts';
 import { INITIAL_TRACKER } from '../../../src/app/gameStore';
 import { IDLE_CALIBRATION, type TrackerPort } from '../../../src/core/contracts';
 import { DISPLAY_PROFILE_IDS, LANGS, THEME_IDS } from '../../../src/core/types';
-import { hasString } from '../../../src/i18n';
+import { hasString, translate } from '../../../src/i18n';
 import { registerAllStrings } from '../../../src/i18n/all';
 import { DESIGN } from '../../../src/layout/solve';
 import type { PlushAsset, PlushManifest } from '../../../src/plush/manifest';
@@ -15,6 +15,7 @@ import { Effects } from '../../../src/scene/Effects';
 import type { FxApi } from '../../../src/scene/fx/api';
 import { defaultSettings, profileDefaults } from '../../../src/settings/spec';
 import { THEMES } from '../../../src/themes/themes';
+import { createFaceTracker } from '../../../src/tracking/FaceTracker';
 import { loadManifest } from '../game/harness';
 
 registerAllStrings();
@@ -54,18 +55,21 @@ describe('theme and display preset ids', () => {
   });
 
   it('names the new theme and preset in every language', () => {
-    registerAllStrings();
     const names: Record<string, [string, string, string]> = {
       'theme.gpu.name': ['GPU Party', '显卡派对', 'GPUパーティー'],
       'device.mobile.name': ['Phone', '手机', 'スマートフォン'],
     };
     for (const [key, [en, zh, ja]] of Object.entries(names)) {
-      expect(LINE_BANKS && hasString('en', key)).toBe(true);
-      expect([en, zh, ja].every((v) => v.length > 0)).toBe(true);
+      expect(translate('en', key)).toBe(en);
+      expect(translate('zh', key)).toBe(zh);
+      expect(translate('ja', key)).toBe(ja);
     }
   });
 
-  it('GPU Party starts as a retinted Cosmic Arcade (dark, green accent)', () => {
+  // Only the contract is pinned here (palette from the brief, a complete definition of its own).
+  // Placeholder choices (Cosmic's backdrop pattern, particles, music and characters) are left
+  // to the GPU theme work, so it does not have to edit this shared file.
+  it('GPU Party has its own dark theme definition with the green palette', () => {
     const gpu = THEMES.gpu;
     expect(gpu.ui.primary).toBe('#76b900');
     expect(gpu.ui.primaryDeep).toBe('#4e7a00');
@@ -74,14 +78,17 @@ describe('theme and display preset ids', () => {
     expect(gpu.ui.paper).toBe('#10140c');
     expect(gpu.ui.panel).toBe('#1a2212');
     expect(gpu.ui.glow).toBe('#b6ff5c');
-    expect(gpu.cabinet.pattern).toBe(THEMES.cosmic.cabinet.pattern);
-    expect(gpu.particles.kind).toBe(THEMES.cosmic.particles.kind);
-    expect(AUDIO_THEME_SOURCE.gpu).toBe('cosmic');
+    expect(gpu).not.toBe(THEMES.cosmic);
+    expect(gpu.cabinet.led.length).toBeGreaterThan(0);
+    expect(gpu.particles.colors.length).toBeGreaterThan(0);
   });
 
-  it('the phone preset starts with the desktop defaults', () => {
-    expect(profileDefaults('mobile')).toEqual(profileDefaults('desktop'));
-    expect(DESIGN.mobile).toEqual(DESIGN.desktop);
+  it('the phone preset has its own defaults and design size (tuned by the mobile work)', () => {
+    const d = profileDefaults('mobile');
+    expect(d.layout).toBeDefined();
+    expect(d.view).toBeDefined();
+    expect(DESIGN.mobile.w).toBeGreaterThan(0);
+    expect(DESIGN.mobile.h).toBeGreaterThan(0);
   });
 
   it('every theme has local guide lines wherever a theme matters', () => {
@@ -98,10 +105,10 @@ describe('plush library: a theme without characters', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('borrows another theme’s characters (warning once) so the machine is never empty', () => {
+    // A manifest without GPU characters, whether or not the real one has them by now.
     const real = loadManifest();
-    expect(real.assets.some((a) => a.theme === 'gpu')).toBe(false); // no GPU characters baked yet
     const lib = new PlushLibrary('/');
-    lib.manifest = real as PlushManifest;
+    lib.manifest = { ...real, assets: real.assets.filter((a) => a.theme !== 'gpu') } as PlushManifest;
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cosmic = lib.assets('cosmic');
     expect(cosmic.length).toBeGreaterThan(0);
@@ -150,5 +157,16 @@ describe('tracker calibration contract', () => {
     expect(() => tracker.cancelCalibration()).not.toThrow();
     expect(tracker.status().calibration.phase).toBe('idle');
     expect(INITIAL_TRACKER.calibration).toEqual(IDLE_CALIBRATION);
+  });
+
+  it('the camera tracker exposes the same contract: idle before any calibration, start / cancel never throw', () => {
+    const tracker = createFaceTracker({ openCamera: () => new Promise(() => undefined), listCameras: async () => [], assetBase: 'http://localhost/mediapipe/' });
+    expect(tracker.status().calibration).toEqual(IDLE_CALIBRATION);
+    // The tracker is not running here: the calibration work decides whether that reads idle or failed.
+    expect(() => tracker.startCalibration(3)).not.toThrow();
+    expect(['idle', 'countdown', 'capturing', 'done', 'failed']).toContain(tracker.status().calibration.phase);
+    expect(() => tracker.cancelCalibration()).not.toThrow();
+    expect(['idle', 'failed']).toContain(tracker.status().calibration.phase);
+    tracker.dispose();
   });
 });

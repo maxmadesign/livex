@@ -512,6 +512,35 @@ export type AudioSettings = Settings['audio'];
 export type AiSettings = Settings['ai'];
 export type CameraSettings = Settings['camera'];
 
+/**
+ * Graphics values that belong to the quality presets but were added after presets were
+ * already stored. `src/app/presets.ts` builds GRAPHICS_PRESETS from this table. When a stored
+ * or imported configuration has a named preset but lacks one of these keys, the key takes its
+ * preset's value instead of the plain default (an upgraded "Safe" install stays light and the
+ * highlighted preset stays true). Keys added to the presets later go here as well.
+ */
+export const GRAPHICS_PRESET_ADDITIONS = {
+  safe: { fxIntensity: 0.5, lightShow: false },
+  medium: { fxIntensity: 1, lightShow: true },
+  high: { fxIntensity: 1.2, lightShow: true },
+  ultra: { fxIntensity: 1.5, lightShow: true },
+} as const satisfies Record<Exclude<GraphicsSettings['preset'], 'custom'>, Partial<GraphicsSettings>>;
+
+/** Fills preset-owned graphics keys missing from older data with the stored preset's values. */
+function fillPresetAdditions(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const graphics = (input as { graphics?: unknown }).graphics;
+  if (!graphics || typeof graphics !== 'object' || Array.isArray(graphics)) return input;
+  const g = graphics as Record<string, unknown>;
+  const values = (GRAPHICS_PRESET_ADDITIONS as Record<string, Record<string, unknown>>)[String(g.preset)];
+  if (!values) return input;
+  const missing = Object.keys(values).filter((key) => g[key] === undefined);
+  if (missing.length === 0) return input;
+  const filled = { ...g };
+  for (const key of missing) filled[key] = values[key];
+  return { ...(input as Record<string, unknown>), graphics: filled };
+}
+
 /* ----------------------------------------------------------------- utilities */
 
 export function isField(node: Field | SpecGroup): node is Field {
@@ -608,7 +637,7 @@ function enforceInvariants(s: Settings): Settings {
 
 /** Returns a complete, valid settings object from arbitrary input (unknown keys are dropped). */
 export function sanitizeSettings(input: unknown): Settings {
-  return enforceInvariants(sanitizeNode(settingsSpec, input) as Settings);
+  return enforceInvariants(sanitizeNode(settingsSpec, fillPresetAdditions(input)) as Settings);
 }
 
 export function getFieldAt(path: string): Field | null {
