@@ -6,6 +6,8 @@
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { KeyManagementMode, SpeechApi } from '../src/ai/protocol';
+import { parseBrandId, type BrandId } from '../src/brand/kits';
+import { isSafeHttpUrl } from '../src/rewards/protocol';
 import {
   DEFAULT_REALTIME_SPEECH_MODEL,
   DEFAULT_SPEECH_API_MODEL,
@@ -62,6 +64,40 @@ export interface ServerConfig {
     certFile: string | null;
     keyFile: string | null;
   };
+  /** Brand kit of the claim and staff pages (PLUSH_BRAND; match it with the build's VITE_BRAND). */
+  brand: BrandId;
+  /** Prize claim codes and pages (docs/REWARDS.md). */
+  rewards: RewardsConfig;
+}
+
+export interface RewardsConfig {
+  /** PLUSH_REWARDS (default on). Off: no new codes; codes issued before stay viewable and redeemable. */
+  enabled: boolean;
+  /** Port of the LAN claim listener (PLUSH_CLAIM_PORT, default 8788; 0 = any free port). */
+  claimPort: number;
+  /** Interfaces the claim listener binds to (all, so phones on the booth network reach it). */
+  claimHost: string;
+  /** PLUSH_CLAIM_LAN (default on): start the claim listener next to the main server. */
+  claimLan: boolean;
+  /** PLUSH_CLAIM_PUBLIC_URL without trailing slash, or null: the base the QR codes point to instead. */
+  publicUrl: string | null;
+  /** PLUSH_REWARD_TTL_HOURS (default 24): how long a code stays valid. */
+  ttlHours: number;
+  /** Folders searched for the brand kit's logo / font files: the build first, then public/. */
+  assetDirs: string[];
+}
+
+/** A public claim base: an http(s) URL without credentials, query or fragment (trailing slashes dropped). */
+export function parseClaimPublicUrl(value: string): string | null {
+  const v = value.trim().replace(/\/+$/, '');
+  if (!v || !isSafeHttpUrl(v) || v.includes('{code}')) return null;
+  try {
+    const url = new URL(v);
+    if (url.search || url.hash) return null;
+  } catch {
+    return null;
+  }
+  return v;
 }
 
 type Env = Record<string, string | undefined>;
@@ -153,6 +189,11 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
   if ((certFile === null) !== (keyFile === null)) warnings.push('PLUSH_TLS_CERT and PLUSH_TLS_KEY must be set together; using a self-signed certificate.');
   const pairComplete = certFile !== null && keyFile !== null;
 
+  const publicUrlRaw = clean(env.PLUSH_CLAIM_PUBLIC_URL);
+  const publicUrl = publicUrlRaw ? parseClaimPublicUrl(publicUrlRaw) : null;
+  if (publicUrlRaw && !publicUrl) warnings.push('PLUSH_CLAIM_PUBLIC_URL must be an http(s) URL without query or fragment; using the claim listener.');
+  const distDir = path.resolve(here, '..', clean(env.PLUSH_DIST_DIR) || 'dist');
+
   return {
     port: int(env.PLUSH_API_PORT, 8787, 1, 65535),
     host: clean(env.PLUSH_API_HOST) || '127.0.0.1',
@@ -176,7 +217,7 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
     textTimeoutMs: int(env.PLUSH_TEXT_TIMEOUT_MS, 6000, 1000, 30000),
     speechTimeoutMs: int(env.PLUSH_SPEECH_TIMEOUT_MS, 12000, 2000, 60000),
     serveDist: argv.includes('--serve-dist') || bool(env.PLUSH_SERVE_DIST, false),
-    distDir: path.resolve(here, '..', clean(env.PLUSH_DIST_DIR) || 'dist'),
+    distDir,
     logLevel,
     version,
     dataDir: path.resolve(projectRoot, clean(env.PLUSH_DATA_DIR) || '.data'),
@@ -190,6 +231,16 @@ export function loadConfig(env: Env, argv: readonly string[] = [], version = '0.
       host: clean(env.PLUSH_HTTPS_HOST) || '0.0.0.0',
       certFile: pairComplete ? path.resolve(projectRoot, certFile) : null,
       keyFile: pairComplete ? path.resolve(projectRoot, keyFile) : null,
+    },
+    brand: parseBrandId(env.PLUSH_BRAND),
+    rewards: {
+      enabled: bool(env.PLUSH_REWARDS, true),
+      claimPort: int(env.PLUSH_CLAIM_PORT, 8788, 0, 65535),
+      claimHost: '0.0.0.0',
+      claimLan: bool(env.PLUSH_CLAIM_LAN, true),
+      publicUrl,
+      ttlHours: int(env.PLUSH_REWARD_TTL_HOURS, 24, 1, 24 * 30),
+      assetDirs: [distDir, path.join(projectRoot, 'public')],
     },
   };
 }

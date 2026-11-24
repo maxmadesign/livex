@@ -13,6 +13,10 @@
  * extra CA certificates (NODE_EXTRA_CA_CERTS, SSL_CERT_FILE) without any
  * special Node flag (see server/net.ts). PLUSH_HTTPS=1 adds an HTTPS listener
  * for phones on the LAN (see server/tls.ts).
+ *
+ * Prize claim codes (docs/REWARDS.md) are kept in `<PLUSH_DATA_DIR>/rewards.json`; unless
+ * PLUSH_REWARDS=off or PLUSH_CLAIM_LAN=off a second listener on 0.0.0.0:PLUSH_CLAIM_PORT (8788)
+ * serves only the claim pages to phones on the booth network.
  */
 import { readFileSync } from 'node:fs';
 import { createServer as createHttpsServer } from 'node:https';
@@ -21,11 +25,24 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
+import { BRAND_KITS } from '../src/brand/kits';
 import { createApp, type ClientBundle, type OpenAILike } from './app';
 import { loadConfig, type ServerConfig } from './config';
 import { createFileKeyStore, createKeyManager, maskKey, type KeyManager } from './keys';
 import { createLogger, type Logger } from './log';
 import { setupNetwork, type NetworkSetup } from './net';
+import {
+  createBrandAssets,
+  createClaimApp,
+  createFileRewardStorage,
+  createRewardsService,
+  initialClaimTarget,
+  makeClientKey,
+  startClaimListener,
+  type BrandAssets,
+  type ClaimListener,
+  type RewardsService,
+} from './rewards';
 import { openAiRealtimeConnect } from './speech';
 import { ensureTlsMaterial, localHostNames } from './tls';
 
@@ -66,8 +83,42 @@ export function createServerApp(config: ServerConfig, network: NetworkSetup | nu
     createClients: clientFactory(config, network),
     onKey: (key) => logger.addSecret?.(key),
   });
-  const app = createApp({ config, keys, logger });
-  return { app, logger, keys };
+  const rewards = createRewardsService({
+    enabled: config.rewards.enabled,
+    ttlHours: config.rewards.ttlHours,
+    storage: createFileRewardStorage(config.dataDir),
+    brand: BRAND_KITS[config.brand],
+    claimTarget: initialClaimTarget(config),
+    logger,
+  });
+  const brandAssets = createBrandAssets(rewards.brand, config.rewards.assetDirs);
+  const app = createApp({ config, keys, logger, rewards, brandAssets });
+  return { app, logger, keys, rewards, brandAssets };
+}
+
+/** Project-relative path of a data file for log lines (absolute when it lives elsewhere). */
+function storeLabel(location: string): string {
+  const relative = path.relative(projectRoot, location);
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : location;
+}
+
+/** The claim-only listener for phones (null when rewards or the LAN listener are switched off). */
+function listenClaims(config: ServerConfig, rewards: RewardsService, brandAssets: BrandAssets, logger: Logger): ClaimListener | null {
+  if (!config.rewards.enabled || !config.rewards.claimLan) {
+    const target = rewards.claimTarget();
+    logger.info('claim pages', { url: `${target.base}/c/<code>`, reach: target.reach, listener: config.rewards.enabled ? 'off (PLUSH_CLAIM_LAN)' : 'off (PLUSH_REWARDS)' });
+    return null;
+  }
+  const app = createClaimApp({ rewards, assets: brandAssets, logger, now: () => Date.now(), clientKey: makeClientKey(config.trustProxy) });
+  return startClaimListener({
+    app,
+    port: config.rewards.claimPort,
+    host: config.rewards.claimHost,
+    rewards,
+    logger,
+    publicUrl: config.rewards.publicUrl,
+    mainPort: config.port,
+  });
 }
 
 function listenHttps(config: ServerConfig, app: ReturnType<typeof createApp>, logger: Logger) {
@@ -107,7 +158,7 @@ function listenHttps(config: ServerConfig, app: ReturnType<typeof createApp>, lo
 export function start(env: Record<string, string | undefined> = process.env, argv: readonly string[] = process.argv.slice(2)) {
   const config = loadConfig(env, argv, readVersion());
   const network = setupNetwork(env);
-  const { app, logger, keys } = createServerApp(config, network);
+  const { app, logger, keys, rewards, brandAssets } = createServerApp(config, network);
   const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
     const active = keys.active();
     logger.info('listening', {
@@ -127,15 +178,27 @@ export function start(env: Record<string, string | undefined> = process.env, arg
     if (!active.key) logger.info('no OpenAI key: AI routes answer "no_key" and the game uses local lines');
     if (config.speechConfigError) logger.error('speech configuration problem', { detail: config.speechConfigError });
     for (const warning of config.warnings) logger.info('config note', { detail: warning });
+    const report = rewards.loadReport;
+    logger.info('rewards', {
+      enabled: rewards.enabled,
+      brand: rewards.brand.id,
+      codes: report.loaded,
+      skipped: report.skipped || undefined,
+      ttlHours: rewards.ttlHours,
+      store: storeLabel(rewards.location),
+    });
+    if (report.error) logger.error('rewards store problem', { detail: report.error });
   });
   const secure = config.https.enabled ? listenHttps(config, app, logger) : null;
+  const claims = listenClaims(config, rewards, brandAssets, logger);
   const shutdown = () => {
-    let open = secure ? 2 : 1;
+    let open = 1 + (secure ? 1 : 0) + (claims ? 1 : 0);
     const closed = () => {
       if (--open <= 0) process.exit(0);
     };
     server.close(closed);
     secure?.close(closed);
+    claims?.close(closed);
     // Do not hang on open keep-alive connections.
     setTimeout(() => process.exit(0), 1500).unref();
   };

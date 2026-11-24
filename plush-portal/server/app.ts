@@ -18,12 +18,26 @@ import {
   type StatusResponseBody,
   type TestResponseBody,
 } from '../src/ai/protocol';
+import { BRAND_KITS } from '../src/brand/kits';
 import { classifyModel, textCapability, type LearnedOverride } from './capabilities';
 import type { ServerConfig } from './config';
 import { ApiFailure, mapUpstreamError } from './errors';
 import { createKeyManager, isLocalRequest, maskKey, validateKeyFormat, type KeyManager } from './keys';
 import { createLogger, type Logger } from './log';
 import { createRateLimiter } from './rateLimit';
+import {
+  createBrandAssets,
+  createClaimRoutes,
+  createMemoryRewardStorage,
+  createRewardApiRoutes,
+  createRewardsService,
+  createStaffRoutes,
+  initialClaimTarget,
+  type BrandAssets,
+  type RewardRouteDeps,
+  type RewardAuthDeps,
+  type RewardsService,
+} from './rewards';
 import { LineRequestSchema, SpeechRequestSchema, TestRequestSchema, describeIssue, type LineRequest } from './schemas';
 import {
   SpeechCache,
@@ -72,6 +86,13 @@ export interface AppDeps {
   logger?: Logger;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Prize claim codes (server/rewards). index.ts passes one backed by `<dataDir>/rewards.json` and
+   * shares it with the LAN claim listener; when omitted (tests, embedders) codes live in memory.
+   */
+  rewards?: RewardsService;
+  /** Brand logo / font files of the claim pages (default: looked up in config.rewards.assetDirs). */
+  brandAssets?: BrandAssets;
 }
 
 const MODELS_CACHE_MS = 5 * 60_000;
@@ -164,7 +185,8 @@ export function createApp(deps: AppDeps): Hono {
     const started = now();
     await next();
     c.header('x-content-type-options', 'nosniff');
-    c.header('referrer-policy', 'no-referrer');
+    // Staff pages set their own (same-origin, see server/rewards/routes.ts); everything else gets none.
+    if (!c.res.headers.has('referrer-policy')) c.header('referrer-policy', 'no-referrer');
     if (c.req.path.startsWith('/api/')) {
       c.header('cache-control', c.res.headers.get('cache-control') ?? 'no-store');
       logger.info('request', { method: c.req.method, path: c.req.path, status: c.res.status, ms: Math.round(now() - started) });
@@ -243,6 +265,14 @@ export function createApp(deps: AppDeps): Hono {
       return null;
     }
   };
+  /** A request made on this machine (see isLocalRequest); shared by the key routes and the prize-claim routes. */
+  const isLocalCaller = (c: Context): boolean =>
+    isLocalRequest({
+      socketAddress: socketAddress(c),
+      host: c.req.header('host') ?? null,
+      origin: c.req.header('origin') ?? null,
+      forwarded: [c.req.header('x-forwarded-for'), c.req.header('forwarded'), c.req.header('x-real-ip')],
+    });
   /**
    * Who may replace / test / restore the key: with PLUSH_KEY_MANAGEMENT=local
    * (default) a request made on this machine, or anyone with the admin token;
@@ -252,12 +282,7 @@ export function createApp(deps: AppDeps): Hono {
     if (keyManagement === 'off') return false;
     if (hasAdminToken(c)) return true;
     if (keyManagement === 'token') return false;
-    return isLocalRequest({
-      socketAddress: socketAddress(c),
-      host: c.req.header('host') ?? null,
-      origin: c.req.header('origin') ?? null,
-      forwarded: [c.req.header('x-forwarded-for'), c.req.header('forwarded'), c.req.header('x-real-ip')],
-    });
+    return isLocalCaller(c);
   };
   const requireKeyManagement = (c: Context): void => {
     if (keyManagement === 'off') {
@@ -590,6 +615,34 @@ export function createApp(deps: AppDeps): Hono {
     modelsCache = { at: now(), generation, body };
     return c.json(body);
   });
+
+  /* ------------------------------------------------------ prize claims */
+
+  const rewards =
+    deps.rewards ??
+    createRewardsService({
+      enabled: config.rewards.enabled,
+      ttlHours: config.rewards.ttlHours,
+      storage: createMemoryRewardStorage(),
+      brand: BRAND_KITS[config.brand],
+      claimTarget: initialClaimTarget(config),
+      now,
+      logger,
+    });
+  const rewardDeps: RewardRouteDeps & RewardAuthDeps = {
+    rewards,
+    assets: deps.brandAssets ?? createBrandAssets(rewards.brand, config.rewards.assetDirs, now),
+    logger,
+    now,
+    clientKey,
+    isLocal: isLocalCaller,
+    hasAdminToken,
+    isAdminToken: (value) => !!config.adminToken && sameToken(value, config.adminToken),
+  };
+  // Before the /api catch-all and the static fallback, which would otherwise answer these paths.
+  app.route('/', createRewardApiRoutes(rewardDeps));
+  app.route('/', createClaimRoutes(rewardDeps));
+  app.route('/', createStaffRoutes(rewardDeps));
 
   app.all('/api/*', () => {
     throw new ApiFailure(404, 'not_found', 'Unknown API route.');
