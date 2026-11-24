@@ -10,6 +10,7 @@ import {
   describeReward,
   promptBrand,
   sanitizeFacts,
+  taskFor,
   themePromptInfo,
 } from '../../../src/ai/prompt';
 import { factsCacheKey, lineCacheKey } from '../../../src/ai/cache';
@@ -173,5 +174,42 @@ describe('line cache keys', () => {
     expect(factsCacheKey(event('retry_prompt', facts({ reward: { qr: true, options: 'both' } })))).not.toBe(
       factsCacheKey(event('retry_prompt', facts())),
     );
+  });
+});
+
+describe('prompt: no QR wording without a QR on screen (live model check, 2026-11)', () => {
+  // A conditional "if facts.reward.qr is true ..." sentence in the task, plus earlier scan
+  // invitations in recentLines, made the live model invite a scan for wins without a QR.
+  const won = (reward: GuideFacts['reward']): GuideFacts => ({
+    phase: 'RESULT',
+    demo: false,
+    attempts: 2,
+    wins: 1,
+    lossStreak: 0,
+    outcome: 'won',
+    toy: { typeId: 'gpu.chip', name: 'Chippy', kind: 'chip' },
+    brand: { event: BRAND_KITS.gtc.eventName, host: BRAND_KITS.gtc.hostName },
+    reward,
+  });
+  const scanLine = 'Winner! Scan the QR code and choose a plush prize or swag savings.';
+
+  it('asks for the scan invitation only when the QR is on screen', () => {
+    const withQr = JSON.parse(buildLineInput({ event: { type: 'prize_won', facts: won({ qr: true, options: 'both' }) }, theme: 'gpu', recentLines: [scanLine] }));
+    expect(withQr.task).toMatch(/QR code is on screen/);
+    expect(withQr.rewardMeaning).toBeTruthy();
+    expect(withQr.recentLines).toEqual([scanLine]);
+
+    const without = JSON.parse(buildLineInput({ event: { type: 'prize_won', facts: won(null) }, theme: 'gpu', recentLines: [scanLine, 'Nice aim!'] }));
+    expect(without.task).toMatch(/No QR code is on screen/);
+    expect(without.task).not.toMatch(/facts\.reward/);
+    expect(without.rewardMeaning).toBeUndefined();
+    // Earlier scan invitations are not shown to the model when no QR is up any more.
+    expect(without.recentLines).toEqual(['Nice aim!']);
+  });
+
+  it('events that never carry a QR keep their plain task', () => {
+    expect(taskFor('welcome', false)).not.toMatch(/QR/);
+    expect(taskFor('retry_prompt', true)).toMatch(/still on screen/);
+    expect(taskFor('retry_prompt', false)).toMatch(/No QR code is on screen/);
   });
 });

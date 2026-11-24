@@ -13,9 +13,9 @@
  */
 import type { BrandKit } from '../brand/kits';
 import type { GuideEventType, GuideFacts } from '../core/contracts';
-import type { Lang, ThemeId } from '../core/types';
+import { LANGS, type Lang, type ThemeId } from '../core/types';
 import { REWARD_OPTIONS, type RewardOptions } from '../rewards/protocol';
-import { namedKitFor, rewardFor, usableBrand, type BrandFacts } from './brand';
+import { mentionsQr, namedKitFor, rewardFor, usableBrand, type BrandFacts } from './brand';
 import type { BrandPoolId } from './lines/types';
 import type { LineLength } from './protocol';
 import { AI_LIMITS } from './protocol';
@@ -99,6 +99,11 @@ export function promptBrand(theme: ThemeId, facts: Pick<GuideFacts, 'brand'>): B
   return usableBrand(theme, facts.brand);
 }
 
+/**
+ * What the model is asked to do per event. The claim-QR part is added per request (taskFor), so a
+ * request without a QR on screen never mentions one: a conditional sentence about a QR made the
+ * model talk about QR codes that were not there.
+ */
 const EVENT_TASKS: Record<GuideEventType, string> = {
   welcome: 'Greet the player and invite them to pick a plush they like.',
   first_play: 'It is their first round: explain the controls in one line.',
@@ -107,11 +112,9 @@ const EVENT_TASKS: Record<GuideEventType, string> = {
   grab_started: 'The claw is going down right now. React with excitement; do not predict the result.',
   empty_grab: 'The claw came up empty. Follow the contact rules below.',
   slipped_after_grip: 'A toy was really gripped but got away. Explain kindly using facts.slipReason and give one fix.',
-  prize_won:
-    'The toy dropped into the prize chute. Celebrate and mention facts.toy.name. If facts.newCharacter is true, say it is new in the collection. If facts.reward.qr is true, a prize-claim QR code is on screen: the invitation to scan it comes first (see rewardMeaning).',
+  prize_won: 'The toy dropped into the prize chute. Celebrate and mention facts.toy.name. If facts.newCharacter is true, say it is new in the collection.',
   theme_changed: 'The cabinet theme just changed. Welcome the player to the new theme in its mood.',
-  retry_prompt:
-    'Lightly invite another try. No pressure: watching or stopping is fine. If facts.reward.qr is true, the prize-claim QR code of the win is still on screen: remind the player to scan it first (see rewardMeaning).',
+  retry_prompt: 'Lightly invite another try. No pressure: watching or stopping is fine.',
   user_requested_tip: 'The player asked for a tip. Give one concrete, practical tip.',
 };
 
@@ -247,6 +250,25 @@ export interface LineContext {
   recentLines: string[];
 }
 
+const QR_TASKS: Partial<Record<GuideEventType, string>> = {
+  prize_won: 'A prize-claim QR code is on screen: the invitation to scan it comes first (see rewardMeaning).',
+  retry_prompt: 'The prize-claim QR code of the win is still on screen: remind the player to scan it first (see rewardMeaning).',
+};
+const NO_QR_TASK = 'No QR code is on screen: do not mention QR codes, scanning, collecting a prize at a booth or discounts.';
+
+/** The event task, with the claim-QR instruction only when a QR is really on screen. */
+export function taskFor(type: GuideEventType, qrOnScreen: boolean): string {
+  const base = EVENT_TASKS[type];
+  const qr = QR_TASKS[type];
+  if (!qr) return base;
+  return `${base} ${qrOnScreen ? qr : NO_QR_TASK}`;
+}
+
+/** True when `line` talks about a QR code in any of the guide's languages. */
+function mentionsAnyQr(line: string): boolean {
+  return LANGS.some((lang) => mentionsQr(line, lang));
+}
+
 /** The user message: a compact JSON document with everything Momo may talk about. */
 export function buildLineInput(context: LineContext): string {
   const facts = sanitizeFacts(context.event.facts);
@@ -257,11 +279,14 @@ export function buildLineInput(context: LineContext): string {
   if (!reward) delete facts.reward;
   const payload: Record<string, unknown> = {
     event: context.event.type,
-    task: EVENT_TASKS[context.event.type],
+    task: taskFor(context.event.type, reward !== null),
     theme: { id: context.theme, ...themePromptInfo(context.theme, facts.brand) },
     facts,
+    // Without a QR on screen, earlier lines that invited a scan are left out: they primed the model
+    // to repeat the invitation for a QR that is no longer there.
     recentLines: context.recentLines
       .filter((line) => typeof line === 'string' && line.length > 0)
+      .filter((line) => reward !== null || !mentionsAnyQr(line))
       .slice(-AI_LIMITS.maxRecentLines)
       .map((line) => line.slice(0, AI_LIMITS.maxRecentLineChars)),
   };
