@@ -6,13 +6,13 @@
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
 
-export const THEME_IDS = ['sakura', 'storybook', 'ocean', 'cosmic'] as const;
+export const THEME_IDS = ['sakura', 'storybook', 'ocean', 'cosmic', 'gpu'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export const LANGS = ['en', 'zh', 'ja'] as const;
 export type Lang = (typeof LANGS)[number];
 
-export const DISPLAY_PROFILE_IDS = ['desktop', 'portrait32', 'portrait86'] as const;
+export const DISPLAY_PROFILE_IDS = ['desktop', 'portrait32', 'portrait86', 'mobile'] as const;
 export type DisplayProfileId = (typeof DISPLAY_PROFILE_IDS)[number];
 
 /** Round state machine phases (see src/game/RoundMachine.ts). */

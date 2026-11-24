@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla';
-import type { AudioStatus, GuideLine, GuideStatus, TrackerStatus } from '../core/contracts';
+import { IDLE_CALIBRATION, type AudioStatus, type GuideLine, type GuideStatus, type TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, RoundPhase, RoundResult, ThemeId } from '../core/types';
 import type { EffectiveGraphics } from '../scene/Stage';
 
@@ -82,6 +82,7 @@ export const INITIAL_TRACKER: TrackerStatus = {
   facesSeen: 0,
   viewSource: 'neutral',
   calibrated: false,
+  calibration: IDLE_CALIBRATION,
 };
 
 export const INITIAL_AUDIO: AudioStatus = { state: 'locked', detail: '', usingFallbackSynth: false, musicTheme: null, outputDeviceSupported: false };

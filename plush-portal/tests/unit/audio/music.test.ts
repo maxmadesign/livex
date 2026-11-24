@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { THEME_IDS, type ThemeId } from '../../../src/core/types';
 import {
+  AUDIO_SOURCE_THEMES,
+  AUDIO_THEME_SOURCE,
   LOOP_POST_ROLL,
   LOOP_PRE_ROLL,
   MUSIC_SCORES,
@@ -15,11 +17,14 @@ import {
   type MusicRender,
 } from '../../../src/audio/synth/index';
 
+/** Themes with a track of their own; a theme that borrows another theme's track is not rendered twice. */
+const TRACKS = AUDIO_SOURCE_THEMES;
+
 const renders = {} as Record<ThemeId, MusicRender>;
 const monos = {} as Record<ThemeId, Float32Array>;
 
 beforeAll(() => {
-  for (const theme of THEME_IDS) {
+  for (const theme of TRACKS) {
     const r = renderMusic(theme);
     renders[theme] = r;
     const m = new Float32Array(r.loop.l.length);
@@ -123,7 +128,7 @@ function chroma(mono: Float32Array): number[] {
   return out;
 }
 
-const SCALES: Record<ThemeId, number[]> = {
+const SCALES: Partial<Record<ThemeId, number[]>> = {
   sakura: [5, 7, 9, 10, 0, 2, 4], // F major
   storybook: [7, 9, 11, 0, 2, 4, 6], // G major
   ocean: [2, 4, 6, 7, 9, 11, 1], // D major
@@ -132,7 +137,17 @@ const SCALES: Record<ThemeId, number[]> = {
 
 /* ------------------------------------------------------------------ tests */
 
-describe.each(THEME_IDS)('music: %s', (theme) => {
+describe('music: theme → track mapping', () => {
+  it('every theme plays a track that exists (its own or the one it borrows)', () => {
+    for (const theme of THEME_IDS) {
+      const source = AUDIO_THEME_SOURCE[theme];
+      expect(TRACKS, theme).toContain(source);
+      expect(MUSIC_SCORES[theme].data, theme).toBe(MUSIC_SCORES[source].data);
+    }
+  });
+});
+
+describe.each(TRACKS)('music: %s', (theme) => {
   it('is at least 60 s long, finite, and laid out as a periodic file', () => {
     const { loop, file } = renders[theme];
     const n = loop.l.length;
@@ -227,16 +242,16 @@ describe.each(THEME_IDS)('music: %s', (theme) => {
     const c = chroma(monos[theme]);
     const order = c.map((v, i) => [v, i] as const).sort((a, b) => b[0] - a[0]);
     const top7 = order.slice(0, 7).map(([, i]) => i);
-    expect(top7.filter((pc) => SCALES[theme].includes(pc)).length).toBeGreaterThanOrEqual(6);
+    expect(top7.filter((pc) => SCALES[theme]!.includes(pc)).length).toBeGreaterThanOrEqual(6);
     const total = c.reduce((a, b) => a + b, 0);
-    const diatonic = c.reduce((a, v, i) => a + (SCALES[theme].includes(i) ? v : 0), 0);
+    const diatonic = c.reduce((a, v, i) => a + (SCALES[theme]!.includes(i) ? v : 0), 0);
     expect(diatonic / total).toBeGreaterThan(0.8);
   });
 });
 
 describe('music: the four tracks are different pieces', () => {
   it('differ in tempo, key, title and instrumentation', () => {
-    const metas = THEME_IDS.map((t) => MUSIC_SCORES[t].data.meta);
+    const metas = TRACKS.map((t) => MUSIC_SCORES[t].data.meta);
     expect(new Set(metas.map((m) => m.bpm)).size).toBe(4);
     expect(new Set(metas.map((m) => m.key)).size).toBe(4);
     expect(new Set(metas.map((m) => m.title)).size).toBe(4);
@@ -257,8 +272,8 @@ describe('music: the four tracks are different pieces', () => {
     };
     for (let a = 0; a < 4; a++) {
       for (let b = a + 1; b < 4; b++) {
-        const A = intervals(THEME_IDS[a]!);
-        const B = intervals(THEME_IDS[b]!);
+        const A = intervals(TRACKS[a]!);
+        const B = intervals(TRACKS[b]!);
         // Share of identical (interval, duration) steps at the same position.
         const n = Math.min(A.length, B.length);
         let same = 0;
@@ -271,20 +286,20 @@ describe('music: the four tracks are different pieces', () => {
   it('have uncorrelated loudness envelopes and their own measurable tempo', () => {
     const env = {} as Record<ThemeId, Float32Array>;
     const ons = {} as Record<ThemeId, Float32Array>;
-    for (const t of THEME_IDS) {
+    for (const t of TRACKS) {
       env[t] = envelope(monos[t]);
       ons[t] = onsets(env[t]);
     }
     for (let a = 0; a < 4; a++) {
       for (let b = a + 1; b < 4; b++) {
-        expect(Math.abs(correlation(env[THEME_IDS[a]!], env[THEME_IDS[b]!]))).toBeLessThan(0.5);
-        expect(Math.abs(correlation(ons[THEME_IDS[a]!], ons[THEME_IDS[b]!]))).toBeLessThan(0.5);
+        expect(Math.abs(correlation(env[TRACKS[a]!], env[TRACKS[b]!]))).toBeLessThan(0.5);
+        expect(Math.abs(correlation(ons[TRACKS[a]!], ons[TRACKS[b]!]))).toBeLessThan(0.5);
       }
     }
     // Each recording fits its own tempo better than any of the other three tempi.
-    for (const t of THEME_IDS) {
+    for (const t of TRACKS) {
       const own = tempoScore(ons[t], MUSIC_SCORES[t].data.meta.bpm);
-      for (const other of THEME_IDS) {
+      for (const other of TRACKS) {
         if (other === t) continue;
         expect(own, `${t} vs tempo of ${other}`).toBeGreaterThan(tempoScore(ons[t], MUSIC_SCORES[other].data.meta.bpm) * 1.15);
       }

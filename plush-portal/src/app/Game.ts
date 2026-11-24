@@ -534,7 +534,7 @@ export class Game {
       const prize = ui.getState().prize;
       if (prize?.isNew) audio.playSfx('collect_unlock', { delay: 0.9 });
       const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
-      if (toy && this.toyVisuals.positionOf(toy, _v)) this.effects.burst(_v.setY(_v.y + 0.1), 1);
+      if (toy && this.toyVisuals.positionOf(toy, _v)) this.effects.prizeBurst(_v.setY(_v.y + 0.1), 1);
       this.emitGuide('prize_won', result);
     } else if (result.outcome === 'slipped') {
       this.lossStreak++;
@@ -701,6 +701,8 @@ export class Game {
     this.stage.setAutoScale(scale);
     this.materials?.setGlassQuality(graphics.glass);
     this.effects.setBudget(graphics.particles);
+    this.effects.setIntensity(graphics.fxIntensity);
+    this.effects.setLightShowEnabled(graphics.lightShow);
     this.effects.setViewportHeight(this.stage.effective.height);
     this.toyVisuals.setQuality({ lod: graphics.lod, fur: graphics.fur, deform: graphics.deform });
     this.deps.ui.setState({ effective: { ...this.stage.effective }, autoReductions: reductions });

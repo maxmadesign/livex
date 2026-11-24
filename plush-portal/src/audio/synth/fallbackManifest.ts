@@ -11,9 +11,11 @@ import { LOOP_POST_ROLL, LOOP_PRE_ROLL } from './mix';
 import { MUSIC_CREDITS, MUSIC_SCORES } from './music';
 import { LOOP_FILE_PEAK_DB, LOOP_RECIPES, SFX_FILE_PEAK_DB, SFX_RECIPES, listSfxFiles, loopFileName } from './sfx';
 import { Timeline } from './seq';
+import { AUDIO_THEME_SOURCE } from './themeSource';
 
+/** File key of a theme's music; a theme without its own track points at the track it borrows. */
 export function musicFileKey(theme: ThemeId): string {
-  return `music/${theme}.mp3`;
+  return `music/${AUDIO_THEME_SOURCE[theme]}.mp3`;
 }
 
 /** Maps a music file key ("music/ocean.mp3", any extension) back to its theme. */
@@ -63,6 +65,15 @@ export function buildSynthManifest(): AudioManifest {
       if (spec.theme === THEME_IDS[0]) entry.files.push(spec.file);
     } else {
       entry.files.push(spec.file);
+    }
+  }
+  // Themes without their own jingles use the files of the theme they borrow from.
+  for (const name of SFX_NAMES) {
+    const themes = sfx[name].themes;
+    if (!themes) continue;
+    for (const theme of THEME_IDS) {
+      const source = AUDIO_THEME_SOURCE[theme];
+      if (source !== theme && themes[source]) themes[theme] = [...themes[source]!];
     }
   }
   const loops = {} as Record<LoopName, LoopEntry>;

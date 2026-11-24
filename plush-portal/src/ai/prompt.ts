@@ -37,6 +37,7 @@ export const THEME_PROMPT_INFO: Record<ThemeId, { name: string; mood: string }> 
   storybook: { name: 'Storybook Friends', mood: 'animated-film toy box, warm light, friendly characters on an adventure' },
   ocean: { name: 'Ocean Dream', mood: 'dreamy sea, pearl and sea-salt blue, gentle waves, squishy sea friends' },
   cosmic: { name: 'Cosmic Arcade', mood: 'playful space arcade, nebula purple and neon, little explorers among the stars' },
+  gpu: { name: 'GPU Party', mood: 'graphics-card and AI-computing fan shop, glossy black with vivid green light, cute plush chips and graphics cards' },
 };
 
 const EVENT_TASKS: Record<GuideEventType, string> = {

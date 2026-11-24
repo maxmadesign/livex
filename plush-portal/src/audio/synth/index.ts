@@ -5,6 +5,7 @@ export * from './drums';
 export * from './seq';
 export * from './mix';
 export * from './music';
+export * from './themeSource';
 export * from './sfx';
 export * from './wav';
 export * from './manifest';

@@ -8,7 +8,7 @@
  * Camera frames and landmarks stay on this device: they are processed in
  * memory, never stored and never sent anywhere.
  */
-import type { CalibrationResult, TrackerPort, TrackerState, TrackerStatus, ViewSource } from '../core/contracts';
+import { IDLE_CALIBRATION, type CalibrationResult, type TrackerPort, type TrackerState, type TrackerStatus, type ViewSource } from '../core/contracts';
 import type { Unsubscribe, Vec3 } from '../core/types';
 import { defaultSettings, type CameraSettings, type ViewSettings } from '../settings/spec';
 import { CalibrationCollector, hfovFromFocal, solveCalibration, type CalibrationValues } from './calibration';
@@ -210,6 +210,7 @@ class FaceTrackerImpl implements FaceTracker {
       facesSeen: 0,
       viewSource: 'neutral',
       calibrated: this.view.calibrated,
+      calibration: IDLE_CALIBRATION,
     };
     this.applyDerived();
   }
@@ -727,6 +728,19 @@ class FaceTrackerImpl implements FaceTracker {
   }
 
   /* ------------------------------------------------------------------ extras */
+
+  /**
+   * Countdown calibration (TrackerPort contract). Placeholder: not implemented yet, so the
+   * calibration status stays idle and nothing is captured; the camera calibration work
+   * replaces these two methods.
+   */
+  startCalibration(_seconds: number): void {
+    // Not implemented yet.
+  }
+
+  cancelCalibration(): void {
+    // Not implemented yet.
+  }
 
   attachPreview(container: HTMLElement | null): void {
     this.preview?.detach();

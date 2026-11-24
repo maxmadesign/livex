@@ -86,6 +86,8 @@ export const uiJa: Record<string, string> = {
   'device.portrait32.desc': '9:16 のタッチディスプレイ、操作は画面下',
   'device.portrait86.name': '縦型 86インチ',
   'device.portrait86.desc': '床置きの 9:16 大型ディスプレイ、すべて手の届く範囲に',
+  'device.mobile.name': 'スマートフォン',
+  'device.mobile.desc': '横向きに持つスマホ、タッチ操作',
   'device.suggested': 'おすすめ',
 
   'tutorial.title': 'あそびかた',
@@ -113,6 +115,8 @@ export const uiJa: Record<string, string> = {
   'theme.ocean.tagline': 'やわらかな潮色のゆめ',
   'theme.cosmic.name': 'コズミックアーケード',
   'theme.cosmic.tagline': '軌道からやってきたネオンのなかま',
+  'theme.gpu.name': 'GPUパーティー',
+  'theme.gpu.tagline': 'ネオングリーンのふわふわチップとグラボ',
   'theme.switching': 'テーマを切り替え中…',
 
   'guide.name': 'Momo',

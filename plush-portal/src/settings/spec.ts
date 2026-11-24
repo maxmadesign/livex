@@ -310,6 +310,26 @@ const PROFILE_DEFAULTS: Record<DisplayProfileId, ProfileDefaults> = {
     maxOffset: [0.7, 0.5, 0.55],
     minDistance: 0.45,
   },
+  // Phone, mostly held in landscape. Placeholder: a copy of the desktop defaults until the
+  // mobile layout work tunes these (safe zone, panel, touch size, screen size, eye distance).
+  mobile: {
+    safeTop: 0,
+    safeBottom: 1,
+    anchorY: 0.84,
+    panelWidth: 0.94,
+    uiScale: 1,
+    touchSize: 84,
+    floorY: 0.69,
+    screenW: 0.531,
+    screenH: 0.299,
+    bottomElevation: 0.95,
+    windowMode: 'window',
+    eye: [0, 0.14, 0.62],
+    camPos: [0, 0.16, 0],
+    camPitch: 4,
+    maxOffset: [0.3, 0.22, 0.3],
+    minDistance: 0.3,
+  },
 };
 
 /* ------------------------------------------------------------------- the spec */
@@ -322,6 +342,11 @@ export const settingsSpec = {
     /** Play a clearly labelled demo round when nobody plays. */
     attractDemo: bool(true),
     attractIdleSec: num(45, 10, 600, 5, 'live', 's'),
+    /**
+     * Seconds without any player input before the machine fully resets to the self-playing
+     * attract / demo mode (score, open dialogs, round). 0 = never.
+     */
+    idleSeconds: num(60, 0, 600, 5, 'live', 's'),
     reducedMotion: en('system', ['system', 'on', 'off'] as const),
     /** Public display lock: players get a reduced options panel; full settings need the PIN. */
     lockSettings: bool(false),
@@ -337,6 +362,8 @@ export const settingsSpec = {
     desktop: profileSpec(PROFILE_DEFAULTS.desktop),
     portrait32: profileSpec(PROFILE_DEFAULTS.portrait32),
     portrait86: profileSpec(PROFILE_DEFAULTS.portrait86),
+    /** Phone (landscape first). Starts as a copy of desktop's layout + view defaults; tuned by the mobile layout work. */
+    mobile: profileSpec(PROFILE_DEFAULTS.mobile),
   },
   gameplay: {
     difficulty: en('arcade', ['easy', 'arcade', 'skill', 'custom'] as const, 'round'),
@@ -365,6 +392,8 @@ export const settingsSpec = {
     /** Thin guide line from the claw to the reticle. */
     aimBeam: bool(true),
     tips: bool(true),
+    /** Points system (score, combos, rarity bonuses) on or off. Presentation only: it never changes physics or outcomes. */
+    scoring: bool(true),
   },
   themes: {
     current: en('sakura', THEME_IDS, 'rebuild'),
@@ -401,6 +430,10 @@ export const settingsSpec = {
     aa: en('fxaa', ['off', 'fxaa', 'smaa', 'msaa2', 'msaa4'] as const),
     bloom: num(0.25, 0, 1, 0.05),
     particles: num(60, 0, 300, 10),
+    /** Multiplier for particle bursts and light effects (grab, win, combo, attract). 0 = none. */
+    fxIntensity: num(1, 0, 1.5, 0.05),
+    /** Moving light show on wins and in attract mode. */
+    lightShow: bool(true),
     exposure: num(1, 0.6, 1.6, 0.02),
     toneMapping: en('neutral', ['aces', 'agx', 'neutral'] as const),
     dof: bool(false),
@@ -429,6 +462,8 @@ export const settingsSpec = {
     voiceName: str('', 40),
     voiceSpeed: num(1, 0.7, 1.3, 0.05),
     language: en('ui', ['ui', ...LANGS] as const),
+    /** 'en' = the guide always speaks and writes English, whatever the UI language; 'ui' = follow the UI language. */
+    voiceLanguage: en('en', ['en', 'ui'] as const),
     personality: str('', 400),
     /** Empty = built-in Momo prompt. */
     systemPrompt: str('', 4000),
@@ -460,6 +495,10 @@ export const settingsSpec = {
     lostHoldMs: num(700, 100, 4000, 50, 'live', 'ms'),
     returnMs: num(1500, 200, 6000, 50, 'live', 'ms'),
     reacquireMs: num(450, 50, 2500, 50, 'live', 'ms'),
+    /** When the camera starts, count down and take the player's current head position / direction as the neutral baseline. */
+    autoCalibrate: bool(true),
+    /** Length of that countdown. */
+    calibrationSeconds: num(3, 1, 10, 1, 'live', 's'),
   },
 } as const satisfies SpecGroup;
 

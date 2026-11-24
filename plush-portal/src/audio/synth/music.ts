@@ -1,4 +1,4 @@
-/** Registry of the four theme tracks and the entry points used by the bake tool, the fallback worker and tests. */
+/** Registry of the theme tracks and the entry points used by the bake tool, the fallback worker and tests. */
 import type { ThemeId } from '../../core/types';
 import { assembleLoopFile, type LoopFile, type MixResult } from './mix';
 import type { ScoreData } from './scores/common';
@@ -12,6 +12,8 @@ export const MUSIC_SCORES: Record<ThemeId, { data: ScoreData; render: () => MixR
   storybook: { data: storybookData, render: renderStorybook },
   ocean: { data: oceanData, render: renderOcean },
   cosmic: { data: cosmicData, render: renderCosmic },
+  // Placeholder until GPU Party has its own score: it plays the Cosmic Arcade track (see AUDIO_THEME_SOURCE).
+  gpu: { data: cosmicData, render: renderCosmic },
 };
 
 export const MUSIC_CREDITS = 'original, synthesised by tools/audio';

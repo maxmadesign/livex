@@ -241,6 +241,28 @@ export type ViewSource =
   | 'reacquire' // blending back onto a fresh estimate
   | 'test'; // manual test sliders (never reported as camera tracking)
 
+/**
+ * Countdown calibration (TrackerPort.startCalibration): a countdown, then the player's current
+ * head pose is captured as the neutral baseline.
+ *   idle      – nothing running
+ *   countdown – `remaining` whole seconds are left
+ *   capturing – the countdown is over, stable samples are being collected
+ *   done      – the baseline was captured (and persisted through the calibration event)
+ *   failed    – no usable face / tracker not running / cancelled; `detail` says why
+ */
+export type CalibrationPhase = 'idle' | 'countdown' | 'capturing' | 'done' | 'failed';
+
+export interface CalibrationStatus {
+  phase: CalibrationPhase;
+  /** Whole seconds left in the countdown (0 outside the countdown). */
+  remaining: number;
+  /** Non-localised detail for diagnostics (e.g. a CalibrationResult detail code). */
+  detail: string;
+}
+
+/** The calibration status when nothing is running. */
+export const IDLE_CALIBRATION: CalibrationStatus = Object.freeze({ phase: 'idle', remaining: 0, detail: '' });
+
 export interface TrackerStatus {
   state: TrackerState;
   /** Non-localised detail for diagnostics ("NotAllowedError: ..."). */
@@ -258,6 +280,8 @@ export interface TrackerStatus {
   viewSource: ViewSource;
   /** True when a calibration exists for the active display profile. */
   calibrated: boolean;
+  /** Progress of the countdown calibration (startCalibration). */
+  calibration: CalibrationStatus;
 }
 
 export interface CalibrationResult {
@@ -284,6 +308,14 @@ export interface TrackerPort {
   calibrate(): Promise<CalibrationResult>;
   /** Makes the current head position the neutral viewpoint without touching the depth scale. */
   recenter(): void;
+  /**
+   * Starts a countdown of `seconds` (whole seconds), then captures the player's current head
+   * pose as the neutral baseline for the active profile. Progress is reported in
+   * `status().calibration`. Calling it again restarts the countdown. Never throws.
+   */
+  startCalibration(seconds: number): void;
+  /** Cancels a running countdown / capture; the previous baseline stays in use. */
+  cancelCalibration(): void;
   /** Manual test viewpoint offset from neutral (metres); null returns to normal operation. */
   setTestViewpoint(offset: Vec3 | null): void;
   /** Shows the (mirrored) camera preview with landmarks in the given element; null detaches. */

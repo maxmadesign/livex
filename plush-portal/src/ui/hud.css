@@ -338,4 +338,7 @@ button.pp-chip { cursor: pointer; }
    primary: its title sits on the light centre of the card. */
 .pp-root[data-theme="cosmic"] .pp-sec,
 .pp-root[data-theme="cosmic"] .pp-modal header h1,
-.pp-root[data-theme="cosmic"] .pp-dpad .pp-btn { color: var(--c-glow); }
+.pp-root[data-theme="cosmic"] .pp-dpad .pp-btn,
+.pp-root[data-theme="gpu"] .pp-sec,
+.pp-root[data-theme="gpu"] .pp-modal header h1,
+.pp-root[data-theme="gpu"] .pp-dpad .pp-btn { color: var(--c-glow); }

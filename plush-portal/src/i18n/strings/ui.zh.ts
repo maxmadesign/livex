@@ -86,6 +86,8 @@ export const uiZh: Record<string, string> = {
   'device.portrait32.desc': '9:16 触摸屏，操作区在屏幕下方',
   'device.portrait86.name': '竖屏 86 寸',
   'device.portrait86.desc': '落地式 9:16 大屏，所有操作伸手可及',
+  'device.mobile.name': '手机',
+  'device.mobile.desc': '横握的智能手机，触屏操作',
   'device.suggested': '推荐',
 
   'tutorial.title': '怎么玩',
@@ -113,6 +115,8 @@ export const uiZh: Record<string, string> = {
   'theme.ocean.tagline': '软软的海盐色白日梦',
   'theme.cosmic.name': '宇宙街机',
   'theme.cosmic.tagline': '来自轨道的霓虹小伙伴',
+  'theme.gpu.name': '显卡派对',
+  'theme.gpu.tagline': '霓虹绿的毛绒芯片和显卡',
   'theme.switching': '正在切换主题…',
 
   'guide.name': 'Momo',

@@ -16,7 +16,24 @@ export { directionKey } from './direction';
 export { LINE_KEYS } from './types';
 export type { DirKey, LangBank, LineEntry, LineKey, LinePool } from './types';
 
-export const LINE_BANKS: Record<Lang, LangBank> = { en, zh, ja };
+/**
+ * Themes without local flavour lines of their own yet borrow another theme's
+ * (GPU Party → Cosmic Arcade) until the theme's content adds real ones.
+ */
+const BORROWED_THEME_LINES: Partial<Record<ThemeId, ThemeId>> = { gpu: 'cosmic' };
+
+function withBorrowedThemeLines(bank: LangBank): LangBank {
+  const lines = { ...bank.lines };
+  for (const key of Object.keys(lines) as LineKey[]) {
+    for (const [theme, source] of Object.entries(BORROWED_THEME_LINES) as [ThemeId, ThemeId][]) {
+      const pool = lines[key];
+      if (!pool[theme] && pool[source]) lines[key] = { ...pool, [theme]: pool[source] };
+    }
+  }
+  return { ...bank, lines };
+}
+
+export const LINE_BANKS: Record<Lang, LangBank> = { en: withBorrowedThemeLines(en), zh: withBorrowedThemeLines(zh), ja: withBorrowedThemeLines(ja) };
 
 export interface LocalLine {
   text: string;

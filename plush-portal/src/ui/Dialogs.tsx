@@ -139,7 +139,8 @@ export function CollectionDialog({ layout }: { layout: HudLayout }) {
       footer={<span className="note">{t('collection.total', { owned, total: assets.length, prizes })}</span>}
     >
       {prizes === 0 ? <p className="pp-note">{t('collection.empty')}</p> : null}
-      {THEME_IDS.map((theme) => (
+      {/* A theme without characters of its own yet (e.g. a new theme before its assets are baked) gets no empty section. */}
+      {THEME_IDS.filter((theme) => assets.some((a) => a.theme === theme)).map((theme) => (
         <section key={theme}>
           <h3 className="pp-sec">{t(`theme.${theme}.name`)}</h3>
           <div className="pp-toys">

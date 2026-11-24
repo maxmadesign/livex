@@ -86,6 +86,8 @@ export const uiEn: Record<string, string> = {
   'device.portrait32.desc': '9:16 touch display, controls along the bottom',
   'device.portrait86.name': 'Portrait 86"',
   'device.portrait86.desc': 'Floor-standing 9:16 wall, everything within arm’s reach',
+  'device.mobile.name': 'Phone',
+  'device.mobile.desc': 'Smartphone held sideways, touch controls',
   'device.suggested': 'Suggested',
 
   'tutorial.title': 'How to play',
@@ -113,6 +115,8 @@ export const uiEn: Record<string, string> = {
   'theme.ocean.tagline': 'Soft sea-salt daydreams',
   'theme.cosmic.name': 'Cosmic Arcade',
   'theme.cosmic.tagline': 'Neon friends from orbit',
+  'theme.gpu.name': 'GPU Party',
+  'theme.gpu.tagline': 'Cuddly chips and graphics cards in neon green',
   'theme.switching': 'Changing theme…',
 
   'guide.name': 'Momo',

@@ -17,6 +17,7 @@ import {
 import { makeRng } from '../core/math';
 import { FIELD } from '../physics/fieldSpec';
 import type { ParticleKind, ThemeDef } from '../themes/themes';
+import type { FxApi, FxBurstKind, FxTier, Vec3Like } from './fx/api';
 
 const MAX_PARTICLES = 420;
 const KIND_INDEX: Record<ParticleKind, number> = { petals: 0, confetti: 1, bubbles: 2, stars: 3 };
@@ -39,11 +40,21 @@ interface Particle {
   color: Color;
 }
 
+/** Light show modes of the FxApi contract. */
+export type LightShowMode = Parameters<FxApi['lightShow']>[0];
+
+/** Celebration strength per rarity tier (used by the placeholder `celebrate`). */
+const TIER_STRENGTH: Record<FxTier, number> = { common: 0.6, rare: 0.8, epic: 0.95, legendary: 1 };
+
 /**
  * Lightweight effects that never touch gameplay: the aim reticle and beam,
  * a few drifting ambient motes and the theme's celebration burst.
+ *
+ * Implements the FxApi contract (src/scene/fx/api.ts). The contract methods are
+ * placeholders for now: `celebrate` reuses the prize burst, the others only
+ * record their input; nothing calls them yet.
  */
-export class Effects {
+export class Effects implements FxApi {
   readonly group = new Group();
   private readonly reticle: Mesh;
   private readonly reticleDot: Mesh;
@@ -60,6 +71,10 @@ export class Effects {
   private rng = makeRng(1234);
   private time = 0;
   reducedMotion = false;
+  /** FxApi state (graphics.fxIntensity / graphics.lightShow, light show mode). */
+  private fxIntensity = 1;
+  private lightShowEnabled = true;
+  private lightShowMode: LightShowMode = 'off';
   /** Hints selected in the gameplay settings. */
   showReticle = true;
   showBeam = true;
@@ -186,7 +201,7 @@ export class Effects {
   }
 
   /** Celebration burst (prize landed). `strength` 0..1. */
-  burst(origin: Vector3, strength = 1): void {
+  prizeBurst(origin: Vector3, strength = 1): void {
     if (!this.theme) return;
     const kind = this.theme.particles.kind;
     const count = Math.round(this.burstBudget * (this.reducedMotion ? 0.3 : 1) * (0.5 + 0.5 * strength));
@@ -303,6 +318,37 @@ export class Effects {
       geometry.getAttribute('aParams').needsUpdate = true;
     }
     this.points.visible = n > 0;
+  }
+
+  /* ------------------------------------------------------ FxApi (placeholders) */
+
+  burst(_kind: FxBurstKind, _pos: Vec3Like, _opts?: { tier?: FxTier; scale?: number; color?: string }): void {
+    // Not implemented yet: the effects work fills this in.
+  }
+
+  celebrate(tier: FxTier, pos: Vec3Like): void {
+    this.prizeBurst(new Vector3(pos.x, pos.y, pos.z), TIER_STRENGTH[tier] ?? 1);
+  }
+
+  aura(_pos: Vec3Like | null, _tier?: FxTier): void {
+    // Not implemented yet.
+  }
+
+  lightShow(mode: LightShowMode): void {
+    this.lightShowMode = mode;
+  }
+
+  setIntensity(intensity: number): void {
+    this.fxIntensity = Number.isFinite(intensity) ? Math.max(0, intensity) : 1;
+  }
+
+  setLightShowEnabled(enabled: boolean): void {
+    this.lightShowEnabled = enabled;
+  }
+
+  /** Current FxApi state (diagnostics / tests). */
+  fxState(): { intensity: number; lightShowEnabled: boolean; lightShow: LightShowMode } {
+    return { intensity: this.fxIntensity, lightShowEnabled: this.lightShowEnabled, lightShow: this.lightShowMode };
   }
 
   /** Number of live particles (diagnostics). */

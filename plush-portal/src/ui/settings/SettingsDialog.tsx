@@ -5,8 +5,14 @@ import { useApp, useSettings, useSettingsState, useT, useUi } from '../context';
 import { IconBrain, IconCamera, IconClose, IconGame, IconGear, IconGraphics, IconLayout, IconSpeaker, IconToy } from '../Icons';
 import { useModals } from '../modals';
 import { Field, Section } from './Field';
-import { GameplayTab, GraphicsTab, LayoutTab, ThemesTab } from './tabsA';
-import { AiTab, AudioTab, CameraTab, SystemTab } from './tabsB';
+import { AiTab } from './tabAi';
+import { AudioTab } from './tabAudio';
+import { CameraTab } from './tabCamera';
+import { GameplayTab } from './tabGameplay';
+import { GraphicsTab } from './tabGraphics';
+import { LayoutTab } from './tabLayout';
+import { SystemTab } from './tabSystem';
+import { ThemesTab } from './tabThemes';
 
 type TabId = 'gameplay' | 'themes' | 'layout' | 'graphics' | 'audio' | 'ai' | 'camera' | 'system';
 

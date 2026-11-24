@@ -3,8 +3,8 @@ import type { LaunchParams } from './Game';
 
 /**
  * Launch parameters (query string):
- *   ?display=desktop|portrait32|portrait86   choose and remember the display preset
- *   ?theme=sakura|storybook|ocean|cosmic     start with a theme
+ *   ?display=desktop|portrait32|portrait86|mobile   choose and remember the display preset
+ *   ?theme=sakura|storybook|ocean|cosmic|gpu     start with a theme
  *   ?lang=en|zh|ja                           UI language
  *   ?quality=safe|medium|high|ultra          apply a graphics preset
  *   ?seed=123                                deterministic toy layout

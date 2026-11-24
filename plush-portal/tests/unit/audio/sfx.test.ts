@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { LOOP_NAMES, SFX_NAMES } from '../../../src/core/contracts';
 import { THEME_IDS } from '../../../src/core/types';
 import {
+  AUDIO_SOURCE_THEMES,
+  AUDIO_THEME_SOURCE,
   LOOP_FILE_PEAK_DB,
   LOOP_RECIPES,
   SFX_FILE_PEAK_DB,
@@ -39,7 +41,9 @@ describe('sfx recipes', () => {
     const files = listSfxFiles();
     for (const name of ['win', 'theme_sting'] as const) {
       expect(SFX_RECIPES[name].themed).toBe(true);
-      for (const theme of THEME_IDS) expect(files.some((f) => f.name === name && f.theme === theme), `${name}@${theme}`).toBe(true);
+      // A theme that borrows another theme's jingles (AUDIO_THEME_SOURCE) has no files of its own.
+      for (const theme of AUDIO_SOURCE_THEMES) expect(files.some((f) => f.name === name && f.theme === theme), `${name}@${theme}`).toBe(true);
+      for (const theme of THEME_IDS) expect(files.some((f) => f.name === name && f.theme === AUDIO_THEME_SOURCE[theme]), `${name}@${theme}`).toBe(true);
     }
     expect(new Set(files.map((f) => f.file)).size).toBe(files.length);
   });
@@ -71,7 +75,7 @@ describe('sfx recipes', () => {
 
   it('render themed jingles that differ per theme', () => {
     for (const name of ['win', 'theme_sting'] as const) {
-      const renders = THEME_IDS.map((t) => renderSfx(name, 0, t));
+      const renders = AUDIO_SOURCE_THEMES.map((t) => renderSfx(name, 0, t));
       for (let a = 0; a < renders.length; a++) {
         for (let b = a + 1; b < renders.length; b++) {
           const n = Math.min(renders[a]!.length, renders[b]!.length);
@@ -83,7 +87,7 @@ describe('sfx recipes', () => {
             aa += renders[a]![i]! ** 2;
             bb += renders[b]![i]! ** 2;
           }
-          expect(Math.abs(ab / Math.sqrt(aa * bb)), `${name} ${THEME_IDS[a]} vs ${THEME_IDS[b]}`).toBeLessThan(0.5);
+          expect(Math.abs(ab / Math.sqrt(aa * bb)), `${name} ${AUDIO_SOURCE_THEMES[a]} vs ${AUDIO_SOURCE_THEMES[b]}`).toBeLessThan(0.5);
         }
       }
     }

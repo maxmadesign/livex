@@ -17,6 +17,8 @@ import { LOOP_NAMES, SFX_NAMES } from '../../src/core/contracts';
 import { THEME_IDS, type ThemeId } from '../../src/core/types';
 import {
   AUDIO_MANIFEST_VERSION,
+  AUDIO_SOURCE_THEMES,
+  AUDIO_THEME_SOURCE,
   LOOP_RECIPES,
   MUSIC_CREDITS,
   SFX_RECIPES,
@@ -94,7 +96,7 @@ function bakeMusic(): Record<ThemeId, MusicEntry> {
   const tmp = mkdtempSync(path.join(tmpdir(), 'plush-audio-'));
   const out = {} as Record<ThemeId, MusicEntry>;
   try {
-    for (const theme of THEME_IDS) {
+    for (const theme of AUDIO_SOURCE_THEMES) {
       const t0 = performance.now();
       const { data, loop, file } = renderMusic(theme);
       if (hasInvalidSamples(file.l, file.r)) throw new Error(`${theme}: render produced invalid samples`);
@@ -159,6 +161,8 @@ function bakeMusic(): Record<ThemeId, MusicEntry> {
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
+  // Themes without their own track point at the one they borrow (AUDIO_THEME_SOURCE).
+  for (const theme of THEME_IDS) if (!out[theme]) out[theme] = { ...out[AUDIO_THEME_SOURCE[theme]] };
   return out;
 }
 
@@ -189,6 +193,12 @@ function bakeSfx(): { sfx: AudioManifest['sfx']; loops: AudioManifest['loops']; 
     entry.duration = Math.max(entry.duration, round(buf.length / SR, 4));
     entry.peakDb = Math.max(entry.peakDb, round(gainToDb(peakOf(buf)), 2));
     entry.rmsDb = Math.max(entry.rmsDb ?? -Infinity, round(gainToDb(rmsOf(buf)), 2));
+  }
+  // Themes without their own jingles use the files of the theme they borrow from.
+  for (const name of SFX_NAMES) {
+    const themes = sfx[name].themes;
+    if (!themes) continue;
+    for (const theme of THEME_IDS) if (AUDIO_THEME_SOURCE[theme] !== theme) themes[theme] = [...(themes[AUDIO_THEME_SOURCE[theme]] ?? [])];
   }
   const loops = {} as AudioManifest['loops'];
   for (const name of LOOP_NAMES) {

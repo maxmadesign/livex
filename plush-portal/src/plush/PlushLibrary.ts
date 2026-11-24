@@ -18,6 +18,12 @@ export interface LoadedPlush {
 const REQUIRED_ATTRIBUTES = ['position', 'normal', 'color', '_mask', '_surf', '_aux'];
 
 /**
+ * Preferred stand-in for a theme that has no characters in the manifest yet (a new theme
+ * before its assets are baked). Without an entry the first theme in the manifest is used.
+ */
+const STAND_IN_THEME: Partial<Record<ThemeId, ThemeId>> = { gpu: 'cosmic' };
+
+/**
  * Loads the asset manifest and the character models. Models are cached per
  * asset id and released per theme, so switching themes does not grow memory.
  */
@@ -31,6 +37,8 @@ export class PlushLibrary {
   /** Informational notes (not problems). */
   readonly notes: string[] = [];
   private custom = new Map<string, CustomModelEntry>();
+  /** Themes for which the "no characters, using a stand-in" warning was already given. */
+  private readonly standInWarned = new Set<ThemeId>();
 
   constructor(private readonly baseUrl = import.meta.env?.BASE_URL ?? '/') {
     this.loader.setMeshoptDecoder(MeshoptDecoder);
@@ -75,9 +83,34 @@ export class PlushLibrary {
     return this.custom.get(id);
   }
 
+  /**
+   * The characters of a theme, or every character without a theme. A theme that has no
+   * characters in the manifest yet borrows another theme's (see `assetTheme`) so the
+   * machine is never empty.
+   */
   assets(theme?: ThemeId): PlushAsset[] {
     const all = this.manifest?.assets ?? [];
-    return theme ? all.filter((a) => a.theme === theme) : all;
+    if (!theme) return all;
+    const source = this.assetTheme(theme);
+    return all.filter((a) => a.theme === source);
+  }
+
+  /**
+   * Theme whose characters `theme` really uses: itself when the manifest has characters for it,
+   * otherwise a stand-in (logged once per theme). Without a manifest the theme itself.
+   */
+  assetTheme(theme: ThemeId): ThemeId {
+    const all = this.manifest?.assets ?? [];
+    if (all.length === 0 || all.some((a) => a.theme === theme)) return theme;
+    const preferred = STAND_IN_THEME[theme];
+    const source = preferred && all.some((a) => a.theme === preferred) ? preferred : all[0]!.theme;
+    if (!this.standInWarned.has(theme)) {
+      this.standInWarned.add(theme);
+      const message = `Theme "${theme}" has no characters in the manifest yet; showing the "${source}" characters instead.`;
+      this.warnings.push(message);
+      console.warn(`[plush] ${message}`);
+    }
+    return source;
   }
 
   get(id: string): LoadedPlush | undefined {
@@ -171,10 +204,11 @@ export class PlushLibrary {
     }
   }
 
-  /** Frees GPU resources of every character that does not belong to `keep`. */
+  /** Frees GPU resources of every character that does not belong to `keep` (or to the theme it borrows characters from). */
   releaseExcept(keep: ThemeId): void {
+    const source = this.assetTheme(keep);
     for (const [id, entry] of this.loaded) {
-      if (entry.asset.theme === keep) continue;
+      if (entry.asset.theme === keep || entry.asset.theme === source) continue;
       for (const geometry of entry.lods) geometry.dispose();
       if (entry.custom) disposeGroup(entry.custom);
       this.loaded.delete(id);

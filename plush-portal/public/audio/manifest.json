@@ -195,6 +195,54 @@
       "rmsDb": -18.92,
       "credits": "original, synthesised by tools/audio",
       "bytes": 1254942
+    },
+    "gpu": {
+      "file": "music/cosmic.mp3",
+      "title": "Neon Orbit",
+      "bpm": 126,
+      "beatsPerBar": 4,
+      "bars": 32,
+      "key": "F# minor / A major",
+      "feel": "four-on-the-floor, 16th arpeggios, side-chain pump",
+      "instruments": [
+        "pulse lead",
+        "arcade arpeggio",
+        "detuned saw pad",
+        "synth bass",
+        "FM bells",
+        "pop kick",
+        "arcade snare and clap",
+        "hats",
+        "blips, zaps and arcade toms"
+      ],
+      "sections": [
+        {
+          "name": "verse",
+          "bars": 8
+        },
+        {
+          "name": "chorus",
+          "bars": 8
+        },
+        {
+          "name": "verse'",
+          "bars": 8
+        },
+        {
+          "name": "chorus'",
+          "bars": 8
+        }
+      ],
+      "duration": 62.693673,
+      "loopStart": 0.25,
+      "loopEnd": 61.193673469387754,
+      "loopStartSample": 11025,
+      "loopEndSample": 2698641,
+      "lufs": -16,
+      "peakDb": -2.95,
+      "rmsDb": -18.92,
+      "credits": "original, synthesised by tools/audio",
+      "bytes": 1254942
     }
   },
   "sfx": {
@@ -449,6 +497,9 @@
         ],
         "cosmic": [
           "sfx/win_cosmic.wav"
+        ],
+        "gpu": [
+          "sfx/win_cosmic.wav"
         ]
       },
       "rmsDb": -17.47
@@ -496,6 +547,9 @@
           "sfx/theme_sting_ocean.wav"
         ],
         "cosmic": [
+          "sfx/theme_sting_cosmic.wav"
+        ],
+        "gpu": [
           "sfx/theme_sting_cosmic.wav"
         ]
       },

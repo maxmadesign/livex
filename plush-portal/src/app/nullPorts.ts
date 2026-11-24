@@ -1,4 +1,4 @@
-import type { AudioPort, AudioStatus, GuidePort, GuideStatus, TrackerPort, TrackerStatus, ViewSource } from '../core/contracts';
+import { IDLE_CALIBRATION, type AudioPort, type AudioStatus, type GuidePort, type GuideStatus, type TrackerPort, type TrackerStatus, type ViewSource } from '../core/contracts';
 import type { Vec3 } from '../core/types';
 import type { ViewSettings } from '../settings/spec';
 import type { ConfigurableGuide, ConfigurableTracker } from './Game';
@@ -66,6 +66,7 @@ export function createNullTracker(detail: string): ConfigurableTracker {
     facesSeen: 0,
     viewSource: 'neutral',
     calibrated: false,
+    calibration: IDLE_CALIBRATION,
   };
   const tracker: TrackerPort = {
     start: async () => {},
@@ -81,6 +82,9 @@ export function createNullTracker(detail: string): ConfigurableTracker {
     },
     calibrate: async () => ({ ok: false, detail, samples: 0 }),
     recenter: () => {},
+    // No camera: a countdown calibration can never start, so the status stays idle.
+    startCalibration: () => {},
+    cancelCalibration: () => {},
     setTestViewpoint: (offset) => {
       test = offset;
     },

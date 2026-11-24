@@ -3,9 +3,12 @@ import { createApp, type App as AppInstance } from '../app/bootstrap';
 import { logError } from '../diagnostics/log';
 import { registerAllStrings } from '../i18n/all';
 import { THEMES } from '../themes/themes';
+import { AttractOverlay } from './AttractOverlay';
+import { CalibrationOverlay } from './CalibrationOverlay';
 import { AppContext, useApp, useSettings, useUi } from './context';
 import { BootScreen, CollectionDialog, DeviceChooser, ThemePicker, TutorialDialog } from './Dialogs';
 import { Hud } from './Hud';
+import { ScoreHud } from './ScoreHud';
 import { useModals } from './modals';
 import { useHudLayout, useReducedMotion } from './useHudLayout';
 
@@ -130,7 +133,11 @@ function Shell() {
   return (
     <div className="pp-hud-root" style={{ ...style, position: 'absolute', inset: 0, pointerEvents: 'none' }} data-reduced={reduced}>
       <div className="pp-root" data-lang={lang} data-theme={themeId} data-profile={layout.profile} data-reduced={reduced} style={{ ...style, background: 'none', pointerEvents: 'none' }}>
+        {/* Stacking follows document order: HUD, score, attract call to action, calibration countdown, then dialogs. */}
         {bootStage === 'ready' ? <Hud layout={layout} /> : null}
+        {bootStage === 'ready' ? <ScoreHud layout={layout} /> : null}
+        {bootStage === 'ready' ? <AttractOverlay layout={layout} /> : null}
+        {bootStage === 'ready' ? <CalibrationOverlay layout={layout} /> : null}
         {modal === 'device' ? <DeviceChooser layout={layout} /> : null}
         {modal === 'tutorial' ? <TutorialDialog layout={layout} /> : null}
         {modal === 'themes' ? <ThemePicker layout={layout} /> : null}

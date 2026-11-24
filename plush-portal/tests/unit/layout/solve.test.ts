@@ -203,4 +203,35 @@ describe('guessProfile', () => {
     expect(guessProfile(2160, 3840)).toBe('portrait86');
     expect(guessProfile(1620, 2880)).toBe('portrait86');
   });
+
+  it('suggests the phone preset only for a finger-driven viewport with a short side of at most 500 px', () => {
+    // No matchMedia in Node: the default is "not a touch screen".
+    expect(guessProfile(844, 390)).toBe('desktop');
+    expect(guessProfile(844, 390, false)).toBe('desktop');
+    expect(guessProfile(844, 390, true)).toBe('mobile');
+    expect(guessProfile(390, 844, true)).toBe('mobile');
+    expect(guessProfile(1000, 500, true)).toBe('mobile');
+    expect(guessProfile(1000, 501, true)).toBe('desktop');
+    // A big touch kiosk is not a phone.
+    expect(guessProfile(1080, 1920, true)).toBe('portrait32');
+    expect(guessProfile(2160, 3840, true)).toBe('portrait86');
+  });
+});
+
+describe('solveLayout: mobile placeholder', () => {
+  it('lays a phone out exactly like the desktop preset for now', () => {
+    const d = defaultSettings();
+    for (const [vw, vh] of [
+      [844, 390],
+      [932, 430],
+      [1920, 1080],
+      [390, 844],
+    ] as const) {
+      const mobile = solveLayout('mobile', d.profiles.mobile.layout, vw, vh);
+      const desktop = solveLayout('desktop', d.profiles.desktop.layout, vw, vh);
+      expect({ ...mobile, profile: 'desktop' }, `${vw}x${vh}`).toEqual(desktop);
+      expect(mobile.profile).toBe('mobile');
+      expectInsideViewport(mobile, `mobile ${vw}x${vh}`);
+    }
+  });
 });

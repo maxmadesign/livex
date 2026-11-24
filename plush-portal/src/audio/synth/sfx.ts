@@ -4,7 +4,7 @@
  * jingles share one sonic world: soft, round and toy-like.
  */
 import { LOOP_NAMES, SFX_NAMES, type LoopName, type SfxName } from '../../core/contracts';
-import { THEME_IDS, type ThemeId } from '../../core/types';
+import type { ThemeId } from '../../core/types';
 import { SR, TAU, hashSeed, makeRng, mtof, type Rng } from './core';
 import { woodblock, zap } from './drums';
 import { Biquad, filterCircular, reverbOneShot } from './dsp';
@@ -26,6 +26,7 @@ import {
 } from './instruments';
 import { finishOneShot } from './mix';
 import { noteToMidi } from './seq';
+import { AUDIO_SOURCE_THEMES } from './themeSource';
 
 /** Every file is normalised to this peak; relative loudness lives in the recipe's `gain`. */
 export const SFX_FILE_PEAK_DB = -4;
@@ -152,7 +153,8 @@ function winJingle(theme: ThemeId, rng: Rng): Float32Array {
       c.add(subBass(f('d2'), 0.5, 0.6, { attack: 0.03 }), 0.3, 0.45);
       break;
     }
-    case 'cosmic': {
+    case 'cosmic':
+    case 'gpu': {
       ['a4', 'c#5', 'e5', 'a5', 'c#6', 'e6'].forEach((n, i) => c.add(softPluck(SOFT_PLUCKS.arcade, f(n), 0.09, 0.7 + i * 0.04), i * 0.07, 0.7));
       c.add(sineGlide(420, 1680, 0.4, { glideTau: 0.5, ampTau: 0.3, attackMs: 30 }), 0.05, 0.14);
       ['a5', 'c#6', 'e6'].forEach((n) => c.add(synthLead(f(n), 0.4, 0.8, { cutoff: 2800 }), 0.46, 0.4));
@@ -200,7 +202,8 @@ function themeSting(theme: ThemeId, rng: Rng): Float32Array {
       c.add(mallet(MALLETS.marimba, f('a3'), 0.5, rng), 0.3, 0.4);
       break;
     }
-    case 'cosmic': {
+    case 'cosmic':
+    case 'gpu': {
       const step = 0.15;
       ['c#5', 'f#5', 'a5'].forEach((n, i) => c.add(synthLead(f(n), step * (i === 2 ? 1.8 : 0.85), 0.75, { cutoff: 2600 }), i * step, 0.55));
       c.add(synthLead(f('g#5'), step * 0.85, 0.7, { cutoff: 2600 }), step * 4, 0.5);
@@ -651,7 +654,8 @@ export function listSfxFiles(): SfxFileSpec[] {
   for (const name of SFX_NAMES) {
     const recipe = SFX_RECIPES[name];
     if (recipe.themed) {
-      for (const theme of THEME_IDS) {
+      // Only themes with their own recordings get files; the others borrow them (AUDIO_THEME_SOURCE).
+      for (const theme of AUDIO_SOURCE_THEMES) {
         for (let v = 0; v < recipe.variants; v++) {
           out.push({ name, theme, variant: v, file: `sfx/${name}_${theme}${recipe.variants > 1 ? `_${v + 1}` : ''}.wav` });
         }

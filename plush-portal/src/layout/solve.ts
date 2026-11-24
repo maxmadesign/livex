@@ -6,7 +6,14 @@ export const DESIGN = {
   desktop: { w: 1920, h: 1080 },
   portrait32: { w: 1080, h: 1920 },
   portrait86: { w: 1080, h: 1920 },
-} as const;
+  // Phone (landscape first). Placeholder: laid out like desktop until the mobile layout is tuned.
+  mobile: { w: 1920, h: 1080 },
+} as const satisfies Record<DisplayProfileId, { w: number; h: number }>;
+
+/** Presets laid out like the desktop one (landscape design units, split panel). */
+function desktopLike(profile: DisplayProfileId): boolean {
+  return profile === 'desktop' || profile === 'mobile';
+}
 
 export interface Rect {
   x: number;
@@ -60,7 +67,7 @@ export function solveLayout(profile: DisplayProfileId, s: LayoutSettings, vw: nu
   const design = DESIGN[profile];
   const landscape = vw > vh * 1.05;
   // Design units are based on the short reference side so a resized window scales smoothly.
-  const base = profile === 'desktop' ? Math.min(vw / design.w, vh / design.h) : vw / design.w;
+  const base = desktopLike(profile) ? Math.min(vw / design.w, vh / design.h) : vw / design.w;
   let uiScale = s.uiScale;
   let adjusted = false;
   let unit = base * uiScale;
@@ -75,7 +82,7 @@ export function solveLayout(profile: DisplayProfileId, s: LayoutSettings, vw: nu
   }
   const zoneH = safeBottom - safeTop;
 
-  const style: HudLayout['panelStyle'] = profile === 'desktop' || landscape ? 'split' : 'bar';
+  const style: HudLayout['panelStyle'] = desktopLike(profile) || landscape ? 'split' : 'bar';
   const panelUnits = (touchUnits: number) => (style === 'bar' ? touchUnits * 3.25 + 96 : touchUnits * 3.1 + 40);
   let touchUnits = s.touchSize;
   let panelH = panelUnits(touchUnits) * unit;
@@ -115,7 +122,7 @@ export function solveLayout(profile: DisplayProfileId, s: LayoutSettings, vw: nu
 
   // Dialogs: centred in the safe zone, scrolling inside.
   const modalMargin = Math.max(12, marginY);
-  const modalW = Math.min(vw - 2 * Math.max(12, marginX), (profile === 'desktop' ? 1180 : 960) * base * Math.max(0.85, Math.min(1.15, uiScale + 0.25)));
+  const modalW = Math.min(vw - 2 * Math.max(12, marginX), (desktopLike(profile) ? 1180 : 960) * base * Math.max(0.85, Math.min(1.15, uiScale + 0.25)));
   const modalTop = safeTop + (zoneH < vh * 0.98 ? modalMargin * 0.4 : modalMargin);
   const modalBottom = safeBottom - (zoneH < vh * 0.98 ? modalMargin * 0.4 : modalMargin);
   const modal: Rect = { x: (vw - modalW) / 2, y: modalTop, w: modalW, h: Math.max(200, modalBottom - modalTop) };
@@ -180,8 +187,25 @@ export function solveLayout(profile: DisplayProfileId, s: LayoutSettings, vw: nu
   };
 }
 
-/** Suggests a preset from the viewport shape (used for the first-run chooser's default highlight). */
-export function guessProfile(vw: number, vh: number): DisplayProfileId {
+/** True when the primary pointer is a finger (touch screen), as far as the browser can tell. */
+export function hasCoarsePointer(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/** Largest short viewport side (CSS px) that is still treated as a phone. */
+export const PHONE_MAX_SHORT_SIDE = 500;
+
+/**
+ * Suggests a preset from the viewport shape (used for the first-run chooser's default highlight).
+ * `coarse` = the primary pointer is a finger; a touch viewport whose short side is at most
+ * PHONE_MAX_SHORT_SIDE CSS px is a phone.
+ */
+export function guessProfile(vw: number, vh: number, coarse: boolean = hasCoarsePointer()): DisplayProfileId {
+  if (coarse && Math.min(vw, vh) <= PHONE_MAX_SHORT_SIDE) return 'mobile';
   if (vw >= vh) return 'desktop';
   // Portrait: very large viewports are most likely the big kiosk.
   return vw >= 1600 || vh >= 3000 ? 'portrait86' : 'portrait32';

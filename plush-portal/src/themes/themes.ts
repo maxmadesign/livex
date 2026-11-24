@@ -235,6 +235,53 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     backdrop: { top: '#2a2058', bottom: '#191233', bokeh: ['#57e0f0', '#ff9ec0', '#a98bff', '#ffe3a8'] },
     particles: { kind: 'stars', colors: ['#57e0f0', '#ff9ec0', '#ffe9a8', '#ffffff', '#b79cff'] },
   },
+  // GPU Party: plush merchandise from a graphics-card / AI-computing world. Placeholder:
+  // the Cosmic Arcade definition retinted to black with a vivid green accent (same backdrop
+  // pattern, LED mode and particle kind); the real look comes with the theme's own content.
+  gpu: {
+    id: 'gpu',
+    ui: {
+      primary: '#76b900',
+      primaryDeep: '#4e7a00',
+      accent: '#9be33a',
+      accent2: '#e4ff9e',
+      ink: '#eaffd0',
+      paper: '#10140c',
+      panel: '#1a2212',
+      glow: '#b6ff5c',
+    },
+    cabinet: {
+      frame: '#141810',
+      frameAccent: '#76b900',
+      metalTint: '#e6eee0',
+      clawCap: '#76b900',
+      backboard: '#0e120b',
+      backboardInk: '#3f6310',
+      pattern: 'cosmos',
+      mat: '#171d12',
+      matInk: '#33500f',
+      fascia: '#12160f',
+      velvet: '#2e4a0c',
+      acrylicEdge: '#8fd61a',
+      led: ['#76b900', '#b6ff5c', '#ffffff', '#9be33a'],
+      ledMode: 'twinkle',
+    },
+    lights: {
+      key: '#f3ffe8',
+      keyIntensity: 3.0,
+      sky: '#c9f29e',
+      ground: '#1e2c10',
+      hemiIntensity: 0.55,
+      rim: '#76b900',
+      rimIntensity: 1.5,
+      envIntensity: 0.55,
+      env: ['#e8f6da', '#3f6a12', '#12180c'],
+      exposure: 1.08,
+      caustics: false,
+    },
+    backdrop: { top: '#151d0f', bottom: '#080a06', bokeh: ['#76b900', '#b6ff5c', '#9be33a', '#ffffff'] },
+    particles: { kind: 'stars', colors: ['#76b900', '#b6ff5c', '#9be33a', '#ffffff', '#eaffd0'] },
+  },
 };
 
 export function themeOf(id: ThemeId): ThemeDef {
