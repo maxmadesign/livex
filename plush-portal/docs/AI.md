@@ -18,7 +18,7 @@ game ──GuideEvent(facts)──▶ src/ai (GuideDirector)
 
 | Mode | What happens |
 | --- | --- |
-| No `.env` / no key | Fully playable. Momo uses the local line bank (en / zh / ja, 5 themes) and the built-in babble voice. Status shows **Local lines**. |
+| No `.env` / no key | Fully playable. Momo uses the local line bank (en / zh / ja, 5 themes, GTC booth-host lines for the GTC kit) and the built-in babble voice. Status shows **Local lines**. |
 | `OPENAI_API_KEY` set | Lines come from GPT through the proxy; voice from OpenAI. Any timeout or error falls back to a local line immediately. |
 | Key replaced in Settings | Same as above with the replaced key, until **Restore default**. |
 
@@ -288,14 +288,17 @@ returns the `GuidePort` from `src/core/contracts.ts` plus
 
 ### Local lines
 
-`src/ai/lines/{en,zh,ja}.ts`: about 165 original lines per language covering
-every event type in all five themes, chosen from facts. GPU Party has its own
+`src/ai/lines/{en,zh,ja}.ts`: about 255 original lines per language (the same
+pools in every language) covering every event type in all five themes, chosen
+from facts: about 165 generic and theme lines, about 85 for the GTC kit and 8
+generic claim-QR lines. GPU Party has its own
 flavour lines (booting, rendering, benchmarks, frame rates, cooling fans, the
 server rack and pixel cubes) and its own prompt entry (`THEME_PROMPT_INFO.gpu`
 with a `cast`: Keynote Chief, the twin-fan graphics card, chip, cooling fan,
 server rack, green-visor robot and green pixel cube). All characters are
 invented; the output rules tell the model never to name real companies,
-brands, products or people.
+brands, products or people — except the event and host of the GTC kit, see
+[GTC kit](#gtc-kit-momo-as-a-gtc-booth-host).
 
 - `empty_grab` with `contact: none` → direction hint from `facts.nearest`
   (+dx = move right, +dz = move toward the front); no "so close" wording.
@@ -304,18 +307,96 @@ brands, products or people.
   `contact_lost`, `transport_swing`, `overload`, `bounced_out`); unknown reasons
   use the generic pool.
 - `prize_won` → mentions the toy, separate lines for a new character and for
-  demo rounds (which never claim a collection entry).
+  demo rounds (which never claim a collection entry). With a claim QR on screen
+  (`facts.reward`, below) the win line invites the player to scan it instead.
+
+### GTC kit: Momo as a GTC booth host
+
+The `gpu` theme is dressed by the brand kit of the build (`src/brand`,
+`VITE_BRAND`): `gtc` by default, `neutral` (the original "GPU Party") for public
+demo copies. `Game.facts()` adds `facts.brand = brandFacts(themeId)` —
+`{ event: 'GTC', host: 'NVIDIA' }` for the GTC kit, nothing for the neutral kit
+or any other theme.
+
+**Which names may be used.** `src/ai/brand.ts` (`namedKitFor`) accepts
+`facts.brand` only when it is exactly the event and host of a kit with
+`namesAllowed` that dresses the event's theme. Anything else (an unknown name,
+another theme, the neutral kit) is treated as no brand at all, in the local
+bank, in the prompt and in the cache key, so neither a hand-made request nor a
+bug can make Momo name an arbitrary company.
+
+**Local lines.** Every line key has a `gtc` pool in en / zh / ja
+(`src/ai/lines/types.ts` explains the choice): while `facts.brand` unlocks the
+GTC kit it *replaces* the `gpu` pool (the GPU Party voice never mixes in), and
+generic lines stay in the mix. Pick weights: event lines 3, theme lines 2,
+generic 1. The lines talk like a booth host on the show floor — the keynote,
+sessions and talks, hands-on training labs, the exhibit hall and its demos, the
+startup showcase, poster sessions, meeting developers, accelerated computing,
+CUDA, coffee breaks — and take the names from the `{event}` / `{host}` tokens
+(lines with a token are skipped when the kit has no such name). The bank never
+spells out a real name itself, so the neutral kit, which sends no
+`facts.brand`, can never output "GTC", "NVIDIA" or "CUDA" (tested over every
+event, theme, situation and language). Hard rules, also tested: no invented
+facts (no session times, rooms, dates, prices, specs, launches, stock), no
+other companies or products, never speaking as or quoting a real person (the
+Keynote Chief is a plush), plus all the honesty rules above.
+
+**Prompt.** `themePromptInfo(theme, facts.brand)` gives the model the kit's
+entry (`name: 'NVIDIA GTC'`, a booth-host mood with the same topics, and the
+cast) and the generic `THEME_PROMPT_INFO.gpu` otherwise. With a usable brand the
+output rule "never name real companies, brands, products or real people" is
+replaced by: *you may name exactly `facts.brand.event` and `facts.brand.host`
+and nothing else; never make claims about products, specs, prices,
+availability, schedules, rooms or announcements; never speak as or quote a real
+person; the Keynote Chief is an invented plush character.* The rule names the
+fields, not their values. The model may not say "CUDA" (only the two names);
+the curated local lines may.
+
+### The claim QR (`facts.reward`)
+
+After a real win the game may show a QR code that the visitor scans with their
+phone to collect the plush prize at the booth or take a swag discount
+(docs/REWARDS.md, `src/rewards`). `Game.facts()` sets
+`facts.reward = { qr: true, options }` only while the `reward` slice of the UI
+store is `ready` (or `demoBuild`) for the current round, the card has not
+timed out, and the round was not a demo. The guide uses it on two events:
+
+| Event | Local pool | Says |
+| --- | --- | --- |
+| `prize_won`, options `both` | `win.reward` | scan to collect your plush prize or take a swag discount |
+| `prize_won`, options `prize` | `win.reward.prize` | scan to collect your plush prize |
+| `prize_won`, options `swag` | `win.reward.swag` | scan for a swag discount |
+| `retry_prompt` while the card is still up | `retry.reward` | nudge: scan the code before playing again |
+
+Each has generic lines (any theme, the neutral kit) and `gtc` lines. A claim QR
+beats "new character" on a win. On every other event, on demo rounds and with
+`qr: false` the facts are ignored, and no line ever mentions a QR, a prize to
+collect or a discount without them. The issuing is asynchronous: when the code
+is not ready yet at the win, the win line is an ordinary one and the retry
+prompt about seven seconds later carries the nudge.
+
+For GPT, `buildLineInput` keeps `facts.reward` only on those two events and adds
+`rewardMeaning` (what scanning unlocks for the given options); the output rules
+say to invite the player to scan only then. The director checks every model
+line (`qrMentionFits`): a reward line that does not mention scanning / the QR,
+or any other line that does, is replaced by a local line (`debugStats().qrMismatch`)
+and not cached; this does not count as a connection failure. Cache keys include
+the QR options and the brand, so such lines are never reused in the wrong
+situation.
 
 ## Data that leaves the device
 
 Only when a key is configured, and only: event type, theme, language, phase,
 counters (attempts, wins, loss streak), outcome / contact / slip reason, lift
 time, the public toy name and kind, the nearest-toy offset, two booleans
-(`newCharacter`, `headTracking`), up to four recent lines, and the prompt /
-personality text. `sanitizeFacts` (browser) and the zod schema (server) both
-whitelist these fields. Camera frames, face landmarks and eye positions are not
-part of the protocol and are stripped if present. Responses are requested with
-`store: false`.
+(`newCharacter`, `headTracking`), the event identity of a brand kit
+(`brand: { event, host }`, at most 24 characters each), whether a claim QR is on
+screen and what it unlocks (`reward: { qr, options }` — never the code or its
+URL), up to four recent lines, and the prompt / personality text.
+`sanitizeFacts` (browser) and the zod schema (server, strict objects for
+`brand` and `reward`) both whitelist these fields. Camera frames, face
+landmarks and eye positions are not part of the protocol and are stripped if
+present. Responses are requested with `store: false`.
 
 ## Verified / not verified
 
@@ -348,6 +429,21 @@ Verified in this repository (`npx vitest run tests/unit/ai tests/unit/server`):
   language (local lines, GPT requests and voice in English with a zh / ja UI),
   settings migration; the line bank (coverage, lengths, direction signs, honesty
   rules) for all five themes.
+- GTC kit and claim QR (`tests/unit/ai/brandLines.test.ts`,
+  `brandPrompt.test.ts`, `tests/unit/server/schemas.test.ts`, the last block of
+  `director.test.ts`): GTC lines for every key in en / zh / ja, lengths, tokens
+  filled, no "GTC" / "NVIDIA" / "CUDA" from the neutral kit, a banned-content
+  check (real people, clock times, dates, prices, stock, rooms, other companies
+  and products), QR lines exactly when `facts.reward` applies and matching the
+  options, the brand exception in the rules only with a usable `facts.brand`,
+  schema accept / reject cases, the proxy passing both through, and the director
+  replacing a model line that skips or invents the QR.
+- In the browser (`tests/e2e/25-gtc-dialogue.spec.ts`, keyless build, gpu theme):
+  the guide events carry `brand: { event: 'GTC', host: 'NVIDIA' }`; a real win
+  without a code gives a plain win line; with the reward slice set to `ready` for
+  that round the win line and the retry prompt invite a scan; a Chinese UI with
+  "Guide speaks: interface language" gets Chinese GTC lines. The QR card itself
+  and a real issued code are not part of this check.
 
 Run by hand on 2026-11-24 in the build container (behind its HTTPS proxy, with
 its re-signing CA in `NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE`, started without

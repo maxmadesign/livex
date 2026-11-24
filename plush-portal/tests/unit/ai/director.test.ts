@@ -802,3 +802,76 @@ describe('guide: connection test', () => {
     expect(h.status().connection).toBe('gpt');
   });
 });
+
+describe('guide: GTC kit and the claim QR', () => {
+  const GTC = { event: 'GTC', host: 'NVIDIA' };
+  const toy = { typeId: 'gpu.chief', name: 'Keynote Chief', kind: 'plush presenter' };
+  const gpuWin = (roundId: number, extra: Partial<GuideFacts> = {}): GuideEvent => ({
+    type: 'prize_won',
+    roundId,
+    themeId: 'gpu',
+    facts: facts({ phase: 'RESULT', outcome: 'won', toy, brand: GTC, ...extra }),
+  });
+  const QR = /\bQR\b|\bscan/i;
+
+  it('a prize_won with facts.reward picks a reward line from the local bank', async () => {
+    const h = await setup({ server: fakeServer({ status: () => json({ ...STATUS, configured: false }) }) });
+    const win = gpuWin(1, { reward: { qr: true, options: 'both' } });
+    h.guide.handle(win);
+    const line = h.guide.currentLine()!;
+    expect(line.source).toBe('local');
+    expect(line.eventType).toBe('prize_won');
+    const candidates = localCandidates(win, 'en');
+    expect(candidates.every((c) => c.key === 'win.reward')).toBe(true);
+    expect(candidates.map((c) => c.text)).toContain(line.text);
+    expect(line.text).toMatch(QR);
+    // Without the QR the same win gets an ordinary (GTC flavoured) win line.
+    h.guide.handle(gpuWin(2));
+    expect(h.guide.currentLine()!.text).not.toMatch(QR);
+  });
+
+  it('sends brand and reward to the server, and replaces a model line that skips the QR', async () => {
+    const server = fakeServer({
+      line: () => ({
+        delay: 100,
+        response: () => json({ text: 'Render complete, Keynote Chief is yours, what a catch!', emotion: 'cheer', shouldSpeak: true, model: 'gpt-6-luna', latencyMs: 100 }),
+      }),
+    });
+    const h = await setup({ server, settings: { cache: 'session' } });
+    const win = gpuWin(3, { reward: { qr: true, options: 'swag' } });
+    h.guide.handle(win);
+    await vi.advanceTimersByTimeAsync(150);
+    const sent = server.lineCalls[0]!.body;
+    expect(sent.event.facts.brand).toEqual(GTC);
+    expect(sent.event.facts.reward).toEqual({ qr: true, options: 'swag' });
+    const line = h.guide.currentLine()!;
+    expect(line.source).toBe('local');
+    expect(localCandidates(win, 'en').map((c) => c.text)).toContain(line.text);
+    expect(line.text).toMatch(QR);
+    expect(h.guide.debugStats().qrMismatch).toBe(1);
+    // The server answered fine: this is not a connection failure.
+    expect(h.status().connection).toBe('gpt');
+    expect(h.guide.debugStats().gptFailures).toBe(0);
+  });
+
+  it('keeps a model line that invites the player to scan, and drops one that invents a QR', async () => {
+    let reply = 'Keynote Chief is yours! Scan the QR code for a swag discount.';
+    const server = fakeServer({
+      line: () => ({ delay: 100, response: () => json({ text: reply, emotion: 'cheer', shouldSpeak: true, model: 'gpt-6-luna', latencyMs: 100 }) }),
+    });
+    const h = await setup({ server });
+    h.guide.handle(gpuWin(4, { reward: { qr: true, options: 'swag' } }));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(h.guide.currentLine()!).toMatchObject({ source: 'gpt', text: reply });
+
+    reply = 'You won! Scan the QR code to claim your plush prize.';
+    const plain = gpuWin(5);
+    h.guide.handle(plain);
+    await vi.advanceTimersByTimeAsync(150);
+    const line = h.guide.currentLine()!;
+    expect(line.source).toBe('local');
+    expect(line.text).not.toMatch(QR);
+    expect(localCandidates(plain, 'en').map((c) => c.text)).toContain(line.text);
+    expect(h.guide.debugStats().qrMismatch).toBe(1);
+  });
+});

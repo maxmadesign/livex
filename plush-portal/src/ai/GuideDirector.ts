@@ -19,6 +19,7 @@ import type {
 } from '../core/contracts';
 import type { Lang, ThemeId, Unsubscribe } from '../core/types';
 import type { AiSettings } from '../settings/spec';
+import { qrMentionFits } from './brand';
 import { LineCache, lineCacheKey, type CachedLine, type StorageLike } from './cache';
 import { pickLocalLine } from './lines';
 import { DEFAULT_PERSONA, DEFAULT_SYSTEM_PROMPT, sanitizeFacts } from './prompt';
@@ -163,6 +164,8 @@ export interface GuideStats {
   droppedPaused: number;
   gptRequests: number;
   gptFailures: number;
+  /** GPT replies replaced because they skipped the claim QR or invented one (see qrMentionFits). */
+  qrMismatch: number;
 }
 
 interface Ticket {
@@ -257,6 +260,7 @@ export class GuideDirector implements GuidePort {
     droppedPaused: 0,
     gptRequests: 0,
     gptFailures: 0,
+    qrMismatch: 0,
   };
 
   constructor(private readonly deps: GuideDeps) {
@@ -652,6 +656,14 @@ export class GuideDirector implements GuidePort {
       this.gptFailuresInRow = 0;
       this.lastLatencyMs = this.now() - started;
       this.setConnection('gpt', `${reply.model || 'GPT'} replied in ${Math.round(this.lastLatencyMs)} ms`, false);
+      if (!qrMentionFits(line.text, ticket.lang, ticket.event.type, ticket.event.facts)) {
+        // The server works, the wording does not: a win with a claim QR must invite the player to
+        // scan it, and no line may talk about a QR that is not on screen. The local bank follows
+        // facts.reward exactly; the reply is not cached.
+        this.stats.qrMismatch++;
+        this.presentFallback(ticket, key);
+        return;
+      }
       this.cache.add(key, line);
       if (this.recent.includes(normalize(line.text))) {
         // The model repeated itself: prefer something the player has not just heard.

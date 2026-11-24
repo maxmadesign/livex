@@ -41,6 +41,12 @@ export const en: LangBank = {
         ['Welcome to the GPU Party! The fans are spinning and the plushies are ready to render.', 'happy'],
         ["Boot sequence complete! Pick a plush from the server rack and let's start the show.", 'cheer'],
       ],
+      gtc: [
+        ["Welcome to {event}! I'm Momo, your plush booth host. Pick a plush and let's play.", 'happy'],
+        ['Hi there, {event} explorer! Between keynote buzz and session hopping, take a claw break with me.', 'happy'],
+        ['Welcome to our plush booth at {host} {event}! The claw is warmed up and ready for you.', 'cheer'],
+        ['Fresh from the exhibit hall? Catch a plush and take home a little {event} memory.', 'happy'],
+      ],
     },
     first_play: {
       all: [
@@ -54,6 +60,11 @@ export const en: LangBank = {
       ocean: [['First dive! Float the claw above a sea friend, then press grab.', 'happy']],
       cosmic: [['First mission! Steer above your target, then press grab for touchdown.', 'happy']],
       gpu: [['First benchmark! Line the claw up over a plush, then press grab to run it.', 'happy']],
+      gtc: [
+        ['Think of this as a hands-on lab: arrows to aim, then press grab to run it.', 'calm'],
+        ['Your first {event} lab session! Steer with the arrows, then the grab button runs the experiment.', 'happy'],
+        ['Quick booth demo: the arrows move the claw, and the big button sends it down.', 'calm'],
+      ],
     },
     idle: {
       all: [
@@ -68,12 +79,21 @@ export const en: LangBank = {
       ocean: [['The tide is calm right now, a perfect moment to line up.', 'calm']],
       cosmic: [["The stars are drifting slowly. Lock onto a target whenever you're ready, captain.", 'calm']],
       gpu: [['The fans are humming along. Take your time picking the next target, no lag here.', 'calm']],
+      gtc: [
+        ['Browsing like it is the exhibit hall? Plushies on top of the pile are easier to lift.', 'think'],
+        ['No rush, this booth runs on your schedule. Move the claw whenever you are ready.', 'calm'],
+        ['Taking a breather between talks? The plush nearest the front is the simplest to line up.', 'think'],
+      ],
     },
     'idle.tracking': {
       all: [
         ['Want another angle? Lean a little left or right and peek inside.', 'think'],
         ['Try moving your head a bit. The view shifts so you can judge the depth.', 'think'],
         ['Lean sideways to see how far back the claw really is.', 'think'],
+      ],
+      gtc: [
+        ['Lean left or right, like walking around a demo in the exhibit hall.', 'think'],
+        ['Move your head a little. The view shifts, just like a 3D demo on the show floor.', 'think'],
       ],
     },
     aim: {
@@ -89,6 +109,11 @@ export const en: LangBank = {
       ocean: [['Drift the claw above the roundest part, like a bubble settling down.', 'think']],
       cosmic: [['Lock on! Centre the target ring on the plush before you descend.', 'think']],
       gpu: [['Calibrating! Centre the target ring on the plush, pixel-perfect, before you drop.', 'think']],
+      gtc: [
+        ['Centre the ring on the middle of the plush. Precision tuning, like a well-optimised kernel.', 'think'],
+        ['Treat it like a poster session: look up close, then centre the ring on the tummy.', 'think'],
+        ['Hands-on lab rule: centre the ring so three fingers grip in parallel, CUDA style.', 'think'],
+      ],
     },
     grab: {
       all: [
@@ -103,6 +128,11 @@ export const en: LangBank = {
       ocean: [["Diving down! Let's scoop up a friend from the deep.", 'cheer']],
       cosmic: [['Descent started! Landing gear out, steady, steady, steady.', 'cheer']],
       gpu: [['Executing grab! The claw is processing at full speed, hold on tight.', 'cheer']],
+      gtc: [
+        ['Claw launched! Three fingers working in parallel, like a tiny CUDA kernel.', 'cheer'],
+        ['Live demo time! Down goes the claw. Hold on tight, little fingers!', 'cheer'],
+        ['Accelerated grabbing in progress! Every finger is computing a hug right now.', 'cheer'],
+      ],
     },
     'empty.dir': {
       all: [
@@ -112,12 +142,22 @@ export const en: LangBank = {
         ['Not quite lined up. Go a bit further {dir} before you drop.', 'think'],
         ['The claw landed in a gap. Aim slightly {dir} to cover a plush.', 'oops'],
       ],
+      gtc: [
+        ['Empty claw this time. Shift a little {dir}, like heading to the next booth.', 'think'],
+        ['No plush in that batch. Nudge the claw {dir} and run it once more.', 'think'],
+        ['The claw landed in an empty aisle. Go a bit more {dir} and {near} is waiting.', 'oops'],
+      ],
     },
     'empty.none': {
       all: [
         ['Nothing under the claw that time. Line the ring up on a plush first.', 'think'],
         ['Empty grab! Check the target ring before you press the button.', 'oops'],
         ['The claw found only air. Aim right over a plush and try again?', 'oops'],
+      ],
+      gtc: [
+        ['Only air in that grab. Put the target ring on a plush before you run it.', 'think'],
+        ['Empty grab! Even the best demo needs a target, so line up the ring first.', 'oops'],
+        ['No plush under the claw that time. Check the ring, then give it another run.', 'think'],
       ],
     },
     'empty.touched': {
@@ -128,12 +168,22 @@ export const en: LangBank = {
         ['You touched it! A tiny nudge toward the centre should help the grip.', 'think'],
         ['Just a brush that time. Try dropping right over the widest part.', 'think'],
       ],
+      gtc: [
+        ["So close, that was real contact! One small centring tweak and it's a fresh run.", 'oops'],
+        ['Almost! It brushed the plush. Optimise your aim toward the middle and try again.', 'oops'],
+        ['You made contact! A final tweak toward the centre, like tuning before a big demo.', 'think'],
+      ],
     },
     'slip.eccentric': {
       all: [
         ['It was only holding on by the edge. Grab closer to the middle of the body.', 'oops'],
         ['So close! The grip was off-centre. Aim right over the tummy next time.', 'oops'],
         ['It tipped out sideways. Centre the claw on the plush and try again?', 'think'],
+      ],
+      gtc: [
+        ['An edge-only grip, so it wobbled out. Aim for the core of the body next run.', 'oops'],
+        ['Off-centre grip, so close! Next run, park the claw right over the tummy.', 'oops'],
+        ['It tipped out sideways. Put the claw centre stage, like a keynote spotlight, and retry?', 'think'],
       ],
     },
     'slip.weak_support': {
@@ -142,12 +192,22 @@ export const en: LangBank = {
         ['It needed one more finger underneath! Aim so the claw hugs it evenly.', 'oops'],
         ['The hold was a bit thin. Drop over the centre so every finger wraps around.', 'think'],
       ],
+      gtc: [
+        ['Only two fingers got under it. Three working in parallel hold much better.', 'think'],
+        ['Short on fingers that time. Land over the widest part so all three share the workload.', 'oops'],
+        ['It needed one more finger underneath! Spread the load like a well-balanced cluster.', 'think'],
+      ],
     },
     'slip.contact_lost': {
       all: [
         ['The fingers lost their hold on the way up. A centred grab stays put.', 'oops'],
         ['It wriggled free! Try catching it lower, around the body.', 'oops'],
         ['Almost had it, then the grip let go. Aim for the round middle next time.', 'think'],
+      ],
+      gtc: [
+        ['The grip dropped on the way up, like a lost connection. Aim for the round middle.', 'oops'],
+        ['It wriggled free during the lift! A centred grab keeps the link steady.', 'oops'],
+        ['Contact lost during the climb! Grab lower around the body for a solid link.', 'think'],
       ],
     },
     'slip.transport_swing': {
@@ -156,12 +216,22 @@ export const en: LangBank = {
         ['Whoa, the swing shook it off! You did lift it though, nicely done.', 'oops'],
         ['It slipped during the trip to the chute. Almost there, want to try once more?', 'oops'],
       ],
+      gtc: [
+        ['It swung loose on the way to the chute. You did lift it though, benchmark-worthy!', 'oops'],
+        ['So close! The ride over shook it off. A centred grip swings much less.', 'oops'],
+        ['It slipped mid-delivery, like a badge falling off a lanyard. Centre it and try again?', 'oops'],
+      ],
     },
     'slip.overload': {
       all: [
         ['That one was heavy for the claw! Try a smaller plush or a more centred hug.', 'oops'],
         ['Too much to hold that time. Grab around the middle for a stronger grip.', 'think'],
         ["The claw couldn't carry it. A centred hold spreads the weight much better.", 'think'],
+      ],
+      gtc: [
+        ['That plush was a heavy workload! Pick a lighter one or balance the grip in the centre.', 'oops'],
+        ['Too much load for one grip. Hug it around the middle so every finger carries a share.', 'think'],
+        ['The claw maxed out on that one. A centred hold balances the load much better.', 'think'],
       ],
     },
     'slip.bounced_out': {
@@ -170,12 +240,22 @@ export const en: LangBank = {
         ['Oh no, it hopped off the edge at the last second. That was a great carry!', 'oops'],
         ["It landed on the chute's rim and rolled back. Almost there, try once more?", 'oops'],
       ],
+      gtc: [
+        ["It bounced off the chute's rim at the very end! So close, what a carry.", 'oops'],
+        ['Oh no, a last-second hop out of the chute! That run was keynote material though.', 'oops'],
+        ['Rolled back off the rim, so close to delivery! Want to run it once more?', 'oops'],
+      ],
     },
     'slip.generic': {
       all: [
         ['You had it for a moment! Try a little closer to the middle.', 'oops'],
         ['So close, it slipped right out. Centre the claw and go again?', 'oops'],
         ['It got away this time, but that was a real grab. Nice work!', 'happy'],
+      ],
+      gtc: [
+        ['It was in your grip for a moment! Refine the plan and aim nearer the middle.', 'oops'],
+        ['It got away, but that was a real grab. A great story for the coffee break!', 'happy'],
+        ['Mid-run slip, so close! Debug the aim toward the centre and ship another try?', 'oops'],
       ],
     },
     win: {
@@ -206,6 +286,12 @@ export const en: LangBank = {
         ['Render complete! {toy} has been delivered to your collection.', 'cheer'],
         ['Full frame rate catch! {toy} is coming home with you.', 'cheer'],
       ],
+      gtc: [
+        ['You got it! {toy} is coming home with you, the best souvenir of {event}.', 'cheer'],
+        ['Catch complete! {toy} heads from the {event} show floor straight into your collection.', 'cheer'],
+        ['A showcase-worthy catch! {toy} takes a bow and joins your collection.', 'cheer'],
+        ['Accelerated catch! {toy} dropped into the chute right on time.', 'happy'],
+      ],
     },
     'win.new': {
       all: [
@@ -219,6 +305,42 @@ export const en: LangBank = {
       ocean: [['A new sea friend just surfaced. Welcome aboard, {toy}!', 'cheer']],
       cosmic: [['New star discovered! {toy} is now on your star map.', 'cheer']],
       gpu: [['New hardware unlocked! {toy} just joined your collection for the first time.', 'cheer']],
+      gtc: [
+        ['New in your collection: {toy}! A fresh discovery from the {event} show floor.', 'cheer'],
+        ['{toy} just joined your collection for the very first time. What a debut!', 'cheer'],
+        ['A new face in the lineup! {toy} is your freshest {event} discovery.', 'happy'],
+      ],
+    },
+    'win.reward': {
+      all: [
+        ['You got {toy}! Scan the QR code to claim your plush prize or a swag discount.', 'cheer'],
+        ['Winner! Scan the code on screen with your phone and pick your prize or a swag discount.', 'cheer'],
+      ],
+      gtc: [
+        ['{toy} is yours! Scan the QR code: pick up your plush at the booth or unlock swag savings.', 'cheer'],
+        ['{event} winner! Point your phone at the QR code and choose a plush prize or a swag discount.', 'cheer'],
+        ['Winner! Grab your phone, scan the QR code and choose a plush prize or swag savings.', 'cheer'],
+      ],
+    },
+    'win.reward.prize': {
+      all: [
+        ['You got {toy}! Scan the QR code with your phone to claim your plush prize.', 'cheer'],
+        ['Winner! Scan the code on screen to collect your prize.', 'cheer'],
+      ],
+      gtc: [
+        ['Prize unlocked, {toy} catcher! Scan the QR code and pick up your plush at the booth.', 'cheer'],
+        ['{event} winner! Scan the QR code, then bring your phone to the booth for your plush prize.', 'cheer'],
+      ],
+    },
+    'win.reward.swag': {
+      all: [
+        ['You got {toy}! Scan the QR code with your phone for a swag discount.', 'cheer'],
+        ['Winner! Scan the code on screen to unlock your swag discount.', 'cheer'],
+      ],
+      gtc: [
+        ['Nice catch, {event} friend! That QR code holds your swag discount, so scan it now.', 'cheer'],
+        ['{event} winner! Swag savings unlocked: scan the QR code with your phone.', 'cheer'],
+      ],
     },
     'win.demo': {
       all: [
@@ -226,11 +348,20 @@ export const en: LangBank = {
         ["See how it's done? The demo doesn't count, so now it's your turn.", 'happy'],
         ['Demo win! Press start to catch one for your own collection.', 'happy'],
       ],
+      gtc: [
+        ["That was a booth demo, so it doesn't count. Press start and try it hands-on!", 'happy'],
+        ["Demo complete! Now it's your turn for the hands-on version. Tap start to play.", 'happy'],
+        ['Like every good {event} demo, now you try it yourself. Press start for a real round.', 'happy'],
+      ],
     },
     'miss.demo': {
       all: [
         ["Even the demo misses sometimes! Want to show it how it's done?", 'happy'],
         ['Demo round over. Tap start whenever you want to play for real.', 'calm'],
+      ],
+      gtc: [
+        ['Even live demos miss sometimes! Tap start and run the hands-on version yourself.', 'happy'],
+        ['Demo round over. Ready for your hands-on lab? Press start to play for real.', 'calm'],
       ],
     },
     theme: {
@@ -263,6 +394,12 @@ export const en: LangBank = {
         ['The keynote stage is lit. Graphics cards, robots and pixel cubes are waiting!', 'happy'],
         ['Welcome to the plush tech expo. Every cooling fan is spinning just for you.', 'happy'],
       ],
+      gtc: [
+        ['Welcome to {host} {event}! Black, white, {host} green and a booth full of plush.', 'cheer'],
+        ['We are on the {event} show floor! Keynote energy, live demos and plushies to catch.', 'happy'],
+        ['{event} mode on! Sessions, hands-on labs, the startup showcase and one very cute claw machine.', 'cheer'],
+        ['Hello, developers! This booth runs on accelerated cuteness. Pick a plush to start.', 'happy'],
+      ],
     },
     retry: {
       all: [
@@ -276,6 +413,11 @@ export const en: LangBank = {
       ocean: [['The tide always comes back around. Want to cast the claw again?', 'calm']],
       cosmic: [['Ready for another orbit? Launch whenever you like, captain.', 'happy']],
       gpu: [['Ready for another run? Reboot the claw whenever you like, no pressure.', 'happy']],
+      gtc: [
+        ['Another run? Like any good lab, every try teaches you more about the claw.', 'happy'],
+        ['Ready for round two? No pressure, you can catch a session and come back later.', 'calm'],
+        ['One more go before your next talk? The plushies will be right here.', 'happy'],
+      ],
     },
     'retry.streak': {
       all: [
@@ -283,6 +425,21 @@ export const en: LangBank = {
         ["Let's switch targets. Pick one near the front that isn't squeezed in.", 'think'],
         ["You're getting closer each time. Aim for a round tummy, right in the middle.", 'think'],
         ['Tough streak! A fresh angle might help, or take a little break.', 'calm'],
+      ],
+      gtc: [
+        ['Tricky pile today! Time to debug: target a plush up top with room around it.', 'think'],
+        ["Iterate like a developer: switch to a plush that isn't squeezed in.", 'think'],
+        ['Tough streak! Grab a coffee, chat with a developer, then come back fresh.', 'calm'],
+      ],
+    },
+    'retry.reward': {
+      all: [
+        ['Your claim code is still on screen. Scan it with your phone before you play again!', 'happy'],
+        ["Don't forget the QR code! Scan it before it disappears, then play another round.", 'happy'],
+      ],
+      gtc: [
+        ['Before your next session, scan that QR code! Your {event} claim is waiting.', 'happy'],
+        ['Your QR code is still up. Scan it with your phone, then catch another round.', 'happy'],
       ],
     },
     tip: {
@@ -302,11 +459,20 @@ export const en: LangBank = {
         ['Chunky shapes like cubes and chips sit nicely in the claw. Aim for the middle.', 'think'],
         ['Thin fan blades and cables slip easily. Go for the solid body instead.', 'think'],
       ],
+      gtc: [
+        ['Pro tip from the booth: aim for the middle so all three fingers work in parallel.', 'think'],
+        ['Chunky shapes like chips and cubes sit nicely in the claw. Go for the solid body.', 'think'],
+        ['Look closely, like at a poster session, then centre the ring on the tummy.', 'think'],
+      ],
     },
     'tip.tracking': {
       all: [
         ['Lean left or right to peek around. It helps you judge the depth.', 'think'],
         ['Move your head a little and watch the toys shift. Nearer ones move more.', 'think'],
+      ],
+      gtc: [
+        ['Lean left or right to peek around, like circling a demo on the show floor.', 'think'],
+        ['Move your head a little. Nearer plushies shift more, so you can judge the depth.', 'think'],
       ],
     },
   },

@@ -19,6 +19,8 @@ export const AI_LIMITS = {
   maxVoiceChars: 40,
   maxSpeechChars: 300,
   maxToyNameChars: 60,
+  /** facts.brand.event / facts.brand.host. */
+  maxBrandNameChars: 24,
   minTimeoutMs: 800,
   maxTimeoutMs: 8000,
   maxBodyBytes: 16 * 1024,

@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { guideLanguage } from '../ai/GuideDirector';
+import { brandFacts } from '../brand';
 import type { AudioPort, CalibrationPhase, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort, TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, Lang, RoundResult, ThemeId, Vec3 } from '../core/types';
 import { getLog, log, logError } from '../diagnostics/log';
@@ -1029,6 +1030,24 @@ export class Game {
         facts.nearest = { dx: result.nearest.dx, dz: result.nearest.dz, dist: result.nearest.dist, name: near ? near.name[lang] : '' };
       }
       facts.newCharacter = this.deps.ui.getState().prize?.isNew ?? false;
+    }
+    // Event identity for {event} / {host} and the GPT prompt; null (left out) for the neutral kit
+    // and for themes no kit dresses, so those lines stay generic.
+    const brand = brandFacts(this.themeId);
+    if (brand) facts.brand = brand;
+    // The claim QR (src/rewards): only while a real, issued code (or the labelled public-demo code)
+    // for this very round is on screen, so Momo never invites anyone to scan a QR that is not there.
+    // The guide uses it on prize_won and on the retry prompt that follows while the card is up.
+    const reward = this.deps.ui.getState().reward;
+    const onScreen = !!reward && (reward.visibleUntil <= 0 || Date.now() < reward.visibleUntil);
+    if (
+      onScreen &&
+      (reward.state === 'ready' || reward.state === 'demoBuild') &&
+      reward.roundId === machine.roundId &&
+      !machine.demo &&
+      (!result || result.outcome === 'won')
+    ) {
+      facts.reward = { qr: true, options: reward.options };
     }
     return facts;
   }

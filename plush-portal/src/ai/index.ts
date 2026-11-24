@@ -25,11 +25,16 @@ export {
   buildLineInput,
   buildOutputRules,
   buildVoiceStyle,
+  describeReward,
   describeSlipReason,
+  promptBrand,
   sanitizeFacts,
+  themePromptInfo,
+  type ThemePromptInfo,
 } from './prompt';
-export { pickLocalLine, localCandidates, resolveSituation, directionKey, LINE_BANKS, LINE_KEYS } from './lines';
-export type { LocalLine, LineKey, DirKey } from './lines';
+export { namedKitFor, usableBrand, rewardFor, mentionsQr, qrMentionFits, REWARD_EVENTS, type BrandFacts } from './brand';
+export { pickLocalLine, localCandidates, resolveSituation, directionKey, BRAND_POOL_IDS, LINE_BANKS, LINE_KEYS } from './lines';
+export type { LocalLine, LineKey, DirKey, BrandPoolId } from './lines';
 export { LENGTH_RULES, countUnits, fitLine, normalizeLineText, displayDurationMs } from './textLength';
 export { LineCache, LINE_CACHE_STORAGE_KEY, lineCacheKey, factsCacheKey, type CacheMode, type StorageLike } from './cache';
 export { planBabble, renderBabble, synthesizeBabble } from './speech/babbleSynth';

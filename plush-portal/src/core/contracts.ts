@@ -200,8 +200,9 @@ export interface GuideFacts {
    */
   brand?: { event: string; host: string } | null;
   /**
-   * prize_won only: a claim code was issued and its QR code is on screen, so the line may invite
-   * the player to scan it. `options` says what it unlocks. Absent / null = no QR (say nothing about one).
+   * prize_won, and the retry_prompt that follows while the card is still up: a claim code was
+   * issued and its QR code is on screen, so the line may invite the player to scan it. `options`
+   * says what it unlocks. Ignored on other events. Absent / null = no QR (say nothing about one).
    */
   reward?: { qr: boolean; options: 'both' | 'prize' | 'swag' } | null;
 }
