@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+*.local
+# MediaPipe WASM runtime is copied from node_modules by `npm run assets:tracking` (and before dev/build)
+public/mediapipe/wasm/
+# test artefacts
+test-results/
+playwright-report/
+tests/e2e/__screenshots__/
+.vite/
+*.log
