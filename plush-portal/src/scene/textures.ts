@@ -13,6 +13,7 @@ import {
 } from 'three';
 import { makeRng } from '../core/math';
 import type { ThemeDef } from '../themes/themes';
+import { sceneInk, sceneParts } from './brandScene';
 import { braidHeight, brushedHeight, flakeNormals, heightToNormal, quiltHeight, stippleHeight, streakRoughness, weave } from './texgen';
 
 export type TextureTier = '512' | '1k' | '2k' | '4k';
@@ -142,14 +143,17 @@ function chipIcon(g: CanvasRenderingContext2D, x: number, y: number, s: number, 
 }
 
 /**
- * Printed-circuit wallpaper (GPU Party): dark green-black laminate with a faint glass-fibre
- * weave, routed traces with 45° bends, vias, chip footprints and a few glowing lime lines.
+ * Printed-circuit wallpaper (GPU theme): black laminate with a faint glass-fibre weave, routed
+ * traces with 45° bends, vias, chip footprints and a few glowing "powered" lines in the brand
+ * green (colours from the brand kit when one dresses the theme).
  */
 function drawCircuit(g: CanvasRenderingContext2D, size: number, theme: ThemeDef, variant: 'board' | 'fascia', rng: () => number): void {
   const u = size / 512;
   const cab = theme.cabinet;
-  const lime = theme.ui.primary;
-  const bright = theme.ui.glow;
+  const ink = sceneInk(theme);
+  const parts = sceneParts(theme);
+  const lime = ink.primary;
+  const bright = ink.glow;
   const copper = cab.backboardInk;
   const tiled = (draw: (dx: number, dy: number) => void) => {
     for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) draw(dx, dy);
@@ -237,8 +241,8 @@ function drawCircuit(g: CanvasRenderingContext2D, size: number, theme: ThemeDef,
     });
   }
   g.globalAlpha = 1;
-  for (const c of chips) tiled((dx, dy) => chipIcon(g, c.x + dx, c.y + dy, c.s, '#06080a', '#9aa39a', variant === 'board' ? copper : null));
-  // A few lime traces with a soft glow: the "powered" lines.
+  for (const c of chips) tiled((dx, dy) => chipIcon(g, c.x + dx, c.y + dy, c.s, parts.rack, parts.pins, variant === 'board' ? copper : null));
+  // A few lit traces with a soft glow: the "powered" lines.
   g.save();
   g.shadowColor = bright;
   g.shadowBlur = 7 * u;
@@ -252,7 +256,7 @@ function drawCircuit(g: CanvasRenderingContext2D, size: number, theme: ThemeDef,
   g.restore();
   // Tiny silkscreen tick marks.
   g.globalAlpha = 0.25;
-  g.fillStyle = '#e8f5dc';
+  g.fillStyle = parts.silkscreen;
   for (let i = 0; i < Math.round(60 * density); i++) {
     const x = rng() * size, y = rng() * size;
     const horizontal = rng() < 0.5;
@@ -525,7 +529,7 @@ export function makeBadgeTexture(theme: ThemeDef, size: number, font: string): T
   const r = size / 2;
   g.clearRect(0, 0, size, size);
   const grad = g.createRadialGradient(r * 0.8, r * 0.7, r * 0.1, r, r, r);
-  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0, sceneInk(theme).badgeHighlight);
   grad.addColorStop(1, theme.cabinet.frame);
   g.fillStyle = grad;
   g.beginPath();
@@ -544,16 +548,17 @@ export function makeBadgeTexture(theme: ThemeDef, size: number, font: string): T
     g.arc(r + Math.cos(a) * r * 0.765, r + Math.sin(a) * r * 0.765, size * 0.006, 0, 6.28);
     g.fill();
   }
-  g.fillStyle = theme.ui.primaryDeep;
+  const ink = sceneInk(theme);
+  g.fillStyle = ink.primaryDeep;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.font = `700 ${Math.round(size * 0.2)}px ${font}`;
   g.fillText('PLUSH', r, r * 0.8);
-  g.fillStyle = theme.ui.accent === theme.cabinet.frame ? theme.ui.primary : theme.ui.accent;
+  g.fillStyle = ink.accent === theme.cabinet.frame ? ink.primary : ink.accent;
   g.font = `700 ${Math.round(size * 0.17)}px ${font}`;
   g.fillText('PORTAL', r, r * 1.2);
   // Little claw glyph on top.
-  g.strokeStyle = theme.ui.primary;
+  g.strokeStyle = ink.primary;
   g.lineWidth = size * 0.022;
   g.lineCap = 'round';
   g.beginPath();
@@ -576,12 +581,15 @@ export function makeSignTexture(theme: ThemeDef, text: string, font: string, sca
   g.beginPath();
   g.roundRect(8, 8, 496, 144, 36);
   g.fill();
-  g.strokeStyle = 'rgba(255,255,255,0.55)';
+  const onPrimary = sceneInk(theme).onPrimary;
+  g.strokeStyle = onPrimary;
+  g.globalAlpha = 0.55;
   g.lineWidth = 4;
   g.beginPath();
   g.roundRect(18, 18, 476, 124, 28);
   g.stroke();
-  g.fillStyle = '#ffffff';
+  g.globalAlpha = 1;
+  g.fillStyle = onPrimary;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.font = `700 84px ${font}`;
@@ -609,6 +617,7 @@ export function makeDecalAtlas(theme: ThemeDef, size: number, font: string): Tex
   g.clearRect(0, 0, size, size);
   const h = size / 2;
   const dark = theme.cabinet.pattern === 'circuit' || theme.cabinet.pattern === 'cosmos';
+  const ink = sceneInk(theme);
   const cell = (i: number, draw: (s: number) => void) => {
     g.save();
     g.translate((i % 2) * h, Math.floor(i / 2) * h);
@@ -626,25 +635,25 @@ export function makeDecalAtlas(theme: ThemeDef, size: number, font: string): Tex
   cell(DECAL.win, (s) => {
     g.fillStyle = '#ffffff';
     star(g, s / 2, s / 2, s * 0.48, 0.1, 14, 0.8);
-    g.fillStyle = theme.ui.primary;
+    g.fillStyle = ink.primary;
     star(g, s / 2, s / 2, s * 0.43, 0.1, 14, 0.8);
-    g.fillStyle = theme.ui.accent2;
+    g.fillStyle = ink.accent2;
     g.beginPath();
     g.arc(s / 2, s / 2, s * 0.29, 0, Math.PI * 2);
     g.fill();
-    label(theme.cabinet.pattern === 'circuit' ? 'GG!' : 'WIN!', s / 2, s * 0.52, s * 0.22, theme.ui.primaryDeep);
+    label(theme.cabinet.pattern === 'circuit' ? 'GG!' : 'WIN!', s / 2, s * 0.52, s * 0.22, ink.primaryDeep);
   });
   // FREE PLAY card.
   cell(DECAL.free, (s) => {
-    g.fillStyle = dark ? '#0b0f08' : '#ffffff';
+    g.fillStyle = dark ? ink.paper : '#ffffff';
     g.beginPath();
     g.roundRect(s * 0.06, s * 0.2, s * 0.88, s * 0.6, s * 0.08);
     g.fill();
-    g.strokeStyle = theme.ui.primary;
+    g.strokeStyle = ink.primary;
     g.lineWidth = s * 0.035;
     g.stroke();
-    label(theme.cabinet.pattern === 'circuit' ? 'FREE COMPUTE' : 'FREE PLAY', s / 2, s * 0.42, s * 0.12, dark ? theme.ui.glow : theme.ui.primaryDeep);
-    label('1 GRAB = 1 TRY', s / 2, s * 0.62, s * 0.075, dark ? '#e8f5dc' : theme.ui.ink, 600);
+    label(theme.cabinet.pattern === 'circuit' ? 'FREE COMPUTE' : 'FREE PLAY', s / 2, s * 0.42, s * 0.12, dark ? ink.cardTitle : ink.primaryDeep);
+    label('1 GRAB = 1 TRY', s / 2, s * 0.62, s * 0.075, ink.ink, 600);
   });
   // Caution label with hazard stripes.
   cell(DECAL.caution, (s) => {
@@ -652,9 +661,9 @@ export function makeDecalAtlas(theme: ThemeDef, size: number, font: string): Tex
     g.beginPath();
     g.roundRect(s * 0.04, s * 0.3, s * 0.92, s * 0.4, s * 0.05);
     g.clip();
-    g.fillStyle = '#ffd23a';
+    g.fillStyle = ink.caution;
     g.fillRect(0, 0, s, s);
-    g.fillStyle = '#1c1c1c';
+    g.fillStyle = ink.cautionInk;
     for (let x = -s; x < s * 2; x += s * 0.12) {
       g.beginPath();
       g.moveTo(x, s * 0.3);
@@ -663,10 +672,10 @@ export function makeDecalAtlas(theme: ThemeDef, size: number, font: string): Tex
       g.lineTo(x + s * 0.4, s * 0.7);
       g.fill();
     }
-    g.fillStyle = '#ffd23a';
+    g.fillStyle = ink.caution;
     g.fillRect(s * 0.12, s * 0.38, s * 0.76, s * 0.24);
     g.restore();
-    label('MIND THE CLAW', s / 2, s * 0.505, s * 0.09, '#1c1c1c');
+    label('MIND THE CLAW', s / 2, s * 0.505, s * 0.09, ink.cautionInk);
   });
   // PRIZE arrow.
   cell(DECAL.arrow, (s) => {
@@ -698,14 +707,15 @@ export function makeBackdropTexture(theme: ThemeDef, size: number): Texture {
   g.fillRect(0, 0, size * 2, size);
   const rng = makeRng(99 + theme.id.length * 13);
   if (theme.cabinet.pattern === 'circuit') {
-    // Server hall: rows of tiny status LEDs on dark racks, a few big soft lime glows.
+    // Server hall: rows of tiny status LEDs on dark racks, a few big soft glows.
+    const rack = sceneParts(theme).rack;
     const racks = 14;
     for (let i = 0; i < racks; i++) {
       const x = (i / racks) * size * 2 + rng() * size * 0.04;
       const w = size * 0.09;
       const top = size * (0.22 + rng() * 0.08), bottom = size * (0.82 + rng() * 0.06);
       g.globalAlpha = 0.55;
-      g.fillStyle = '#05070a';
+      g.fillStyle = rack;
       g.fillRect(x, top, w, bottom - top);
       for (let r = 0; r < 26; r++) {
         const y = top + ((r + 0.5) / 26) * (bottom - top);
@@ -751,59 +761,28 @@ export function makeGlowTexture(): Texture {
 }
 
 /**
- * Procedural stand-in for a theme emblem (drawn when the emblem image cannot be loaded):
- * a stylised chip with the word "GPU". Original artwork, no real company logo.
+ * Loads a logo file (SVG or bitmap) into a texture with the artwork's own aspect ratio, `maxWidth`
+ * texels wide (an SVG is rasterised at that size; nothing is stretched or recoloured). Resolves
+ * to null when the file is missing or cannot be decoded. Clamped edges: a logo never tiles.
  */
-export function drawChipEmblem(g: CanvasRenderingContext2D, size: number, lime: string, font: string): void {
-  const s = size;
-  g.clearRect(0, 0, s, s);
-  g.fillStyle = '#b8c2b0';
-  for (let i = 0; i < 6; i++) {
-    const o = s * (0.24 + i * 0.104);
-    g.fillRect(o - s * 0.018, s * 0.05, s * 0.036, s * 0.1);
-    g.fillRect(o - s * 0.018, s * 0.85, s * 0.036, s * 0.1);
-    g.fillRect(s * 0.05, o - s * 0.018, s * 0.1, s * 0.036);
-    g.fillRect(s * 0.85, o - s * 0.018, s * 0.1, s * 0.036);
-  }
-  g.fillStyle = '#10140c';
-  g.beginPath();
-  g.roundRect(s * 0.14, s * 0.14, s * 0.72, s * 0.72, s * 0.07);
-  g.fill();
-  g.strokeStyle = lime;
-  g.lineWidth = s * 0.025;
-  g.stroke();
-  g.fillStyle = lime;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.font = `800 ${Math.round(s * 0.22)}px ${font}`;
-  g.fillText('GPU', s / 2, s * 0.52);
-}
-
-/**
- * Loads an image file (SVG or bitmap) into a square texture of `size` texels. Resolves to
- * null when the file is missing or cannot be decoded, so callers can keep a fallback.
- */
-export async function loadImageTexture(url: string, size: number): Promise<Texture | null> {
+export async function loadLogoTexture(url: string, maxWidth: number): Promise<{ texture: Texture; aspect: number } | null> {
   try {
     const img = new Image();
     img.decoding = 'async';
     img.src = url;
     await img.decode();
-    const { c, g } = canvas(size);
-    g.clearRect(0, 0, size, size);
-    // Fit inside the square, keeping the aspect ratio.
-    const w = img.naturalWidth || size, h = img.naturalHeight || size;
-    const k = Math.min(size / w, size / h);
-    g.drawImage(img, (size - w * k) / 2, (size - h * k) / 2, w * k, h * k);
-    return finish(c, true, false);
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    if (!(nw > 0 && nh > 0)) return null;
+    const aspect = nw / nh;
+    const w = Math.max(16, Math.round(maxWidth));
+    const h = Math.max(8, Math.round(w / aspect));
+    const { c, g } = canvas(w, h);
+    g.clearRect(0, 0, w, h);
+    g.drawImage(img, 0, 0, w, h);
+    const texture = finish(c, true, false);
+    texture.wrapS = texture.wrapT = ClampToEdgeWrapping;
+    return { texture, aspect };
   } catch {
     return null;
   }
-}
-
-/** Canvas texture from a drawing callback (square). */
-export function drawTexture(size: number, draw: (g: CanvasRenderingContext2D, size: number) => void): Texture {
-  const { c, g } = canvas(size);
-  draw(g, size);
-  return finish(c, true, false);
 }

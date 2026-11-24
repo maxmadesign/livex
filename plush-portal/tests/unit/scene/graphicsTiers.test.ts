@@ -4,6 +4,7 @@ import { Mesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { AdaptiveQuality, REDUCTION_STEPS, reductionLabelKey, visibleReductions } from '../../../src/app/AdaptiveQuality';
 import { GRAPHICS_PRESETS } from '../../../src/app/presets';
+import { BRAND_KITS } from '../../../src/brand/kits';
 import { LANGS } from '../../../src/core/types';
 import { hasString, translate } from '../../../src/i18n';
 import { registerAllStrings } from '../../../src/i18n/all';
@@ -11,7 +12,7 @@ import { graphicsStrings } from '../../../src/i18n/strings/graphics';
 import { FIELD } from '../../../src/physics/fieldSpec';
 import { ContactShadows, CONTACT_RANGE, contactDarkness } from '../../../src/scene/contactShadows';
 import { buildStudioScene, captureSize, environmentSize, studioEnvironmentSize } from '../../../src/scene/environment';
-import { detailLevel, THEME_EMBLEMS } from '../../../src/scene/materials';
+import { detailLevel } from '../../../src/scene/materials';
 import { CONTACT_SHADOWS, SHADOW_FILTER, SHADOW_SIZE } from '../../../src/scene/Stage';
 import { defaultSettings, getFieldAt, sanitizeSettings, type GraphicsSettings } from '../../../src/settings/spec';
 import { THEMES } from '../../../src/themes/themes';
@@ -206,8 +207,10 @@ describe('GPU Party look', () => {
     expect(THEMES.gpu.cabinet.pattern).toBe('circuit');
   });
 
-  it('ships an original, replaceable emblem file', () => {
-    const rel = THEME_EMBLEMS.gpu!;
+  it('takes its back-wall logo from the brand kit; the neutral kit ships an original emblem', () => {
+    // The GTC kit's original placeholder sits where the official file goes (see its README).
+    expect(existsSync(`${root}public/${BRAND_KITS.gtc.logo.placeholder}`)).toBe(true);
+    const rel = BRAND_KITS.neutral.logo.placeholder!;
     const file = `${root}public/${rel}`;
     expect(existsSync(file)).toBe(true);
     expect(statSync(file).size).toBeLessThan(64 * 1024);

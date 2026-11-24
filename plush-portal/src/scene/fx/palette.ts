@@ -1,5 +1,7 @@
 import { Color } from 'three';
+import type { BrandPalette } from '../../brand';
 import type { ThemeDef } from '../../themes/themes';
+import { sceneKit } from '../brandScene';
 import type { FxTier } from './api';
 
 /** Theme-specific particle motif. */
@@ -31,6 +33,46 @@ export const TIER_COLORS: Readonly<Record<FxTier, readonly string[]>> = {
   epic: ['#a24dff', '#d39bff', '#ff6bd6'],
   legendary: ['#ffc21a', '#fff0a0', '#ff9d2e', '#ffffff'],
 };
+
+/**
+ * Tier colours inside a brand kit's palette (no blue, purple, gold or rainbow): rarity reads from
+ * white towards the brand green, and from the amount of light and rings, not from hue.
+ */
+export function brandTierColors(p: BrandPalette): Readonly<Record<FxTier, readonly string[]>> {
+  return {
+    common: [p.white, p.gray200, p.gray100],
+    rare: [p.greenLight, p.white, p.gray200],
+    epic: [p.green, p.greenLight, p.white],
+    legendary: [p.green, p.white, p.greenLight, p.white],
+  };
+}
+
+/**
+ * Colours of the "special" effects that are not theme data: score coins, combo flames, the slip
+ * fizzle and the hues rainbow effects run through. A brand kit replaces gold, fire and the rainbow
+ * with its own palette; themes without a kit keep the originals below.
+ */
+export interface SpecialColors {
+  coin: string;
+  flameA: string;
+  flameB: string;
+  fizzle: string;
+  /** Rainbow effects cycle through these colours instead of every hue. */
+  spectrum: readonly string[];
+}
+
+export function brandSpecials(p: BrandPalette): SpecialColors {
+  return { coin: p.green, flameA: p.greenDeep, flameB: p.green, fizzle: p.gray400, spectrum: [p.green, p.white, p.greenLight, p.white] };
+}
+
+/** Gold of the score coins (linear RGB of #ffcf3a). */
+export const GOLD: Rgb = { r: 1, g: 0.624, b: 0.042 };
+export const FLAME_A: Rgb = { r: 1, g: 0.144, b: 0.012 };
+export const FLAME_B: Rgb = { r: 1, g: 0.54, b: 0.04 };
+/** Blue-grey sparks of a slip. */
+export const FIZZLE: Rgb = { r: 0.55, g: 0.62, b: 0.8 };
+/** Cool grey dust of a slip (mixed into the plush fluff colour). */
+export const DUST: Rgb = { r: 0.42, g: 0.42, b: 0.46 };
 
 /** Mutable RGB triple (linear). */
 export interface Rgb {
@@ -121,19 +163,52 @@ export class ThemePalettes {
   /** Puffs: plush fluff in the theme's paper colour, slightly brightened. */
   readonly fluff: Rgb;
   readonly tiers: Readonly<Record<FxTier, Palette>>;
+  /** False when a brand kit dresses the theme: rainbow effects cycle through `spectrum` instead. */
+  readonly rainbow: boolean;
+  /** Colours that stand in for the rainbow (brand themes); the tier-free white otherwise. */
+  readonly spectrum: Palette;
+  readonly coin: Rgb;
+  readonly flameA: Rgb;
+  readonly flameB: Rgb;
+  readonly fizzle: Rgb;
+  readonly dust: Rgb;
 
   constructor(theme: ThemeDef | null) {
     this.motif = motifOf(theme);
-    const ui = theme?.ui;
-    const colors = theme?.particles.colors ?? ['#ffffff', '#ffe9a8', '#b79cff'];
-    this.particles = new Palette(colors);
-    this.confetti = new Palette(ui ? [ui.primary, ui.accent, ui.accent2, ...colors] : colors);
-    this.ui = new Palette(ui ? [ui.primary, ui.accent, ui.accent2, ui.glow] : colors);
-    this.led = new Palette(theme?.cabinet.led ?? colors);
     const one = (hex: string | undefined, fallback: string): Rgb => {
       _c.set(hex ?? fallback);
       return { r: _c.r, g: _c.g, b: _c.b };
     };
+    const kit = sceneKit(theme);
+    const colors = theme?.particles.colors ?? ['#ffffff', '#ffe9a8', '#b79cff'];
+    this.particles = new Palette(colors);
+    this.led = new Palette(theme?.cabinet.led ?? colors);
+    if (kit) {
+      // A brand kit: every colour comes from its palette (the theme's UI block is not used here).
+      const p = kit.palette;
+      this.confetti = new Palette([p.green, p.white, p.gray300, ...colors]);
+      this.ui = new Palette([p.green, p.white, p.greenLight, p.green]);
+      this.primary = one(p.green, '#ffffff');
+      this.glow = one(p.greenLight, '#ffffff');
+      this.accent = one(p.white, '#ffffff');
+      this.tint = one(p.greenLight, '#ffffff');
+      _c.set(p.black).lerp(new Color(0xffffff), 0.45);
+      this.fluff = { r: _c.r, g: _c.g, b: _c.b };
+      const tiers = brandTierColors(p);
+      this.tiers = { common: new Palette(tiers.common), rare: new Palette(tiers.rare), epic: new Palette(tiers.epic), legendary: new Palette(tiers.legendary) };
+      const sp = brandSpecials(p);
+      this.rainbow = false;
+      this.spectrum = new Palette(sp.spectrum);
+      this.coin = one(sp.coin, '#ffffff');
+      this.flameA = one(sp.flameA, '#ffffff');
+      this.flameB = one(sp.flameB, '#ffffff');
+      this.fizzle = one(sp.fizzle, '#ffffff');
+      this.dust = one(p.gray500, '#ffffff');
+      return;
+    }
+    const ui = theme?.ui;
+    this.confetti = new Palette(ui ? [ui.primary, ui.accent, ui.accent2, ...colors] : colors);
+    this.ui = new Palette(ui ? [ui.primary, ui.accent, ui.accent2, ui.glow] : colors);
     this.primary = one(ui?.primary, '#ffffff');
     this.glow = one(ui?.glow, '#ffffff');
     this.accent = one(ui?.accent, '#ffffff');
@@ -147,6 +222,22 @@ export class ThemePalettes {
       epic: new Palette(TIER_COLORS.epic),
       legendary: new Palette(TIER_COLORS.legendary),
     };
+    this.rainbow = true;
+    this.spectrum = new Palette(['#ffffff']);
+    this.coin = { ...GOLD };
+    this.flameA = { ...FLAME_A };
+    this.flameB = { ...FLAME_B };
+    this.fizzle = { ...FIZZLE };
+    this.dust = { ...DUST };
+  }
+
+  /**
+   * Colour `h` (0..1, wraps) of a rainbow effect: every hue for ordinary themes, the brand's
+   * spectrum (green / white) for a brand-kit theme.
+   */
+  hue(h: number, out: Rgb, gain = 1): Rgb {
+    if (this.rainbow) return hueRgb(h, out, gain);
+    return this.spectrum.blend(h * this.spectrum.size, out, gain);
   }
 }
 

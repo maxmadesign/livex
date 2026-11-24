@@ -28,6 +28,7 @@ varying vec4 vColor;
 varying vec3 vData;
 varying float vAux;
 varying float vCover;
+varying vec3 vWorld;
 void main() {
   float code = iMeta.x;
   float mode = floor( ( code + 0.5 ) / 32.0 );
@@ -61,17 +62,29 @@ void main() {
     p = base + side * c.x * mix( iPos.w, iMeta.y, t );
     vData.y = iAxis.w;
   }
+  // World position of the corner (the view matrix is rigid: its inverse is the transpose).
+  vWorld = transpose( mat3( viewMatrix ) ) * ( p - viewMatrix[ 3 ].xyz );
   gl_Position = projectionMatrix * vec4( p, 1.0 );
 }
 `;
 
 export const FX_FRAGMENT = /* glsl */ `
 uniform float uTime;
+// Keep-out rectangles on the back wall (xMin, yMin, xMax, yMax at z = uKeepOutZ; an empty one has
+// xMax < xMin): light whose view ray would land inside one fades out, so effects pass around a
+// logo and never over it.
+uniform vec4 uKeepOut;
+uniform vec4 uKeepOut2;
+uniform float uKeepOutZ;
+uniform float uKeepOutOn;
+// 1 = white cores for flames and coin glints (brand-kit theme), 0 = the original warm ones.
+uniform float uWhiteCores;
 varying vec2 vUv;
 varying vec4 vColor;
 varying vec3 vData;
 varying float vAux;
 varying float vCover;
+varying vec3 vWorld;
 
 vec3 fxHue( float h ) {
   return clamp( abs( fract( h + vec3( 0.0, 2.0 / 3.0, 1.0 / 3.0 ) ) * 6.0 - 3.0 ) - 1.0, 0.0, 1.0 );
@@ -157,7 +170,7 @@ void main() {
     float rim = smoothstep( 0.6, 0.7, rq );
     float gd = q.x * 0.7 - q.y * 0.7 - 0.35 * f;
     float glint = exp( -gd * gd * 24.0 );
-    col = col * mix( 1.1, 0.78, rim ) * ( f >= 0.0 ? 1.0 : 0.82 ) + vec3( 1.0, 0.95, 0.75 ) * glint * 0.9;
+    col = col * mix( 1.1, 0.78, rim ) * ( f >= 0.0 ? 1.0 : 0.82 ) + mix( vec3( 1.0, 0.95, 0.75 ), vec3( 1.0 ), uWhiteCores ) * glint * 0.9;
   } else if ( shape == 11 ) {
     // PIXEL: square LED / data bit with a faint glow
     vec2 d = abs( p );
@@ -175,7 +188,7 @@ void main() {
     float w = mix( 1.0, 0.22, clamp( p.y * 0.5 + 0.5, 0.0, 1.0 ) );
     float rr = length( vec2( p.x / w, p.y * 0.95 + 0.05 ) );
     a = 1.0 - smoothstep( 0.35, 1.0, rr );
-    col = mix( col, vec3( 1.0, 0.92, 0.62 ) * 2.2, exp( -rr * rr * 5.0 ) );
+    col = mix( col, mix( vec3( 1.0, 0.92, 0.62 ), vec3( 1.0 ), uWhiteCores ) * 2.2, exp( -rr * rr * 5.0 ) );
   } else if ( shape == 14 ) {
     // FLASH
     float k = max( 0.0, 1.0 - r * r );
@@ -189,6 +202,15 @@ void main() {
     a = 1.0 - smoothstep( 0.55, 1.0, abs( p.x ) );
   }
   a = clamp( a, 0.0, 1.0 ) * vColor.a;
+  if ( uKeepOutOn > 0.5 ) {
+    vec3 d = vWorld - cameraPosition;
+    if ( d.z < -1e-4 && vWorld.z > uKeepOutZ ) {
+      vec2 hit = cameraPosition.xy + d.xy * ( ( uKeepOutZ - cameraPosition.z ) / d.z );
+      vec2 q = max( uKeepOut.xy - hit, hit - uKeepOut.zw );
+      vec2 q2 = max( uKeepOut2.xy - hit, hit - uKeepOut2.zw );
+      a *= smoothstep( 0.0, 0.025, max( q.x, q.y ) ) * smoothstep( 0.0, 0.025, max( q2.x, q2.y ) );
+    }
+  }
   if ( a < 0.002 ) discard;
   gl_FragColor = vec4( col * a, a * vCover );
 }

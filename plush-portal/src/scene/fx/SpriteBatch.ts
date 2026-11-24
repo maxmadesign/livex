@@ -10,6 +10,7 @@ import {
   OneFactor,
   OneMinusSrcAlphaFactor,
   ShaderMaterial,
+  Vector4,
 } from 'three';
 import { FX_FRAGMENT, FX_VERTEX } from './shaders';
 
@@ -69,7 +70,15 @@ export class SpriteBatch {
 
     this.material = new ShaderMaterial({
       name: `fx-${name}`,
-      uniforms: { uTime: { value: 0 }, uCoverGain: { value: 1 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uCoverGain: { value: 1 },
+        uKeepOut: { value: new Vector4(1, 1, -1, -1) },
+        uKeepOut2: { value: new Vector4(1, 1, -1, -1) },
+        uKeepOutZ: { value: 0 },
+        uKeepOutOn: { value: 0 },
+        uWhiteCores: { value: 0 },
+      },
       vertexShader: FX_VERTEX,
       fragmentShader: FX_FRAGMENT,
       transparent: true,
@@ -158,6 +167,28 @@ export class SpriteBatch {
   /** Scales the cover of light sprites (bright cabinets need more, dark ones less). */
   setCoverGain(gain: number): void {
     this.material.uniforms.uCoverGain!.value = gain;
+  }
+
+  /**
+   * Up to two rectangles on the back wall (plane z = `z`) that sprites never cover: where a
+   * sprite's view ray would land inside one, the sprite fades out (a logo and its clear space).
+   */
+  setKeepOut(rects: readonly { xMin: number; yMin: number; xMax: number; yMax: number }[], z = 0): void {
+    const u = this.material.uniforms;
+    u.uKeepOutOn!.value = rects.length > 0 ? 1 : 0;
+    const slots = [u.uKeepOut!.value as Vector4, u.uKeepOut2!.value as Vector4];
+    slots.forEach((v, i) => {
+      const r = rects[i];
+      // An empty rectangle (max < min) contains nothing.
+      if (r) v.set(r.xMin, r.yMin, r.xMax, r.yMax);
+      else v.set(1, 1, -1, -1);
+    });
+    u.uKeepOutZ!.value = z;
+  }
+
+  /** White instead of warm cores for flames and coin glints (brand-kit themes). */
+  setWhiteCores(on: boolean): void {
+    this.material.uniforms.uWhiteCores!.value = on ? 1 : 0;
   }
 
   end(time: number): void {

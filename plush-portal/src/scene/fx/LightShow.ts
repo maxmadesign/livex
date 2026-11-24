@@ -1,6 +1,6 @@
 import { FIELD } from '../../physics/fieldSpec';
 import { DEFAULT_FOCUS, FLASH_MIN_INTERVAL, JACKPOT_SECONDS, JACKPOT_STROBE_HZ, MODE, SHAPE, WIN_SECONDS, spriteCode } from './constants';
-import { hueRgb, type Rgb, type ThemePalettes } from './palette';
+import type { Rgb, ThemePalettes } from './palette';
 import type { SpriteBatch } from './SpriteBatch';
 
 export type LightShowMode = 'off' | 'idle' | 'attract' | 'win' | 'jackpot';
@@ -57,6 +57,7 @@ const GLOW_CODE = spriteCode(SHAPE.GLOW, MODE.BILLBOARD);
 const STAR_CODE = spriteCode(SHAPE.STAR, MODE.BILLBOARD);
 const FLASH_CODE = spriteCode(SHAPE.FLASH, MODE.BILLBOARD);
 const RAINBOW_CODE = spriteCode(SHAPE.RAINBOW_RING, MODE.FLAT);
+const RING_CODE = spriteCode(SHAPE.RING, MODE.FLAT);
 
 const _c: Rgb = { r: 1, g: 1, b: 1 };
 
@@ -68,7 +69,8 @@ function approach(current: number, target: number, rate: number, dt: number): nu
  * Moving light show drawn with additive geometry only (no extra lights, no shadow
  * passes): light shafts sweeping down from the cabinet top with pools of light on
  * the floor, an LED chase along the front edge of the floor, a short global flash,
- * and a rainbow ring at the prize exit during a jackpot.
+ * and a rainbow ring at the prize exit during a jackpot. In a brand-kit theme the jackpot
+ * colours cycle through the brand's spectrum (green / white) instead of every hue.
  *
  * `off`, `idle` and `attract` are persistent modes; `win` and `jackpot` are timed
  * shows (2.6 s / 4 s) that return to the persistent mode. `off` also cancels a
@@ -246,7 +248,7 @@ export class LightShow {
         tz += (clamp(this.focus.z + oz, -0.76, -0.04) - tz) * converge;
       }
       const ty = 0.004;
-      if (jackpot) hueRgb(time * (reducedMotion ? 0.03 : 0.35) + i / MAX_BEAMS, _c);
+      if (jackpot) pal.hue(time * (reducedMotion ? 0.03 : 0.35) + i / MAX_BEAMS, _c);
       else if (win && i % 2 === 1) {
         _c.r = this.focusColor.r;
         _c.g = this.focusColor.g;
@@ -275,7 +277,7 @@ export class LightShow {
       for (let j = 0; j < CHASE_COUNT; j++) {
         const x = CHASE_X0 + ((CHASE_X1 - CHASE_X0) * j) / (CHASE_COUNT - 1);
         const b = reducedMotion ? 0.55 : 0.12 + 0.88 * Math.pow(Math.max(0, Math.sin(this.chasePhase - j * 0.55)), 6);
-        if (jackpot) hueRgb(j / CHASE_COUNT + time * (reducedMotion ? 0.02 : 0.4), _c, 1.4);
+        if (jackpot) pal.hue(j / CHASE_COUNT + time * (reducedMotion ? 0.02 : 0.4), _c, 1.4);
         else pal.led.get(j, _c, 1.4);
         batch.push(x, CHASE_Y, CHASE_Z, 0, 0, 0, _c.r, _c.g, _c.b, Math.min(1, chase * b), 0.012, 0, GLOW_CODE, 0, 0.4);
       }
@@ -295,8 +297,15 @@ export class LightShow {
       const f = this.focus;
       const y = Math.max(0.006, f.y);
       const pulse = reducedMotion ? 0 : Math.sin(time * 4) * 0.03;
-      batch.push(f.x, y, f.z, time * 0.1, 0.14, 0, 1, 1, 1, Math.min(1, ring * 0.9), 0.15 + pulse, reducedMotion ? 0 : time * 0.8, RAINBOW_CODE, 0.6, 0.35);
-      batch.push(f.x, y + 0.004, f.z, 0.5, 0.08, 0, 1, 1, 1, Math.min(1, ring * 0.5), 0.21 - pulse, reducedMotion ? 0 : -time * 0.5, RAINBOW_CODE, 0.8, 0.35);
+      if (pal.rainbow) {
+        batch.push(f.x, y, f.z, time * 0.1, 0.14, 0, 1, 1, 1, Math.min(1, ring * 0.9), 0.15 + pulse, reducedMotion ? 0 : time * 0.8, RAINBOW_CODE, 0.6, 0.35);
+        batch.push(f.x, y + 0.004, f.z, 0.5, 0.08, 0, 1, 1, 1, Math.min(1, ring * 0.5), 0.21 - pulse, reducedMotion ? 0 : -time * 0.5, RAINBOW_CODE, 0.8, 0.35);
+      } else {
+        // Brand-kit theme: the jackpot ring is the brand green inside a white one.
+        const g = pal.primary;
+        batch.push(f.x, y, f.z, 0, 0.14, 0, g.r * 1.6, g.g * 1.6, g.b * 1.6, Math.min(1, ring * 0.9), 0.15 + pulse, 0, RING_CODE, 0.6, 0.35);
+        batch.push(f.x, y + 0.004, f.z, 0, 0.08, 0, 1.4, 1.4, 1.4, Math.min(1, ring * 0.5), 0.21 - pulse, 0, RING_CODE, 0.8, 0.35);
+      }
     }
   }
 }

@@ -65,7 +65,7 @@ describe('GPU Party theme definition', () => {
     const { cabinet, lights, particles } = gpu;
     expect(luminance(cabinet.frame)).toBeLessThan(0.01);
     expect(luminance(cabinet.fascia)).toBeLessThan(0.01);
-    expect(cabinet.frameAccent).toBe('#76b900');
+    expect(cabinet.frameAccent.toLowerCase()).toBe('#76b900');
     for (const led of cabinet.led) {
       const [r, g, b] = rgb(led);
       expect(g, led).toBeGreaterThanOrEqual(r);

@@ -1,14 +1,9 @@
 import { scaledCount } from './budget';
 import { BEH, FAMILY, MODE, SHAPE } from './constants';
-import { type Motif, hueRgb, type Palette, type Rgb, type ThemePalettes } from './palette';
+import { DUST, FLAME_B, GOLD, type Motif, type Palette, type Rgb, type ThemePalettes } from './palette';
 import { ParticleSpec, type ParticlePool } from './ParticlePool';
 
 const TAU = Math.PI * 2;
-/** Gold of the score coins (linear RGB of #ffcf3a). */
-const GOLD: Rgb = { r: 1, g: 0.624, b: 0.042 };
-const FLAME_A: Rgb = { r: 1, g: 0.144, b: 0.012 };
-const FLAME_B: Rgb = { r: 1, g: 0.54, b: 0.04 };
-const DUST: Rgb = { r: 0.42, g: 0.42, b: 0.46 };
 const WHITE: Rgb = { r: 1, g: 1, b: 1 };
 
 /** Firework shell physics (see `shell`). */
@@ -124,7 +119,8 @@ export class FxRecipes {
   ring(x: number, y: number, z: number, r0: number, r1: number, life: number, rgb: Rgb, alpha: number, thickness = 0.14, rainbow = false, softness = 0.6, facing = false): void {
     if (!this.lights) return;
     const s = this.s.reset();
-    s.shape = rainbow ? SHAPE.RAINBOW_RING : SHAPE.RING;
+    // A brand-kit theme has no rainbow: the ring keeps the colour it was given.
+    s.shape = rainbow && this.pal.rainbow ? SHAPE.RAINBOW_RING : SHAPE.RING;
     s.mode = facing ? MODE.BILLBOARD : MODE.FLAT;
     s.beh = BEH.FIXED;
     s.tag = FAMILY.RING;
@@ -218,7 +214,7 @@ export class FxRecipes {
       s.fadeOut = 0.5;
       s.cover = 0.35;
       if (rainbow) {
-        hueRgb(i / Math.max(1, count) + this.rng() * 0.1, this.c);
+        this.pal.hue(i / Math.max(1, count) + this.rng() * 0.1, this.c);
         this.setRgb(this.c, gain);
       } else this.paint(gain, 0.2);
       this.emitAdd();
@@ -353,7 +349,7 @@ export class FxRecipes {
     }
   }
 
-  /** Spinning gold coins (score) plus a few gold glints. */
+  /** Spinning coins (score) plus a few glints: gold, or the brand colour of a brand-kit theme. */
   coins(x: number, y: number, z: number, count: number): void {
     for (let i = 0; i < count; i++) {
       const s = this.s.reset();
@@ -377,10 +373,10 @@ export class FxRecipes {
       s.size0 = s.size1 = 0.014 * this.sizeK;
       s.fadeIn = 0;
       s.fadeOut = 0.25;
-      this.setRgb(GOLD, 1.35);
+      this.setRgb(this.pal.coin, 1.35);
       this.emitNorm();
     }
-    this.colors(null, GOLD).sparkles(x, y, z, count, 0.4, 0.8, 0.05, 0.25, 0.6, 0.9, 0.012, 0.018, -0.4, 2, FAMILY.COIN);
+    this.colors(null, this.pal.coin).sparkles(x, y, z, count, 0.4, 0.8, 0.05, 0.25, 0.6, 0.9, 0.012, 0.018, -0.4, 2, FAMILY.COIN);
   }
 
   /** Soft puffs of dust / plush fluff (normal blending). `sad` = slow, grey, sinking. */
@@ -417,7 +413,7 @@ export class FxRecipes {
 
   /* ---------------------------------------------------------------- flames */
 
-  /** Flames swirling up around a point (combo). */
+  /** Flames swirling up around a point (combo): fire, or brand greens for a brand-kit theme. */
   flameSwirl(x: number, y: number, z: number, count: number): void {
     for (let i = 0; i < count; i++) {
       const s = this.s.reset();
@@ -442,7 +438,7 @@ export class FxRecipes {
       s.size1 = s.size0 * 0.35;
       s.cover = 0.35;
       const pick = this.rng();
-      this.setRgb(pick < 0.4 ? FLAME_A : pick < 0.8 ? FLAME_B : this.pal.primary, 1.7);
+      this.setRgb(pick < 0.4 ? this.pal.flameA : pick < 0.8 ? this.pal.flameB : this.pal.primary, 1.7);
       s.fadeIn = 0.05;
       s.fadeOut = 0.5;
       this.emitAdd();

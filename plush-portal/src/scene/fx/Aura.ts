@@ -1,6 +1,6 @@
 import type { FxTier, Vec3Like } from './api';
 import { MODE, SHAPE, spriteCode } from './constants';
-import { TIER_INDEX, hueRgb, type Rgb, type ThemePalettes } from './palette';
+import { TIER_INDEX, type Rgb, type ThemePalettes } from './palette';
 import type { SpriteBatch } from './SpriteBatch';
 
 const HALO_CODE = spriteCode(SHAPE.GLOW, MODE.BILLBOARD);
@@ -19,7 +19,8 @@ const _gold: Rgb = { r: 1, g: 0.6, b: 0.05 };
 /**
  * Rarity aura around the toy being carried: a soft halo behind it, a ring around
  * it (two for epic and above, rainbow for legendary) and sparkles circling it,
- * coloured by tier (common white, rare blue, epic purple, legendary gold-rainbow).
+ * coloured by tier (common white, rare blue, epic purple, legendary gold-rainbow; in a
+ * brand-kit theme white → brand green, with the legendary sparkles cycling green and white).
  * Drawn as immediate instances of the additive batch; no pool entries.
  */
 export class Aura {
@@ -64,6 +65,8 @@ export class Aura {
     const t = TIER_INDEX[this.tier];
     const tierPal = pal.tiers[this.tier];
     const legendary = t === 3;
+    // A brand-kit theme has no rainbow ring: the legendary rings keep the tier's (brand) colour.
+    const ringCode = legendary && pal.rainbow ? RAINBOW_CODE : RING_CODE;
     const pulse = reducedMotion ? 1 : 1 + 0.08 * Math.sin(time * 4);
     tierPal.get(0, _c);
     // Halo slightly behind the toy: the toy hides its middle, so it reads as a glow around the silhouette.
@@ -73,14 +76,14 @@ export class Aura {
       this.x, this.y - 0.05, this.z,
       time * 0.2, 0.16, 0,
       _c.r * 1.6, _c.g * 1.6, _c.b * 1.6, 0.65 * k,
-      AURA_RADIUS * pulse, reducedMotion ? 0 : time * 1.5, legendary ? RAINBOW_CODE : RING_CODE, 0.7, 0.35,
+      AURA_RADIUS * pulse, reducedMotion ? 0 : time * 1.5, ringCode, 0.7, 0.35,
     );
     if (t >= 2) {
       batch.push(
         this.x, this.y + 0.03, this.z,
         0.5 + time * 0.2, 0.12, 0,
         _c.r * 1.4, _c.g * 1.4, _c.b * 1.4, 0.4 * k,
-        AURA_RADIUS * 0.75 * (2 - pulse), reducedMotion ? 0 : -time * 2, legendary ? RAINBOW_CODE : RING_CODE, 0.7, 0.35,
+        AURA_RADIUS * 0.75 * (2 - pulse), reducedMotion ? 0 : -time * 2, ringCode, 0.7, 0.35,
       );
     }
     // Sparkles circling the toy (static positions with reduced motion).
@@ -92,12 +95,13 @@ export class Aura {
       const px = this.x + Math.cos(a) * rr;
       const pz = this.z + Math.sin(a) * rr * 0.8;
       const py = this.y - 0.02 + 0.04 * Math.sin((reducedMotion ? 0 : time * 2.2) + s * 1.7);
-      if (legendary) {
-        hueRgb(time * 0.25 + s / n, _c);
+      if (legendary && pal.rainbow) {
+        pal.hue(time * 0.25 + s / n, _c);
         _c.r = (_c.r + _gold.r) * 0.75;
         _c.g = (_c.g + _gold.g) * 0.75;
         _c.b = (_c.b + _gold.b) * 0.75;
-      } else tierPal.get(s, _c);
+      } else if (legendary) pal.hue(time * 0.25 + s / n, _c);
+      else tierPal.get(s, _c);
       const tw = reducedMotion ? 1 : 0.6 + 0.4 * Math.sin(time * 9 + s * 2.1);
       batch.push(px, py, pz, 0, 0, 0, _c.r * 1.8, _c.g * 1.8, _c.b * 1.8, Math.min(1, k * tw), 0.02 * (1 + 0.1 * t), time * 0.5 + s, STAR_CODE, 0, 0.45);
     }

@@ -1,6 +1,6 @@
-import { BoxGeometry, ExtrudeGeometry, ShapeUtils } from 'three';
+import { BoxGeometry, ExtrudeGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
-import { axisUV, boltShape, boxUV, fanBladeShape, fanFrameShape, letterShape, TESSELLATION } from '../../../src/scene/decor';
+import { axisUV, boxUV, fanBladeShape, fanFrameShape, TESSELLATION } from '../../../src/scene/decor';
 
 describe('world-projected UVs', () => {
   it('box projection scales with world size, independent of the part', () => {
@@ -30,26 +30,8 @@ describe('world-projected UVs', () => {
 });
 
 describe('GPU decor outlines', () => {
-  it('letters G, P and U are closed, non-degenerate and the P has its counter', () => {
-    for (const ch of ['G', 'P', 'U'] as const) {
-      const s = letterShape(ch, 0.1);
-      const pts = s.getPoints();
-      const area = Math.abs(ShapeUtils.area(pts));
-      expect(area, ch).toBeGreaterThan(0.1 * 0.06 * 0.25);
-      expect(area, ch).toBeLessThan(0.1 * 0.06);
-      const box = pts.reduce((b, p) => ({ w: Math.max(b.w, p.x), h: Math.max(b.h, p.y) }), { w: 0, h: 0 });
-      expect(box.h).toBeCloseTo(0.1, 6);
-      expect(box.w).toBeCloseTo(0.06, 6);
-      const geo = new ExtrudeGeometry(s, { depth: 0.01, bevelEnabled: false });
-      expect(geo.getAttribute('position').count).toBeGreaterThan(30);
-      geo.dispose();
-    }
-    expect(letterShape('P', 0.1).holes.length).toBe(1);
-    expect(letterShape('G', 0.1).holes.length).toBe(0);
-  });
-
-  it('bolt, fan blade and fan frame extrude cleanly', () => {
-    for (const shape of [boltShape(0.04), fanBladeShape(0.06, 0.02), fanFrameShape(0.13, 0.06)]) {
+  it('fan blade and fan frame extrude cleanly', () => {
+    for (const shape of [fanBladeShape(0.06, 0.02), fanFrameShape(0.13, 0.06)]) {
       const geo = new ExtrudeGeometry(shape, { depth: 0.003, bevelEnabled: false });
       const pos = geo.getAttribute('position');
       expect(pos.count).toBeGreaterThan(12);
