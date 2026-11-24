@@ -139,24 +139,36 @@ environment and shadow targets:
 
 | | Safe | Medium | High | Ultra |
 | --- | --- | --- | --- | --- |
-| Cabinet textures (GPU Party, measured) | 8.7 MB | 40.7 MB | 78.0 MB | 222 MB (89 MB of it the 4K back wall) |
+| Cabinet textures (GPU theme, measured before the brand kit; Medium is now 37.5 MB) | 8.7 MB | 40.7 MB | 78.0 MB | 222 MB (89 MB of it the 4K back wall) |
 | Studio environment (half-float cube + mips; the generator keeps a source cube of the same size up to 512) | ≈ 4 (+ 4) MB | ≈ 4 (+ 4) MB | ≈ 17 (+ 17) MB, + 17 MB capture | ≈ 17 (+ 17) MB, + 17 MB live capture (static reflections: ≈ 67 MB, no capture) |
 | Key-light shadow map | 4 MB depth | 17 MB depth | ≈ 200 MB (VSM: two RG16F targets + depth) | as High |
 
-**GPU Party theme** (`pattern: 'circuit'`). Printed-circuit wallpaper (dark
-laminate with glass-fibre weave, 45°-routed traces, vias, chip footprints, a few
-glowing lime lines), a server-hall backdrop, and a 3D wall kit: the emblem on a
-chip carrier, "GPU" block letters, two case fans whose rotors spin (stopped with
-reduced motion), floating chips that bob gently, lightning bolts and raised lit
-traces. All designs are original; no real company logo is used.
+**GPU theme (brand kit)** (`pattern: 'circuit'`). Printed-circuit wallpaper and
+the server-hall backdrop, now in the NVIDIA palette only. The back wall of the
+play field is an LED wall (`src/scene/ledWall.ts`, layout in `src/scene/brandScene.ts`)
+carrying the brand kit's event logo. The logo is an unlit plane on a black pad;
+its shader undoes exposure and Neutral tone mapping, so the logo keeps its
+colours exactly. Behind it run animated green sweeps, scanlines and data
+packets; they stand still with reduced motion. Above the wall is a slim truss
+with five white spot fixtures. In landscape the side bays carry black anodised
+case fans with spinning rotors, floating chips and lit traces. The "GPU" block
+letters, the chip-carrier emblem and the lightning bolts are gone.
 
-**Theme emblem (logo slot).** The emblem on the chip carrier is loaded at run
-time from **`public/assets/themes/gpu/logo.svg`** (an original stylised chip with
-the word "GPU"). An owner with permission to use an official logo can replace
-that one file — same path and name, square artwork, transparent background
-recommended — and nothing else needs to change. If the file is missing or cannot
-be decoded, a procedural stand-in of the same design is shown. The mapping of
-themes to emblem files is `THEME_EMBLEMS` in `src/scene/materials.ts`.
+Measured on Medium, desktop 1280 × 720, gpu theme, software GL, against the
+previous build served side by side:
+
+| | Before | After |
+| --- | --- | --- |
+| Draw calls per frame | 149–171 | 148–170 |
+| Triangles per frame | 242k–314k | 237k–309k |
+| Textures | 57 | 57 |
+| Shader programs | — | +2 (LED wall, logo) |
+| Cabinet textures | 40.7 MB | 37.5 MB |
+
+**Logo slots.** The logos and the brand font are files the owner drops into
+`public/assets/brand/gtc/` (or `dist/assets/brand/gtc/` on a built kiosk). Until
+then an original placeholder wordmark is shown. The neutral kit uses the
+original emblem `public/assets/themes/gpu/logo.svg`. See [BRAND.md](BRAND.md).
 
 ## Automatic optimiser
 

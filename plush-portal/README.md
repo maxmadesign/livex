@@ -112,6 +112,19 @@ Outbound calls honour `HTTPS_PROXY` / `NO_PROXY` and `NODE_EXTRA_CA_CERTS` / `SS
 
 Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
 
+### GTC booth in five steps
+
+1. Put the official artwork into `public/assets/brand/gtc/` (`gtc-logo.svg`, optional `nvidia-logo.svg` and the
+   NVIDIA Sans `.woff2` files), then `npm run build`. Without them an original placeholder wordmark is shown
+   ([docs/BRAND.md](docs/BRAND.md)).
+2. `npm start` on the kiosk PC. Prize codes are on by default; the claim page for visitors' phones listens on
+   port 8788 of the PC's LAN address. Connect the PC to the network the visitors' phones use, or set
+   `PLUSH_CLAIM_PUBLIC_URL` / a claim link ([docs/REWARDS.md](docs/REWARDS.md)).
+3. Open `http://127.0.0.1:8787/?display=portrait86&theme=gpu` in full screen (`F`).
+4. *Settings → Rewards*: discount wording, swag store link, and check that *Who can open it* says *Phones on this
+   network*. **Preview card**, then scan its QR code with a phone to confirm the page opens.
+5. Staff redeem codes on `http://127.0.0.1:8787/staff/rewards` (on the kiosk, or anywhere with the admin token).
+
 ## Controls
 
 | Input | Action |
@@ -145,10 +158,12 @@ open dialogs close, the session score is cleared and the field is restocked.
 | Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json` (collision proxies, mass, fallback); textured AI-generated models imported with `npm run assets:import`; any character slot also accepts an ordinary `.glb`, through the manifest or by in-app import. | [docs/ASSETS.md](docs/ASSETS.md) |
 | Display presets | Normalised layout solver, safe zone, panel anchor, per-preset settings, phone layout, simulated 9:16 screen. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Window Perspective | Off-axis frustum from the tracked eye position; countdown calibration, head-turn effect, distance calibration. | [docs/CALIBRATION.md](docs/CALIBRATION.md), [docs/DISPLAYS.md](docs/DISPLAYS.md) |
-| Settings | Eight tabs, 100+ settings, presets, import/export, lock. | [docs/SETTINGS.md](docs/SETTINGS.md) |
+| Settings | Nine tabs, 100+ settings, presets, import/export, lock. | [docs/SETTINGS.md](docs/SETTINGS.md) |
 | Graphics tiers | Safe / Medium / High / Ultra + automatic optimiser; environment lighting, effects and light show. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
 | Audio | Studio music play-lists, win stingers, character voices and effects; the synthesised fallback set; ducking. | [docs/AUDIO.md](docs/AUDIO.md) |
-| AI guide | Server proxy, replaceable key, structured lines, speech, local fallback, rate limits, HTTPS for phones. | [docs/AI.md](docs/AI.md) |
+| AI guide | Server proxy, replaceable key, structured lines, speech, local fallback, rate limits, HTTPS for phones; a GTC booth-host persona in the GTC theme. | [docs/AI.md](docs/AI.md) |
+| GTC brand kit | The gpu theme as an NVIDIA GTC booth: brand palette, LED wall with the event logo, branded loading / attract / win screens. Official logos and font are drop-in files (an original placeholder until then); a neutral kit for public copies. | [docs/BRAND.md](docs/BRAND.md) |
+| Prize claims | After a real win the card shows a QR code; visitors scan it to collect the plush at the booth or take a swag discount. One-time codes issued by the kiosk's server, claim page on the LAN, staff page to redeem. | [docs/REWARDS.md](docs/REWARDS.md) |
 | Test results | What the automated suites cover and their last recorded run. | [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md) |
 
 ## AI guide configuration
@@ -224,14 +239,16 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 | `src/settings/` | Settings specification, store and migrations |
 | `src/ui/` | React HUD, score HUD, attract call to action, calibration overlay, dialogs and the settings dialog |
 | `src/audio/` | Web Audio engine, studio play-lists and moments, fallback synthesiser |
-| `src/ai/` | Guide director, prompt, local lines, speech, cache, key client |
+| `src/ai/` | Guide director, prompt, local lines (incl. the GTC booth-host pools), speech, cache, key client |
+| `src/brand/` | Brand kits (GTC, neutral), NVIDIA palette, logo / font slots, the brand-file listing |
+| `src/rewards/` | Prize-claim protocol, client, flow, QR encoding, win-card geometry |
 | `src/i18n/` | Strings (en / zh / ja) |
 | `src/persistence/`, `src/diagnostics/` | Local storage helpers, collection, scores, redacted in-memory log |
-| `server/` | Hono API server: OpenAI proxy, key store, proxy / CA handling, HTTPS listener, validation, rate limiting, static hosting of `dist/` |
+| `server/` | Hono API server: OpenAI proxy, key store, proxy / CA handling, HTTPS listener, validation, rate limiting, static hosting of `dist/`; `server/rewards/` prize codes, claim and staff pages, the LAN claim listener |
 | `tools/plush/` | SDF modelling DSL, mesher, GLB writer, character designs, generated-model importer |
 | `tools/audio/` | Music and SFX synthesis, studio-recording import |
 | `tools/dev/` | Headless probes and screenshot helpers used during development |
-| `public/assets/plush/`, `public/assets/themes/`, `public/audio/`, `public/mediapipe/` | Characters (procedural + textured), the GPU Party emblem, audio (synthesised + studio), face model |
+| `public/assets/plush/`, `public/assets/themes/`, `public/assets/brand/`, `public/audio/`, `public/mediapipe/` | Characters (procedural + textured), the neutral GPU Party emblem, the brand-kit slots (put the official GTC / NVIDIA files here, see its README), audio (synthesised + studio), face model |
 | `tests/unit/`, `tests/e2e/` | Vitest and Playwright suites |
 | `docs/` | Documentation listed above |
 
@@ -276,11 +293,13 @@ What it **cannot** show, and what is therefore **not verified**:
 | Frame rate on a Ryzen 7 7840HS / Radeon 780M (or any real GPU) | No such machine was available. The quality tiers are engineering starting budgets, not measurements. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — measurement checklist |
 | Look, reach and readability on a physical 32" or 86" portrait screen | Only browser viewports of the same pixel shape were used. A viewport proves layout, not ergonomics or viewing comfort. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Head tracking, the countdown calibration and Window Perspective with a real camera and a real person | Only synthetic input was used: generated landmarks in the unit tests and, at most, Chromium's fake camera test pattern (no face) in the end-to-end suite. Mouse or slider input is not camera validation. The stability thresholds and the head-turn default are untested with people. | [docs/CALIBRATION.md](docs/CALIBRATION.md) |
-| Live OpenAI text and speech beyond a smoke test | A smoke test passed on 2026-11-24 through the container's HTTPS proxy with a real key: one text line and one Realtime voice line (byte count only — nobody listened), including a run where the proxy's CA came only from `SSL_CERT_FILE` loaded by the server. Longer sessions, rate limits in practice and use from a phone were not tried. | [docs/AI.md](docs/AI.md) |
+| Live OpenAI text and speech beyond a smoke test | A smoke test passed on 2026-11-24 through the container's HTTPS proxy with a real key: one text line and one Realtime voice line (byte count only — nobody listened), including a run where the proxy's CA came only from `SSL_CERT_FILE` loaded by the server. A second live check (10 GTC-theme lines) confirmed the booth-host persona and led to a prompt fix: the model had invited a QR scan for a win without a QR. Longer sessions, rate limits in practice and use from a phone were not tried. | [docs/AI.md](docs/AI.md) |
 | How the music, effects and character voices sound | Nobody has listened to any of it. Loudness, loop seams and cross-fades were measured; taste, drama and musical fit are unjudged, and the two music takes of a theme are in different keys. | [docs/AUDIO.md](docs/AUDIO.md) |
 | Phones | Only Chromium's phone emulation (size, pixel ratio, touch, coarse pointer): no real iOS / Android device, cut-outs, landscape lock, HTTPS certificate acceptance, front camera, battery or heat. | [docs/DISPLAYS.md](docs/DISPLAYS.md#phones) |
 | Look of the textured models, effects and lighting on a real GPU | Screenshots from software rendering only; whole-frame triangle counts at Medium are about twice the procedural models'. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md), [docs/ASSETS.md](docs/ASSETS.md) |
 | Touch input on real touch hardware, audio output devices, Safari and Firefox | Only Chromium with synthetic pointer and touch events was used. | Manual pass |
+| The official GTC / NVIDIA artwork in the game | None is in the repository; only the original placeholder and stand-in files in tests were drawn. A logo of a very different shape is covered by the placement maths, not by a render. | Drop the files in ([docs/BRAND.md](docs/BRAND.md)) and check *Settings → Themes* and each screen |
+| Scanning the claim QR with real phones, and the claim page on event Wi-Fi | The QR was decoded from screenshots with a QR decoder and the claim page was opened in emulated phones on the container's own network. Event Wi-Fi often isolates clients, so phones may not reach the kiosk's LAN address. | Booth dry run; [docs/REWARDS.md](docs/REWARDS.md) (public claim link option) |
 
 Other known limitations:
 

@@ -372,12 +372,21 @@ Each has generic lines (any theme, the neutral kit) and `gtc` lines. A claim QR
 beats "new character" on a win. On every other event, on demo rounds and with
 `qr: false` the facts are ignored, and no line ever mentions a QR, a prize to
 collect or a discount without them. The issuing is asynchronous: when the code
-is not ready yet at the win, the win line is an ordinary one and the retry
-prompt about seven seconds later carries the nudge.
+is still on its way as the win card appears, `Game.emitPrizeWon` holds the win
+line back for up to 1.5 s, until the code is ready (or has failed). If it is
+still not there after that, the win line is an ordinary one and the retry prompt
+about seven seconds later carries the nudge.
 
 For GPT, `buildLineInput` keeps `facts.reward` only on those two events and adds
 `rewardMeaning` (what scanning unlocks for the given options); the output rules
-say to invite the player to scan only then. The director checks every model
+say to invite the player to scan only then. The task text itself is built per
+request (`taskFor`): with a QR on screen it asks for the scan invitation first,
+otherwise it says that no QR code is on screen. Earlier scan invitations are then
+left out of `recentLines`. A live check with a real key (10 GTC lines) had shown
+the model inviting a scan for wins without a QR while the task carried a
+conditional QR sentence and recent lines held scan invitations. After the change,
+the same check produced no QR wording without a QR and the scan invitation first
+with one. The director checks every model
 line (`qrMentionFits`): a reward line that does not mention scanning / the QR,
 or any other line that does, is replaced by a local line (`debugStats().qrMismatch`)
 and not cached; this does not count as a connection failure. Cache keys include

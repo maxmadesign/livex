@@ -1,13 +1,13 @@
 # Settings reference
 
 The settings dialog opens from the round **i** button (top right) or the first
-button of the control-panel menu. It has eight tabs. Every setting is declared
+button of the control-panel menu. It has nine tabs. Every setting is declared
 once in `src/settings/spec.ts` (type, default, range, apply mode); the tables
 below were regenerated from that specification (and the English labels in
 `src/i18n/strings/`) for this version, so paths, defaults and ranges are the real ones.
 
 - [How editing works](#how-editing-works)
-- [Game](#1-game) · [Themes & Toys](#2-themes--toys) · [Layout](#3-layout) · [Graphics](#4-graphics) · [Audio](#5-audio) · [AI Guide](#6-ai-guide) · [Camera & Parallax](#7-camera--parallax) · [System](#8-system)
+- [Game](#1-game) · [Themes & Toys](#2-themes--toys) · [Layout](#3-layout) · [Graphics](#4-graphics) · [Audio](#5-audio) · [AI Guide](#6-ai-guide) · [Camera & Parallax](#7-camera--parallax) · [Rewards](#8-rewards) · [System](#9-system)
 - [Presets](#presets)
 - [Import and export](#import-and-export)
 - [Public display lock](#public-display-lock)
@@ -344,7 +344,37 @@ Viewing geometry (per display preset, under `profiles.<preset>.view`):
 - Video only — the microphone is never requested. Frames and landmarks stay on the device; nothing is recorded, stored or sent to the AI guide.
 - Procedure and troubleshooting: [CALIBRATION.md](CALIBRATION.md).
 
-## 8. System
+## 8. Rewards
+
+Prize claims after a real win: see [REWARDS.md](REWARDS.md) for the whole flow, the claim and staff
+pages and the server options. Sections: Prize claims · Status.
+
+| Setting | Path | Default | Range / options | Applies |
+| --- | --- | --- | --- | --- |
+| Prize codes | `rewards.mode` | `gtc` | `gtc` Only the brand theme (NVIDIA GTC) · `all` Every theme · `off` | live |
+| A code unlocks | `rewards.options` | `both` | `both` Prize or swag discount · `prize` Prize only · `swag` Swag discount only | live |
+| Claim link | `rewards.claimUrl` | *(empty = built-in claim page)* | `https://…` URL ≤ 300, `{code}` is replaced (else `?code=` is added) | live |
+| Swag store link | `rewards.swagUrl` | *(empty)* | `https://…` URL ≤ 300 | live |
+| Discount wording | `rewards.discountText` | *(empty = generic wording)* | text ≤ 80, e.g. "20% off all swag" | live |
+| QR code shown for | `rewards.qrSeconds` | 60 | 15 … 300 (step 5) s | live |
+
+- After a real win (never a demo round) in a theme where codes are on, the kiosk asks its own API server for a
+  one-time code. The win card shows the QR code, the code as `XXXX-XXXX` and a countdown ring. The visitor
+  scans it with their own phone and picks **one** option on the claim page. The idle reset waits until the
+  QR card has gone.
+- Codes come only from the server, and only for the kiosk machine itself (or a browser with the admin token).
+  If no code can be issued, the card says so ("ask booth staff") and shows no QR code. A QR code is never
+  made up. Phones playing over the LAN get no codes.
+- *Claim link* / *Swag store link*: a link that is not a well-formed http(s) URL is ignored (a note under the
+  field says so).
+- **Status** (read from the server):
+  - Whether the code server is on, the claim page address and who can open it (phones on this network, your
+    public link, or only this machine, with a warning), and how long codes stay valid.
+  - **Open staff page** (`/staff/rewards`) and **Preview card**: a labelled preview, no code is issued. Its QR
+    code opens the claim page with `PREVIEW`, which answers "not found". It is useful to check that a phone
+    reaches the page.
+
+## 9. System
 
 Sections: General · Configuration · Reset · Public display lock · Diagnostics.
 
