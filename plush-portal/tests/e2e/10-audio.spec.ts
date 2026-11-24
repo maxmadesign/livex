@@ -17,8 +17,53 @@ const engine = (page: Page) =>
     };
   });
 
+/**
+ * Playwright's Chromium lets an AudioContext run without any gesture (navigator.userActivation
+ * reports an activation on load, whatever --autoplay-policy says), so a desktop browser's autoplay
+ * block is emulated here: contexts start suspended and resume() only takes effect once the page has
+ * seen a real pointerdown / pointerup / touchend / keydown.
+ */
+const emulateAutoplayBlock = () => {
+  let gesture = false;
+  for (const t of ['pointerdown', 'pointerup', 'touchend', 'keydown']) window.addEventListener(t, () => (gesture = true), { capture: true });
+  const Native = window.AudioContext;
+  const nativeResume = Native.prototype.resume;
+  window.AudioContext = class extends Native {
+    constructor(options?: AudioContextOptions) {
+      super(options);
+      void Native.prototype.suspend.call(this);
+    }
+  };
+  window.AudioContext.prototype.resume = function (this: AudioContext) {
+    return gesture ? nativeResume.call(this) : new Promise<void>(() => undefined);
+  };
+};
+
 test.describe('10. audio', () => {
-  test('locked until START, then running; volume, mute, track preview and output-device UI', async ({ page }) => {
+  test('attract mode plays the theme music: at once where autoplay is allowed, after any tap where it is not', async ({ page, browser }) => {
+    // This browser allows autoplay (like a kiosk started with --autoplay-policy=no-user-gesture-required).
+    await boot(page, { display: 'desktop', theme: 'ocean' });
+    await expect.poll(async () => (await engine(page)).status, { timeout: 120_000 }).toBe('running');
+    await expect.poll(async () => (await engine(page)).music, { timeout: 60_000 }).toBe('ocean');
+    expect(await plush(page, (p) => p.game.attract.active), 'still in attract mode, nobody pressed anything').toBe(true);
+    // Autoplay blocked (emulated): locked at boot, a tap on the D-pad during the demo unlocks it.
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+    const blocked = await ctx.newPage();
+    await blocked.addInitScript(emulateAutoplayBlock);
+    await boot(blocked, { display: 'desktop', theme: 'ocean' });
+    await blocked.waitForTimeout(2500);
+    expect((await engine(blocked)).status).toBe('locked');
+    expect((await engine(blocked)).ctx).toBe('suspended');
+    const pad = await blocked.getByTestId('dir-right').boundingBox();
+    await blocked.mouse.click(pad!.x + pad!.width / 2, pad!.y + pad!.height / 2);
+    await expect.poll(async () => (await engine(blocked)).status, { timeout: 120_000 }).toBe('running');
+    await expect.poll(async () => (await engine(blocked)).music, { timeout: 60_000 }).toBe('ocean');
+    expect(await plush(blocked, (p) => p.game.attract.active), 'a D-pad tap does not leave attract mode').toBe(true);
+    await ctx.close();
+  });
+
+  test('locked until START (autoplay blocked, emulated), then running; volume, mute, track preview and output-device UI', async ({ page }) => {
+    await page.addInitScript(emulateAutoplayBlock);
     await boot(page, { display: 'desktop' });
     const locked = await engine(page);
     expect(locked.status).toBe('locked');

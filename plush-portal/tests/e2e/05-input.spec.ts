@@ -197,8 +197,9 @@ test.describe('5. input', () => {
 });
 
 test.describe('5. input (touch)', () => {
-  test('two fingers give a normalised diagonal; touchcancel releases', async ({ browser }) => {
-    const context = await browser.newContext({ hasTouch: true, viewport: { width: 1080, height: 1920 }, baseURL: 'http://127.0.0.1:8799' });
+  test('two fingers give a normalised diagonal; touchcancel releases', async ({ browser, baseURL }) => {
+    // baseURL comes from playwright.config.ts, which follows PLUSH_E2E_PORT.
+    const context = await browser.newContext({ hasTouch: true, viewport: { width: 1080, height: 1920 }, baseURL });
     const page = await context.newPage();
     await page.addInitScript((g) => {
       if (sessionStorage.getItem('__e2e_seeded')) return;

@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { guideLanguage } from '../ai/GuideDirector';
 import type { AudioPort, CalibrationPhase, GuideEvent, GuideEventType, GuideFacts, GuidePort, SfxName, TrackerPort, TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, Lang, RoundResult, ThemeId, Vec3 } from '../core/types';
 import { getLog, log, logError } from '../diagnostics/log';
@@ -9,7 +10,7 @@ import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
 import { solveLayout, type HudLayout } from '../layout/solve';
-import { computeWindowLayout, eyeToWorld, type WindowLayout } from '../perspective/windowGeometry';
+import { computeWindowLayout, eyeToWorld, handheldCameraPosition, physicalScreenSize, type WindowEnvironment, type WindowLayout } from '../perspective/windowGeometry';
 import type { CollectionStore } from '../persistence/collection';
 import { clearScores, loadScores, saveScores } from '../persistence/scores';
 import { CHUTE_CENTER, CLAW, FIXED_DT, GROUP, PRIZE_SENSOR, groups } from '../physics/fieldSpec';
@@ -23,7 +24,7 @@ import type { FxApi, FxBurstKind, Vec3Like } from '../scene/fx/api';
 import { CabinetMaterials } from '../scene/materials';
 import { Stage } from '../scene/Stage';
 import { ToyVisuals } from '../scene/ToyVisuals';
-import { diffSettings, type AiSettings, type CameraSettings, type GraphicsSettings, type Settings, type ViewSettings } from '../settings/spec';
+import { diffSettings, profileDefaults, type AiSettings, type CameraSettings, type GraphicsSettings, type Settings, type ViewSettings } from '../settings/spec';
 import type { SettingsStore } from '../settings/store';
 import { themeOf } from '../themes/themes';
 import { AdaptiveQuality } from './AdaptiveQuality';
@@ -83,6 +84,11 @@ const TIER_LED: Record<RarityTier, number> = { common: 0.75, rare: 1, epic: 1.3,
 const EXIT_POS: Vec3Like = { x: CHUTE_CENTER.x, y: PRIZE_SENSOR.yTop + 0.04, z: CHUTE_CENTER.z };
 /** Input events that count as "somebody is here" for the idle reset. */
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
+/**
+ * Inputs a browser accepts as the user gesture that may start audio (mouse: pointerdown; touch:
+ * pointerup / touchend; keys: keydown). Any of them unlocks sound, not only START.
+ */
+const AUDIO_UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
 type LightMode = Parameters<FxApi['lightShow']>[0];
 
 /**
@@ -109,6 +115,8 @@ export class Game {
   private running = false;
   private time = 0;
   private layout!: WindowLayout;
+  /** The measured window environment behind `layout` (screen size, rotation). */
+  private env: WindowEnvironment | null = null;
   hud!: HudLayout;
   private profile: DisplayProfileId;
   private themeId: ThemeId;
@@ -242,14 +250,22 @@ export class Game {
       this.offs.push(this.deps.audio.subscribe((status) => ui.setState({ audio: status })));
       this.offs.push(this.deps.guide.subscribe((line, status) => ui.setState({ guideLine: line, guideStatus: status })));
       window.addEventListener('resize', this.onResize);
+      // A phone turned by 180° (top left ↔ top right) changes no size, so no resize: the lens moved sides.
+      screen.orientation?.addEventListener?.('change', this.onResize);
       document.addEventListener('visibilitychange', this.onVisibility);
       window.addEventListener('blur', this.onBlur);
       for (const type of ACTIVITY_EVENTS) window.addEventListener(type, this.onActivity, { capture: true, passive: true });
+      for (const type of AUDIO_UNLOCK_EVENTS) window.addEventListener(type, this.onAudioGesture, { capture: true, passive: true });
       this.idle.touch();
       this.publishScore(null);
 
       ui.setState({ boot: { stage: 'ready', progress: 1, label: 'ready', error: null }, warnings: [...this.library.warnings], themeId: this.themeId });
       this.setPaused('boot', false);
+      // Attract mode has its theme music too: select it now and try to start audio. A browser that
+      // allows autoplay (a kiosk) plays the demo with sound at once; elsewhere the first tap, click
+      // or key anywhere unlocks it (onAudioGesture). unlock() never throws.
+      this.deps.audio.setTheme(this.themeId, { immediate: true });
+      void this.deps.audio.unlock();
       this.start();
       this.emitGuide('welcome');
       this.queueThumbnails();
@@ -346,6 +362,7 @@ export class Game {
     // Portrait presets may simulate their 9:16 screen in a window of another shape: env and insets
     // are then those of the box (src/layout/frame.ts); otherwise the canvas is measured as before.
     const { env, insets } = readFramedEnvironment(canvas, this.profile, profile.layout);
+    this.env = env;
     this.hud = solveLayout(this.profile, profile.layout, env.viewportW, env.viewportH, insets);
     this.layout = computeWindowLayout(env, profile.view, this.hud.floorY);
     if (this.stage) {
@@ -408,6 +425,11 @@ export class Game {
 
   private onBlur = (): void => {
     this.clearDirections();
+  };
+
+  /** A user gesture while the browser still holds audio back (at boot, or re-locked later): unlock now. */
+  private onAudioGesture = (): void => {
+    if (this.deps.audio.status().state === 'locked') void this.deps.audio.unlock();
   };
 
   /** A dialog opened or closed. Rounds, physics and the aim timer are frozen while one is open. */
@@ -997,7 +1019,9 @@ export class Game {
       facts.contact = result.contact;
       facts.slipReason = result.slipReason;
       facts.liftedMs = result.liftedMs;
-      const lang = this.language();
+      // Toy names follow the guide's language (English by default), not the interface language:
+      // a Chinese UI must not put Chinese names into English lines, GPT prompts or the voice.
+      const lang = guideLanguage(this.applied.ai, this.language());
       const asset = result.targetTypeId ? this.library.assets().find((a) => a.id === result.targetTypeId) : undefined;
       facts.toy = asset ? { typeId: asset.id, name: asset.name[lang], kind: asset.kind[lang] } : null;
       if (result.nearest) {
@@ -1045,7 +1069,13 @@ export class Game {
   }
 
   private configureTracker(): void {
-    const view = this.applied.profiles[this.profile].view;
+    let view = this.applied.profiles[this.profile].view;
+    if (this.profile === 'mobile' && this.env) {
+      // The preset's default lens position only fits a phone turned top-to-the-left: follow the real rotation.
+      const screenM = physicalScreenSize(this.env, this.layout);
+      const camPos = handheldCameraPosition(view.camPos, profileDefaults('mobile').view.camPos, this.env.orientationAngle, screenM.widthM, screenM.heightM);
+      if (camPos !== view.camPos) view = { ...view, camPos: [camPos[0], camPos[1], camPos[2]] };
+    }
     this.deps.tracker.configure({
       camera: this.applied.camera,
       view,
@@ -1626,9 +1656,11 @@ export class Game {
     this.running = false;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
+    screen.orientation?.removeEventListener?.('change', this.onResize);
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('blur', this.onBlur);
     for (const type of ACTIVITY_EVENTS) window.removeEventListener(type, this.onActivity, { capture: true });
+    for (const type of AUDIO_UNLOCK_EVENTS) window.removeEventListener(type, this.onAudioGesture, { capture: true });
     for (const off of this.offs) off();
     this.toyVisuals?.dispose();
     this.effects?.dispose();

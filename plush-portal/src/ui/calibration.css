@@ -56,7 +56,7 @@
 .pp-cal-card[data-layout="row"] .pp-cal-text { align-items: flex-start; gap: calc(var(--cal-font) * 0.25); }
 .pp-cal-card[data-layout="row"] .pp-cal-actions { justify-content: flex-start; margin-top: 0; }
 .pp-cal-card[data-layout="row"] .pp-cal-title { font-size: 1.05em; }
-.pp-cal-card[data-layout="row"] .pp-btn.small { min-height: max(40px, calc(var(--touch) * 0.55)); }
+.pp-cal-card[data-layout="row"] .pp-btn.small { min-height: max(44px, calc(var(--touch) * 0.55)); }
 
 .pp-cal-title { margin: 0; font-weight: 700; font-size: 1.15em; line-height: 1.2; max-width: 22em; }
 .pp-cal-note { margin: 0; font-weight: 500; font-size: 0.85em; line-height: 1.3; opacity: 0.85; max-width: 26em; }

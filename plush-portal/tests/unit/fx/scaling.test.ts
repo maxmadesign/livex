@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ambientTarget, lightScale, particleScale, scaledCount } from '../../../src/scene/fx/budget';
-import { MODE, SHAPE, spriteCode } from '../../../src/scene/fx/constants';
+import { JACKPOT_STROBE_HZ, MODE, SHAPE, spriteCode } from '../../../src/scene/fx/constants';
 import { EXIT, PRESETS, additiveAlphas, makeFx, run } from './helpers';
 
 const BEAM = spriteCode(SHAPE.BEAM, MODE.AXIAL);
@@ -153,11 +153,35 @@ describe('fx reduced motion', () => {
         expect(maxJump).toBeLessThan(0.1);
       } else {
         expect(flashes).toBeGreaterThan(0);
-        // With motion allowed the jackpot beams do alternate (at 3 Hz).
+        // With motion allowed the jackpot beams do alternate (at JACKPOT_STROBE_HZ, 2 Hz).
         expect(maxJump).toBeGreaterThan(1);
       }
       fx.dispose();
     }
+  });
+
+  it('the jackpot beam strobe stays below 3 Hz (period ≥ 0.45 s, public screens)', () => {
+    expect(JACKPOT_STROBE_HZ).toBeLessThan(3);
+    const fx = makeFx();
+    fx.lightShow('attract');
+    fx.celebrate('legendary', EXIT);
+    // Rising edges of one light-show beam's brightness (0.3 → 1 jumps) while the jackpot runs. The
+    // light show writes its beams last; celebration rays (same sprite code) come before them.
+    const rises: number[] = [];
+    let prev: number | null = null;
+    run(fx, 3.6, (frame) => {
+      const beam = additiveAlphas(fx, BEAM).at(-1);
+      if (beam === undefined) return;
+      // A strobe toggle is a ×3.3 jump within one frame; the fade-in at the start is gentler.
+      if (prev !== null && frame >= 12 && beam > prev * 2.5) rises.push(frame / 60);
+      prev = beam;
+    });
+    expect(rises.length).toBeGreaterThanOrEqual(4);
+    const periods = rises.slice(1).map((t, i) => t - rises[i]!);
+    for (const p of periods) expect(p).toBeGreaterThanOrEqual(0.45);
+    // About one flash per 1 / JACKPOT_STROBE_HZ seconds, i.e. at most two per second.
+    expect(Math.min(...periods)).toBeCloseTo(1 / JACKPOT_STROBE_HZ, 1);
+    fx.dispose();
   });
 
   it('flashes are rate limited to well under three per second', () => {

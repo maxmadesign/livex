@@ -23,7 +23,11 @@
 .pp-score[data-stacked="true"] { flex-direction: column; gap: calc(var(--u) * 8); border-radius: calc(var(--u) * 40); padding: calc(var(--u) * 16) calc(var(--u) * 14); }
 .pp-score[data-stacked="true"] .value { font-size: calc(var(--u) * 56 * var(--fs)); }
 .pp-score[data-demo="true"] { background: linear-gradient(180deg, color-mix(in srgb, var(--c-paper) 80%, transparent), color-mix(in srgb, var(--c-panel) 72%, transparent)); }
-.pp-root[data-theme="gpu"] .pp-score .value { color: #3f6400; }
+/* Cosmic and GPU Party have dark paper: the panel's default dark text ("Best", the label, GPU's green
+   digits) was unreadable on it, so these two use their light ink and glow colours. */
+.pp-root[data-theme="cosmic"] .pp-score, .pp-root[data-theme="gpu"] .pp-score { color: var(--c-ink); }
+.pp-root[data-theme="cosmic"] .pp-score .label, .pp-root[data-theme="gpu"] .pp-score .label { color: var(--c-glow); }
+.pp-root[data-theme="cosmic"] .pp-score .value, .pp-root[data-theme="gpu"] .pp-score .value { color: var(--c-glow); text-shadow: 0 calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.6); }
 
 /* Combo badge: a little flame that grows hotter with the multiplier. */
 .pp-combo {
@@ -87,6 +91,16 @@
 .pp-breakdown dt { font-weight: 600; text-align: left; }
 .pp-breakdown dt small { font-weight: 600; opacity: 0.6; font-size: 0.85em; }
 .pp-breakdown dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Cosmic and GPU Party: the card's white centre faded into their near-black paper right where the
+   breakdown sits, and its fixed dark text (and GPU's dark green title / total) became unreadable. On
+   these two themes the card is a dark panel with a soft glow behind the portrait and light text. */
+.pp-root[data-theme="cosmic"] .pp-result, .pp-root[data-theme="gpu"] .pp-result {
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c-glow) 34%, var(--c-panel)) 0%, var(--c-panel) 50%, var(--c-paper) 100%);
+  box-shadow: 0 calc(var(--u) * 12) 0 color-mix(in srgb, var(--c-primary) 55%, transparent), 0 calc(var(--u) * 30) calc(var(--u) * 60) rgba(0, 0, 0, 0.5), inset 0 calc(var(--u) * 4) 0 color-mix(in srgb, var(--c-glow) 45%, transparent);
+}
+.pp-root[data-theme="cosmic"] .pp-result h2, .pp-root[data-theme="gpu"] .pp-result h2,
+.pp-root[data-theme="cosmic"] .pp-breakdown .total, .pp-root[data-theme="gpu"] .pp-breakdown .total { color: var(--c-glow); }
+.pp-root[data-theme="cosmic"] .pp-breakdown, .pp-root[data-theme="gpu"] .pp-breakdown { color: var(--c-ink); }
 .pp-breakdown .total { border-top: calc(var(--u) * 2) dashed color-mix(in srgb, var(--c-primary) 50%, transparent); margin-top: calc(var(--u) * 4); padding-top: calc(var(--u) * 6); font-family: var(--font-display); font-size: 1.25em; color: var(--c-primary-deep); }
 .pp-tier { padding: calc(var(--u) * 3) calc(var(--u) * 16); border-radius: calc(var(--u) * 999); background: #6b6075; color: #fff; font-family: var(--font-display); font-weight: 700; font-size: calc(var(--u) * 20 * var(--fs)); letter-spacing: 0.12em; text-transform: uppercase; }
 .pp-tier[data-tier="rare"] { background: #1f7fb8; }
@@ -160,6 +174,9 @@
 .pp-cta .spark.d { top: 30%; left: calc(var(--u) * -22); animation-delay: 1.3s; width: calc(var(--u) * 28); height: calc(var(--u) * 28); }
 /* The tapping hand, at the lower right of the button. */
 .pp-cta-hand { position: absolute; right: 6%; bottom: calc(var(--u) * -54); width: calc(var(--u) * 92); height: calc(var(--u) * 92); pointer-events: none; }
+/* Phones: the status line sits right under the call to action; a hand hanging 54 units below it covered
+   the end of the demo hint ("…play yourself"), so it stays inside the gap there. */
+.pp-root[data-profile="mobile"] .pp-cta-hand { right: 4%; bottom: calc(var(--u) * -12); width: calc(var(--u) * 76); height: calc(var(--u) * 76); }
 .pp-cta-hand svg { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 40% 10%; filter: drop-shadow(0 calc(var(--u) * 6) calc(var(--u) * 6) rgba(40, 10, 40, 0.35)); animation: pp-tap 1.2s ease-in-out infinite; }
 .pp-cta-hand .ripple { position: absolute; left: 22%; top: -6%; width: calc(var(--u) * 46); height: calc(var(--u) * 46); margin: calc(var(--u) * -23) 0 0 calc(var(--u) * -10); border-radius: 50%; border: calc(var(--u) * 4) solid #fff; opacity: 0; animation: pp-tap-ripple 1.2s ease-out infinite; }
 .pp-cta-keys { padding: calc(var(--u) * 6) calc(var(--u) * 18); border-radius: calc(var(--u) * 999); background: rgba(43, 34, 51, 0.72); color: #fff; font-weight: 600; font-size: max(12px, calc(var(--u) * 22 * var(--fs))); margin-top: calc(var(--u) * 40); }

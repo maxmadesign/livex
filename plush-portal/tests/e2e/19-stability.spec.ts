@@ -4,7 +4,22 @@ import { aim, boot, click, ff, ffUntil, fieldToys, finishRound, frames, grabAndW
 const counts = (page: Page) =>
   plush(page, (p) => {
     const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
-    return { ...p.memory(), ...p.bodies(), onField: p.state().toys.filter((t: any) => !t.inBin).length, heapMb: perf.memory ? Math.round(perf.memory.usedJSHeapSize / 1048576) : null } as Record<string, number | null>;
+    // A toy has one collider per collision proxy of its character, and characters have different
+    // numbers of proxies, so the world's collider total follows the field's composition (a won toy
+    // is restocked with whatever character the restock picks). Split the total into the toys' own
+    // colliders and everything else (cabinet, claw, sensors): the latter must never change, and
+    // every toy collider must still exist in the world and belong to a proxy of a live toy.
+    const phys = p.game.core.phys;
+    let toyColliders = 0;
+    let proxies = 0;
+    let stale = 0;
+    for (const t of phys.toys.values()) {
+      toyColliders += t.colliders.length;
+      proxies += t.asset.proxies.length;
+      for (const c of t.colliders) if (!phys.world.getCollider(c.collider.handle)) stale++;
+    }
+    const b = p.bodies();
+    return { ...p.memory(), ...b, toyColliders, proxies, staleColliders: stale, otherColliders: b.colliders - toyColliders, onField: p.state().toys.filter((t: any) => !t.inBin).length, heapMb: perf.memory ? Math.round(perf.memory.usedJSHeapSize / 1048576) : null } as Record<string, number | null>;
   });
 
 const inCabinet = (toys: { id: string; pos: number[] }[]) => {
@@ -31,7 +46,7 @@ test.describe('19. stability', () => {
       await frames(page, 2);
       const c = await counts(page);
       (checkpoints[theme] ??= []).push(c);
-      table.push(`${label.padEnd(28)} geometries ${c.geometries} textures ${c.textures} programs ${c.programs} | bodies ${c.bodies} colliders ${c.colliders} joints ${c.joints} toys ${c.toys} (on field ${c.onField}) | heap ${c.heapMb} MB`);
+      table.push(`${label.padEnd(28)} geometries ${c.geometries} textures ${c.textures} programs ${c.programs} | bodies ${c.bodies} colliders ${c.colliders} (toys ${c.toyColliders} = proxies ${c.proxies}, other ${c.otherColliders}, stale ${c.staleColliders}) joints ${c.joints} toys ${c.toys} (on field ${c.onField}) | heap ${c.heapMb} MB`);
       inCabinet((await state(page)).toys);
     };
     const playRound = async (i: number) => {
@@ -64,8 +79,17 @@ test.describe('19. stability', () => {
     const last = checkpoints.sakura![checkpoints.sakura!.length - 1]!;
     expect(last.toys).toBe(first.toys);
     expect(last.bodies).toBe(first.bodies);
-    expect(last.colliders).toBe(first.colliders);
     expect(last.joints).toBe(first.joints);
+    // Colliders: the total depends on which characters are on the field (see counts()), so compare
+    // the parts that must not drift. At every checkpoint each toy has exactly its proxies' colliders,
+    // all of them still in the world; the non-toy colliders are the same at every checkpoint.
+    for (const [themeId, list] of Object.entries(checkpoints)) {
+      for (const c of list) {
+        expect(c.toyColliders, `${themeId}: toy colliders = collision proxies of the toys on the field`).toBe(c.proxies);
+        expect(c.staleColliders, `${themeId}: no toy collider handle points at a removed collider`).toBe(0);
+        expect(c.otherColliders, `${themeId}: cabinet / claw / sensor colliders unchanged`).toBe(first.otherColliders);
+      }
+    }
     expect(Math.abs((last.geometries as number) - (first.geometries as number)), 'geometries back to the starting level').toBeLessThanOrEqual(6);
     expect(Math.abs((last.textures as number) - (first.textures as number)), 'textures back to the starting level').toBeLessThanOrEqual(6);
     // No theme leaves its resources behind: no checkpoint is far above the first one.

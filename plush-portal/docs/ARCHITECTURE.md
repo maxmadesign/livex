@@ -287,7 +287,7 @@ invariants (for example "safe zone at least 30 % tall") are applied on load and 
 | Audio files missing / decoding fails | A studio take, stinger, voice or effect that cannot be loaded falls back to the synthesised file of the same name (music: the theme's synthesised track); if those are missing too, the engine switches to the built-in synthesiser (worker) and reports `usingFallbackSynth`. |
 | A textured (generated) model or a texture tier is missing or broken | `PlushLibrary` falls back to the embedded 512 textures, then to the procedural model of the same character, with a warning; `?models=procedural` forces the procedural models. |
 | An effect throws | `Game.safeFx` logs it and skips the effect; the round is not touched. |
-| No audio permission yet | State `locked`; audio starts on the first user gesture. |
+| No audio permission yet | The game tries `unlock()` at boot (kiosks that allow autoplay play the attract demo with music); otherwise state `locked`, and audio starts on the first tap, click or key anywhere. |
 | Camera denied, absent, busy, insecure context, model load failure | The tracker reports a specific state; the view uses the reference eye position (plus a slow drift on the attract screen, unless reduced motion is on) and the game is fully playable. The HUD chip shows the state. |
 | Face lost during play | Hold the last position, then ease back to neutral, then blend in again when a face returns ([CALIBRATION.md](CALIBRATION.md)). |
 | AI server unreachable, no key, timeout, invalid response, rate limited | The guide answers from local lines within its time budget; status shows the reason ([AI.md](AI.md)). |

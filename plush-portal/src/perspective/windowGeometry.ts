@@ -148,6 +148,30 @@ export function phoneCameraPosition(angle: number, widthM: number, heightM: numb
 }
 
 /**
+ * Lens position the head tracker should use on a phone. The phone preset's stored default
+ * (`presetDefault`, [-0.065, 0, 0]) is only right for a phone turned top-to-the-left; while the stored
+ * value is still exactly that default and the rotation is known, the position follows the actual
+ * rotation (`phoneCameraPosition`). A position the user entered is returned unchanged.
+ */
+export function handheldCameraPosition(stored: Readonly<Vec3>, presetDefault: Readonly<Vec3>, angle: number | undefined, screenWidthM: number, screenHeightM: number): Readonly<Vec3> {
+  const isDefault = stored.every((v, i) => Math.abs(v - presetDefault[i]!) < 1e-9);
+  if (!isDefault || angle === undefined || !Number.isFinite(angle) || !(screenWidthM > 0) || !(screenHeightM > 0)) return stored;
+  return phoneCameraPosition(angle, screenWidthM, screenHeightM);
+}
+
+/**
+ * Physical size of the whole screen (metres, in the viewport's orientation), derived from the window
+ * layout: the canvas' physical size scaled by screen / viewport CSS pixels. Without a usable screen
+ * size (or for a simulated screen) the canvas is taken as the screen.
+ */
+export function physicalScreenSize(env: WindowEnvironment, layout: Pick<WindowLayout, 'physWidth' | 'physHeight'>): { widthM: number; heightM: number } {
+  if (!env.simulated && env.screenW > 0 && env.screenH > 0 && env.viewportW > 0 && env.viewportH > 0) {
+    return { widthM: (layout.physWidth * env.screenW) / env.viewportW, heightM: (layout.physHeight * env.screenH) / env.viewportH };
+  }
+  return { widthM: layout.physWidth, heightM: layout.physHeight };
+}
+
+/**
  * Maps the canvas to a "window" into the cabinet. The front edge of the play
  * floor lies exactly in the window plane, so its position on screen never
  * changes with the viewpoint.

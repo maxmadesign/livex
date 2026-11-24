@@ -16,7 +16,9 @@ import {
   isNominalPhoneScreen,
   machineSpan,
   orientScreen,
+  handheldCameraPosition,
   phoneCameraPosition,
+  physicalScreenSize,
   virtualWindowSize,
   type WindowEnvironment,
 } from '../../../src/perspective/windowGeometry';
@@ -246,6 +248,36 @@ describe('phones: physical screen estimate and viewing distance', () => {
     expect(phoneCameraPosition(180, 0.065, 0.141)[1]).toBeCloseTo(-(0.141 / 2 - 0.008), 9);
     // The preset's static default matches the usual way of turning a phone (top to the left).
     expect(views.mobile.view.camPos[0]).toBeCloseTo(phoneCameraPosition(90, w, h)[0], 2);
+  });
+
+  it('follows the phone’s rotation with the preset’s default lens position, keeps one the user entered', () => {
+    const preset = views.mobile.view.camPos;
+    // Landscape 844 × 390 CSS px (0.163 mm each) and upright 390 × 844.
+    const land = physicalScreenSize(env(844, 390), { physWidth: 844 * PHONE_CSS_PX_M, physHeight: 390 * PHONE_CSS_PX_M });
+    const up = physicalScreenSize(env(390, 844), { physWidth: 390 * PHONE_CSS_PX_M, physHeight: 844 * PHONE_CSS_PX_M });
+    expect(land.widthM).toBeCloseTo(0.1376, 3);
+    const at = (angle: number | undefined, s = land) => handheldCameraPosition(preset, preset, angle, s.widthM, s.heightM);
+    // 90: top to the left, lens at the left end (≈ the stored default).
+    expect(at(90)[0]).toBeCloseTo(-(land.widthM / 2 - 0.008), 9);
+    expect(at(90)[1]).toBe(0);
+    expect(at(90)[0]).toBeCloseTo(preset[0], 2);
+    // 270: top to the right, lens at the right end — the old fixed default was 13 cm off here.
+    expect(at(270)[0]).toBeCloseTo(land.widthM / 2 - 0.008, 9);
+    expect(at(270)[0]).toBeGreaterThan(0.05);
+    // 0: upright, lens above the screen centre.
+    expect(at(0, up)[0]).toBe(0);
+    expect(at(0, up)[1]).toBeCloseTo(up.heightM / 2 - 0.008, 9);
+    // Unknown rotation or no size: the stored value.
+    expect(at(undefined)).toBe(preset);
+    expect(handheldCameraPosition(preset, preset, 270, 0, 0)).toBe(preset);
+    // A position the user typed in is never replaced.
+    const mine: Vec3 = [0.03, 0.01, 0];
+    expect(handheldCameraPosition(mine, preset, 270, land.widthM, land.heightM)).toBe(mine);
+    // The whole screen, not only the browser viewport: 390 × 844 screen with a 390 × 700 viewport.
+    const partial = physicalScreenSize(env(390, 700, { screenW: 390, screenH: 844 }), { physWidth: 390 * PHONE_CSS_PX_M, physHeight: 700 * PHONE_CSS_PX_M });
+    expect(partial.heightM).toBeCloseTo(844 * PHONE_CSS_PX_M, 9);
+    // A simulated screen is the screen.
+    expect(physicalScreenSize(env(300, 533, { simulated: true, screenW: 1920, screenH: 1080 }), { physWidth: 0.4, physHeight: 0.71 })).toEqual({ widthM: 0.4, heightM: 0.71 });
   });
 
   it('machineSpan and floorLimits agree with the window the scene builds', () => {

@@ -1,197 +1,308 @@
 # End-to-end test results
 
-Automated browser acceptance tests for PLUSH PORTAL (`tests/e2e`, Playwright).
-This file records what was run, where, and what it does and does not prove.
+Automated acceptance checks for PLUSH PORTAL: the Playwright browser suite (`tests/e2e`), the Vitest unit
+suite (`tests/unit`), the type checks and the production build. This file records what was run on the
+round-2 build, where, against which sources, what passed, and what these runs do **not** prove.
+
+**Short version.** On commit `5a5ca12` both type checks pass, all **953 unit tests in 84 files** pass and the
+production build succeeds. The whole browser suite (49 tests) ran once: **41 passed, 5 failed, 3 skipped**.
+All 5 failures were **test bugs** (four specs had the test server's port hard-coded, one stability check
+assumed a fixed collider total); after test-only fixes each of the five specs **passed when re-run on its
+own**. No product defect was found by these runs. Nothing here was checked on a real GPU, phone, 32" or 86"
+panel, camera or speaker, and nobody listened to any audio.
 
 ## Environment — read this first
 
 | | |
 | --- | --- |
-| Where | A cloud container: 4 shared CPU cores, **no GPU, no display, no camera, no audio hardware, no OpenAI key** |
-| Browser | Headless Chromium (Playwright 1.63) with **software WebGL** (ANGLE / SwiftShader) |
-| What is served | The **production build** (`vite build`) by the project's own server (`server/index.ts --serve-dist`, port 8799, `OPENAI_API_KEY` forced empty) |
-| Not used | A Ryzen 7 7840HS / Radeon 780M, a physical 32" or 86" screen, a real camera, a real person, real touch hardware, Safari / Firefox, live OpenAI |
+| Where | A cloud container: 4 shared CPU cores, **no GPU, no display, no camera, no speakers, no phone** |
+| Browser | Headless Chromium 158.0.8127.36 (Playwright 1.63.0) with **software WebGL** (ANGLE → SwiftShader, Vulkan) |
+| Node | v22.23.5 |
+| What is served | The **production build** (`vite build` into a scratch folder) served by the project's own server (`server/index.ts --serve-dist`) on port 8811 (`PLUSH_E2E_PORT=8811`, `PLUSH_E2E_DIST=<scratch>/dist-e2e`) |
+| AI | The server ran **keyless**: `OPENAI_API_KEY` empty, `PLUSH_KEY_MANAGEMENT=off`, a fresh temporary `PLUSH_DATA_DIR`. Checked before the run: `/api/ai/status` → `configured: false`, `credential.source: "none"`. No request went to OpenAI. |
+| Not used | A Ryzen 7 7840HS / Radeon 780M, any real GPU, a physical 32" or 86" screen, a real phone, a real camera or person, real touch hardware, audio output, Safari / Firefox, live OpenAI |
 
-Nothing below is a hardware acceptance. Viewport sizes (1280×720, 1080×1920,
-2160×3840) prove layout rules, not ergonomics, reach or viewing comfort on a
-physical screen. Frame rates in this container (0.5–3 frames per second for the
-whole page) say nothing about a real GPU and are not reported as performance.
+Viewport sizes (1280×720, 1080×1920, 2160×3840, 844×390, a 9:16 box inside 1280×720) prove layout rules, not
+ergonomics, reach, readability or viewing comfort on a physical screen. Frame rates here (whole seconds per
+frame on some tests) say nothing about a real GPU and are not reported as performance.
 
-### How the suite copes with software rendering
+## Command results (this verification run, 2026-11-24 UTC)
 
-* One rendered frame can take seconds here, so the specs start the game with
-  very cheap graphics (ordinary user settings seeded into `localStorage`) and
-  advance **game time** with the `?debug=1` API (`__plush.fastForward`, the same
-  fixed 120 Hz steps the game runs, without rendering). Physics, rules and
-  settlement are the real code; only the wall clock is skipped.
-* Buttons are operated with real pointer / keyboard / touch events. One test
-  (item 2, desktop) aims with the on-screen direction buttons only, in real
-  time, like a player.
-* `__plush.placeClaw(x, z)` is used in most other tests to put the claw above a
-  spot between rounds. That is a test shortcut for aiming, not player input.
+| Command | Sources | Result |
+| --- | --- | --- |
+| `npx tsc --noEmit -p tsconfig.json` | A | exit 0 (1.8 s) |
+| `npx tsc --noEmit -p tsconfig.node.json` | A, and again after the test fixes | exit 0 both times (covers `tests/e2e` and `playwright.config.ts`) |
+| `npx vitest run` | A | **84 files, 953 tests passed**, 0 failed, 0 skipped (38 s) |
+| `npm run build` (tracking assets check → typecheck → `vite build`) | A | exit 0; 229 modules; main chunk 5.9 MB (2.1 MB gzip); no warnings in the log |
+| `npm run e2e -- --trace off` (whole suite, once) | A | **41 passed, 5 failed, 3 skipped** of 49 tests; 17:04:45 → 18:08:19 (Playwright: 1.1 h) |
+| The 5 failing specs, each re-run alone after test-only fixes | B | `05-input` 4/4, `13-camera-denied` 1/1, `13-camera-fallback` 1/1, `14-camera-fake` 1/1, `19-stability` 2/2 — **all passed** |
 
-### What was simulated, and how
+Sources:
+
+* **A** — commit `5a5ca12` exactly (working tree clean when the build for the full run was made at 17:04).
+* **B** — commit `5a5ca12` + the test-only fixes listed below + two uncommitted product edits that **another
+  workstream** made while the full run was in progress (`src/scene/Cabinet.ts` at 17:38: placement of the
+  "caution" sticker; `src/ui/game.css` at 17:59: Cosmic / GPU Party score and win-card colours, the phone
+  call-to-action hand). The re-runs (18:10–18:17) rebuilt from that tree. None of the re-run specs asserts
+  sticker placement or those colours.
+
+Not run in this session: `npm ci` / a clean install into an empty `node_modules` (the folder is shared with
+servers other sessions are running), and `npm run dev` (a dev server on 5173 belonging to another session was
+already running; it was not touched).
+
+## How the suite copes with software rendering
+
+* One rendered frame can take seconds here, so most specs start the game with very cheap graphics (ordinary
+  user settings seeded into `localStorage`: custom preset, render scale 0.35, shadows / AO / fur off,
+  512 textures, auto-optimise off) and advance **game time** with the `?debug=1` API
+  (`__plush.fastForward(sec)`: the same fixed 120 Hz physics steps the game runs, without rendering). Physics,
+  rules, scoring and settlement are the real code; only the wall clock is skipped. Specs that need a preset
+  pass `?quality=` instead (phone: `safe`; graphics change: Safe → Medium live).
+* Buttons are operated with real pointer, keyboard and touch events. One test (desktop round in `02-rounds`)
+  aims with the on-screen direction buttons only, in real time, like a player. Elsewhere
+  `__plush.placeClaw(x, z)` puts the claw above a spot between rounds — a test shortcut for aiming, not
+  player input.
+* Every `window.__plush` call except `attract()` counts as player input, so slow steps never trigger the idle
+  reset by accident; `22-idle-attract` therefore waits for the reset by watching the DOM only.
+* Dialogs pop in with a 260 ms animation; helpers wait for animations to finish before measuring rectangles.
+  `__bootDone` is set before the first frame is on screen; the first frames (shader compilation) can block the
+  page for 10–25 s, so timeouts are long (test timeout 7 min, some specs 15–25 min) and nothing races the clock.
+* One worker, no retries.
+
+## What was simulated, and how
 
 | Thing | Simulation used | What it does **not** show |
 | --- | --- | --- |
-| 32" / 86" portrait screens | Browser viewports 1080×1920 and 2160×3840 with `?display=portrait32/portrait86` | Physical size, reach, readability, glare |
-| Tab hidden / shown | `document.visibilityState` overridden + a `visibilitychange` event | Real browser throttling of a background tab |
+| 32" / 86" portrait screens | Viewports 1080×1920 and 2160×3840 with `?display=portrait32 / portrait86` | Physical size, reach, readability, glare |
+| A 32" / 86" preset in a landscape window (R10) | `portrait32` / `portrait86` in a 1280×720 window → the game draws a centred 405×720 9:16 box | A real portrait panel |
+| Phone held sideways (R3) | Chromium phone emulation: 844×390, `isMobile`, `hasTouch`, coarse pointer, `?display=mobile`, taps via `page.touchscreen` | A real iOS / Android device, cut-outs, landscape lock, full screen, heat, frame rate |
+| Touch on a kiosk | `hasTouch` contexts; two simultaneous touch points through CDP `Input.dispatchTouchEvent` | A real touch panel, palm rejection, latency |
+| Tab hidden / shown | `document.visibilityState` overridden + a `visibilitychange` event | Real background-tab throttling |
 | Window blur | A dispatched `blur` event | OS-level focus changes |
-| Touch | Chromium touch emulation (`Input.dispatchTouchEvent`, two touch points) | A real touch panel, palm rejection, latency |
-| Camera present | Chromium's synthetic camera (`--use-fake-device-for-media-stream`): a moving test pattern, **no face** | Face detection, tracking accuracy, latency, calibration with a person |
-| Camera denied | Same synthetic camera with the permission prompt auto-answered "Block" (`--use-fake-ui-for-media-stream=deny`) | A real permission dialog |
+| Camera present | Chromium's synthetic camera (`--use-fake-device-for-media-stream`): a moving test pattern, **no face** | Face detection, tracking accuracy, latency, the 3-2-1 calibration with a person |
+| Camera denied | Same synthetic camera, prompt auto-answered "Block" (`--use-fake-ui-for-media-stream=deny`) | A real permission dialog |
 | No camera | Permission granted, zero video devices | — |
-| Head position | The "test viewpoint" sliders in Settings → Camera (reported by the game as source `test`, never as tracking) | Anything about real head tracking |
+| Head position | The "test viewpoint" sliders in Settings → Camera (reported as source `test`, never `tracking`) | Anything about real head tracking |
 | No OpenAI key | The real server without a key | — |
 | API unreachable | Every `/api/**` request aborted in the browser | — |
-| Slow GPT | A **fake** `/api/ai/status` claiming a key and a fake `/api/ai/line` that answers after 9 s | Real OpenAI behaviour; no real GPT text or speech was ever produced |
-| Audio | A real `AudioContext` with no sound device; gains and states are read from the engine | Audible output, output-device switching |
+| Slow GPT | A **fake** `/api/ai/status` claiming a key and a fake `/api/ai/line` answering after 9 s | Real OpenAI behaviour; no real GPT text or speech was produced |
+| Idle player (R8) | `system.idleSeconds` set to 10 s; no input of any kind until the reset | A real crowd walking past |
+| Hostile / broken settings | Hand-made JSON files (garbage, foreign, version 99, array, out-of-range values) | — |
+| Audio | A real `AudioContext` with no output device; gains, states, decoded buffers and the engine's calls are read in the page | Audible output, loudness as heard, taste |
 
 ## How to run
 
 ```bash
-npm run e2e                                # builds dist, serves it on :8799, runs everything except the screenshots
-npx playwright test tests/e2e/06-outcomes.spec.ts --trace off      # one file
-PLUSH_SHOTS=1 npx playwright test tests/e2e/20-screenshots.spec.ts # regenerate docs/screenshots (≈15 min here)
-PLUSH_E2E_DIST=dist-e2e npm run e2e        # build into another folder (keeps a dist/ that is being served elsewhere)
+npm run e2e                                  # builds dist, serves it on :8799, runs everything (screenshots skipped)
+PLUSH_E2E_PORT=8811 PLUSH_E2E_DIST=/tmp/x npm run e2e    # another port / build folder (as used for this run)
+npx playwright test tests/e2e/06-outcomes.spec.ts --trace off       # one file
+PLUSH_SHOTS=1 npx playwright test tests/e2e/20-screenshots.spec.ts  # regenerate docs/screenshots
 ```
 
-Two Playwright projects: `chromium` (everything) and `camera-fake`
-(`*camera-fake*.spec.ts`, Chromium started with the synthetic camera).
-One worker, no retries. The complete suite takes about 25–30 minutes in this container.
+Two Playwright projects: `chromium` (everything else) and `camera-fake` (`*camera-fake*.spec.ts`, Chromium
+started with the synthetic camera). A server already answering on the chosen port is reused — make sure it is
+a keyless one.
 
-## Results by acceptance item
+## Every spec, this build
 
-"Build" says which build the spec was last run against — see [Run record](#run-record).
+"Full run" = the one complete `npm run e2e` on sources A. "Alone" = re-run of that spec file on its own on
+sources B after the test fix. Numbers are from the last run of the test.
 
-| # | What is checked | Result | Build | Evidence (numbers from the last run of that spec) |
-| --- | --- | --- | --- | --- |
-| 1 | Production build loads cleanly | **pass** | F | 74 requests, all same-origin; 0 console errors, 0 uncaught exceptions, 0 failed requests, 0 HTTP ≥ 400; boots to attract mode with 18 toys. First run without a preset (720×1280): device chooser shown, dismissible. `01-load` |
-| 2 | A full round through the real HUD on the three layouts; presets keep their own layout | **pass** | F | Desktop 1280×720: START → direction buttons only (real press-and-hold, 6 presses, aim error 1.4 cm) → GRAB → won → win card → PLAY AGAIN → next round. Portrait 32" 1080×1920 and portrait 86" 2160×3840: START, holding ▶ moves the claw > 5 cm, GRAB (claw placed by the test), won on the first grab, PLAY AGAIN. Layout: portrait86 `uiScale 0.8 / anchorY 0.56` and portrait32 `uiScale 1.1` survive reloads, desktop untouched. `02-rounds` |
-| 3 | Portrait 86": everything interactive inside normalised Y 0.25–0.75; top-right "i" exists | **pass** (after fix 2) | F | Same numbers (±0.001) at 1080×1920 and 2160×3840: panel 0.528–0.672 (centre 0.600 = anchor setting 0.60), direction pad 0.541–0.647, START 0.556–0.632, menu row 0.643–0.665; settings dialog 0.258–0.742 with Close 0.263–0.285 and Cancel / Apply 0.712–0.734; win card 0.316–0.519, its PLAY AGAIN 0.473–0.507. A scan of **every** visible button / input / tab / switch (all 8 settings tabs, also scrolled to the end; tutorial; theme picker; collection; win card) finds none outside the zone except the "i" (x > 0.8, y < 0.12). 4K: direction button 132 px, START 284 px. `03-safe-zone` |
-| 4 | Both settings entries open the same dialog; tabs left, content right; 8 tabs; scrolling stays inside | **pass** (one part only partly exercised) | F | Gear in the panel and the "i" give the identical dialog rectangle and the same 8 tabs. Desktop: dialog 905×691, tab list 184 px wide, content from x = 372. Portrait 32": 1004×1843, tab list 276 px. Portrait 86": 874×929, tab list 182 px. Graphics tab content 1308 / 2485 / 1387 px scrolls inside a 574 / 1643 / 802 px area; dialog, footer and page do not move. At 900×480 the dialog is 603×456 and all tabs are reachable. **Not exercised:** the tab list never overflowed in any tested size (379 px in 379 px at 900×480), so only its `overflow-y: auto` and reachability were checked, not actual scrolling. `04-settings-dialog` |
-| 5 | Input: hold / release, diagonal, cancel, lost capture, blur, hidden tab, dialogs, typing, keyboard | **pass** | F | Mouse hold moves, release stops (inputs read from the controller, claw at rest afterwards); dragging off the button keeps the hold; lost pointer capture, `blur`, hidden tab and an opening dialog each clear the input; a key held before a dialog does not resume after it; 0 physics steps while a dialog is open. Typing "wasd WASD ok", arrows and Space in a settings field: no movement, no grab. Arrows and WASD map to the four directions, opposite keys cancel. Straight 0.420 m/s, diagonal 0.420 m/s (0.297 + 0.297) with keys and with two touch points; `touchcancel` releases. Space starts / grabs, a second Space or Enter during the round is ignored. `05-input` |
-| 6 | Honest outcomes: centre → win, empty spot → empty, off-centre → can slip; second GRAB ignored; one award | **pass** | F | Centred grab: won at the first try, grip quality 0.62, contact `lifted`. Empty spot 38.6 cm from the nearest of 6 toys: `empty`, contact `none`, nothing awarded, next round ready without input. Off-centre sweep, 7 rounds: 4.5 cm off → 4 wins (quality 0.37–0.42); 6 cm off → 1 `empty` (only touched), 1 win, 1 **`slipped` (reason `eccentric`, during LIFTING, quality 0.18)**. GRAB pressed again (button, API, Space) during DESCENDING / CLOSING / LIFTING: refused; exactly one result and at most one award per round; PLAY AGAIN twice starts one round. `06-outcomes` |
-| 7 | Collection changes only after the chute sensor; no duplicates; demo rounds never count | **pass** | F | Counter is 0 at DESCENDING, CLOSING, LIFTING, TRANSPORTING and RELEASING; award and sensor happen in the same simulation step (1072) with the toy at y = −0.071 m inside the chute; exactly one award, one stored prize id. "Restart round" on the win card and with a toy in the air (TRANSPORTING): no credit. Theme switch: no re-credit; the next win is a new prize id; a reload restores the same collection. Demo: DEMO badge shown, a demo round that **won** left wins = 0 / attempts = 0 and showed no prize card; a player taking over mid-demo gets a normal round. `07-settlement` |
-| 8 | — | **not covered** | — | No spec in this suite |
-| 9 | Four themes change cabinet, characters, UI colours and music; a mid-round change is queued | **pass** | F | sakura `#ff8fb3` / storybook `#ff8a6b` / ocean `#6ab8e6` / cosmic `#9b7bff` primaries, four different accents and names; each theme: 18 toys of 6 of its own characters (no id shared between themes), music track = theme; the collection dialog lists 24 characters. Picked Cosmic during LIFTING: theme stays sakura, "pending" shown, the round ends with sakura toys, then the cabinet changes. Dialog text contrast (settings ×8 tabs, theme picker, collection, text on solid backgrounds): 0 texts below 3:1 in all four themes (after fixes 4–6). `09-themes` |
-| 10 | Audio starts after START; volume / mute; track preview; honest output-device UI | **pass** (not heard) | F | `locked` before START; `running` after (AudioContext running, 44.1 kHz, real assets, no fallback synth), music = sakura. Master gain 0.8 → 0.3 as a live preview → 0 when muted → 0.8 after Cancel; music bus 0.55 → 0.2. Preview of the Ocean track plays on its own bus while the game keeps its track. Output device: `setSinkId` exists, the browser lists 0 outputs → the UI shows "The browser did not list any audio outputs." instead of a device list. Mute + Apply survives a reload. Nobody listened: there is no sound device here. `10-audio` |
-| 11 | Settings: preview, cancel, apply, persistence, reset tab, export → import, garbage rejected, clamping | **pass** | F for the first two tests, E for the third | Preview changes the HUD while the stored value stays; Cancel and Escape restore; Apply stores (layout, gameplay, language → `zh-Hans`) and survives a reload; "Reset this tab" resets only that tab and only after Apply. Export: a 6410-byte download without PIN, device ids or anything key-like; import restores the values as a preview; invalid JSON, a foreign JSON, a version-99 file and an array are rejected with a message and change nothing; a hostile file is clamped (`moveSpeed 99 → 0.9`, `toyCount −5 → 6`, `aimTimeLimit 1e9 → 60`, `master 7 → 1`, `renderScale −50 → 0.35`, unknown enum → default, unknown section dropped, PIN not importable). Third test (E): corrupt stored settings are repaired at start; no settings tab shows a raw translation key. `11-settings` |
-| 12 | No key / API unreachable / slow server: playable, local subtitles, never claims GPT | **pass** | E | No key: only `GET /api/ai/status` is called, connection `local`, 3 subtitles (first play, prize, tip) all marked "Local lines", the connection test answers "Not connected: The server has no OpenAI API key; local lines are in use". All `/api` requests aborted: same, playable, a round won. Fake slow server claiming a key: 2 line requests left hanging, the round was won in 3.8 s of wall time meanwhile, the subtitle is a local line, states seen `checking → error`, never `gpt`, the late fake answer never appears. Guide off: no subtitles. No key-like string in the page or in `localStorage`. `12-ai-offline` |
-| 13 | Camera denied / absent → neutral view, status shown | **pass** | E | Before START: state `idle`, 0 camera requests. After START: `NotAllowedError: Permission denied` → `denied`; `NotFoundError: Requested device not found` → `no_device`. Each: one `getUserMedia({ video: {640×480 ideal, 30 fps, facingMode user}, audio: false })`, view source `neutral`, eye fixed at (0, 0.856, 2.698), chip shows the state with "… fixed view", a round is won, Settings → Camera shows "Fixed viewpoint"; test sliders report source `test` and never `tracking`; switching head tracking off shows `off`. `13-camera-denied`, `13-camera-fallback` |
-| 14 | Synthetic camera: starts after START, off ends the track, on restarts | **pass** (camera lifecycle only) | E | Device `fake_device_0`, 640×480, video track only. Model and WASM load from this server; the GPU delegate is skipped on software WebGL, backend `worker-cpu`; 4 inferences at 238 ms each (≈1 per second here — not a performance figure). The test pattern has no face: 0 faces, state `searching`, view source `neutral` — the game does not pretend to track. Head tracking off: the track is `ended`, inference count stops; on: a new stream; Stop / Start buttons likewise. No request left the server, no request carried a body. **Face detection, tracking quality and calibration were not tested.** `14-camera-fake` |
-| 15 | — | **not covered** | — | No spec in this suite |
-| 16 | — | **not covered** | — | No spec in this suite |
-| 17 | Test viewpoint changes the projection only; projection stays off-axis after resize and render-scale change | **pass** | E | Desktop and portrait 86". The four corners of the glass window project onto the four viewport corners for every eye position (largest error 6.7·10⁻¹⁶ NDC); P[8] = −2·ex/W, P[9] = −2·ey/H, P[0] = 2·ez/W, P[5] = 2·ez/H hold to 10⁻⁵; the camera never rotates. Desktop: neutral P[8] = 0; slider x = ±0.25 → P[8] = ∓0.93; y = 0.2 → P[9] −0.94 → −2.24; z = −0.3 → P[0] 2.34 → 1.28. Still exact and asymmetric after resizing the window (1280×720 → 1024×648) and after render scale 0.35 → 0.7 (3D buffer 448×252 → 896×504). HUD rectangles identical before / after; claw and all toy positions identical. Attract mode sways the viewpoint slowly; that sway is off-axis too. `17-viewpoint` |
-| 18 | Graphics preset changed mid-round does not disturb the round | **pass** | E | During LIFTING: custom-low → Safe (3D buffer 960×540) → Medium (1280×720) as live preview: round id, phase, step count, all 18 toy poses, claw pose and physics object counts are **identical**. After Apply: 10 steps later, same toys, largest toy movement 3.76 cm (the toy being lifted), the round finishes with the same id and exactly one result. `18-graphics-midround` |
-| 19 | Ten rounds + theme switches: resources return to the same level; hidden tab mid-round | **pass** | E | 10 rounds (7 won, 3 slipped) with sakura → ocean → cosmic → storybook → sakura: geometries 71 → 71 (max 72), textures 12 → 12, shader programs 40 throughout, rigid bodies 24, colliders 98 → 98, joints 3, 18 toys, JS heap 40 MB throughout. Hidden for 6 s during LIFTING: 0 steps while hidden, audio suspended; after returning 0.125 s (15 steps) in the first 3 frames — no catch-up of the 6 s; all poses finite and inside the cabinet, largest displacement 5.27 cm; the round ends with one result. `19-stability` |
-| 20 | Screenshots of 3 layouts × 4 themes, a win card and the settings dialog per layout | **produced and reviewed** | see run record | 18 JPEGs, 95–209 KB, in `docs/screenshots/`. Defects seen are listed below. `20-screenshots` (skipped unless `PLUSH_SHOTS` is set) |
-
-Items **8, 15 and 16** of the acceptance list have no spec in this browser
-suite and are **not covered** here. Whatever they need (visual judgement of
-plush softness, calibration with a real camera and person, performance on the
-target hardware) cannot be established in this container; see "Verified here /
-needs real hardware" in the README.
-
-## Product defects found by these tests
-
-### Fixed (small changes in `public/`, `src/ui/`, `src/app/`)
-
-| # | Defect | Fix |
-| --- | --- | --- |
-| 1 | `index.html` referenced `/favicon.svg`, which did not exist → a 404 on every load | Added `public/favicon.svg` |
-| 2 | Portrait 86": the theme chip in the top bar was a **button** at y = 0.03–0.045, outside the interactive zone 0.25–0.75 (the spec allows only the top-right "i" up there) | `src/ui/Hud.tsx`: where the top bar lies outside the interactive zone the chip is a plain label; themes open from the control panel |
-| 3 | Settings → AI Guide → "Test connection" / "Preview voice" printed the raw placeholders, e.g. `Not connected: {detail} · The server has no OpenAI API key…` | `src/ui/settings/tabsB.tsx`: the detail is passed into the translated string (now `Not connected: The server has no OpenAI API key; local lines are in use`) |
-| 4 | Cosmic (the dark theme): unselected segmented options, notes, inputs, selects, key/value boxes, theme cards and collection cards were **white text on white** (≈1.1:1) | `src/ui/hud.css`: light surfaces always use dark text |
-| 5 | Cosmic: section headings, dialog titles and the direction arrows were drawn in the deep primary on dark surfaces (2.63:1) | `src/ui/hud.css`: these use the theme's light glow colour on Cosmic |
-| 6 | Sakura / Storybook / Ocean: the selected tab and selected segmented option were white on the pastel primary (2.14 / 2.31 / 2.18:1) | `src/ui/hud.css`: selected states use the deep primary. Measured after the fix: no dialog text on a solid background below 3:1 in any theme |
-
-Also added: read-only getters in the `?debug=1` API (`memory`, `bodies`, `audio`,
-`guide`, `tracker`, `ui`, `settings`, `collection`) in `src/app/Game.ts`.
-
-### Open (reported, not fixed)
-
-| # | Where | Behaviour | Repro |
+| Spec · test | Full run | Alone | Evidence |
 | --- | --- | --- | --- |
-| A | `src/ai/GuideDirector.ts` `probe()` (`STATUS_TIMEOUT_MS = 4000`) | If the page is blocked for more than 4 s while it boots (here: software GL compiling shaders), the status request is aborted by its own timer although the server answered. The guide then says "AI server not reachable: local lines" and only asks again after 60 s. With a real key that means up to a minute of local lines after a slow start. Harmless without a key. | Headless Chromium, `/api/ai/status` answering `configured: true`, boot: `__plush.guide().status.detail` is "AI server not reachable…" until `probe(true)` |
-| B | `src/app/AdaptiveQuality.ts` `STEPS` + `src/ui/settings/tabsA.tsx` (graphics note) | The "Auto optimiser active: …" note lists internal step ids (`particles, bloom, scale90, scale80, scale70, shadows`) instead of readable, translated labels, and lists every scale step instead of the current one | Preset Medium with Auto optimise on a slow machine, open Settings → Graphics |
-| C | `src/ui/hud.css` `.pp-status` (desktop layout) | The status line below the play field has no backing or outline; on Cosmic the first words of "Tap START to play — it's free!" lie over the brightly lit prize chute and are nearly invisible | `docs/screenshots/desktop-cosmic-attract.jpg` |
-| D | HUD control panel (`.pp-panel`) in both portrait layouts | The panel is translucent and sits in front of the cabinet's 3D front: the round "PLUSH PORTAL" badge is cut in half by the panel edge, and light strips / the round opening show through the panel as faint lines and rings | `docs/screenshots/portrait32-*-attract.jpg`, `portrait86-*-attract.jpg` |
-| E | `src/ui/Hud.tsx` `DirButton` | Robustness note, not reproduced with real input: release relies on pointer capture. If `setPointerCapture` ever fails, a `pointerup` outside the button would not reach it and the direction would stay pressed until blur / pause. A window-level `pointerup` / `pointercancel` listener while pressed would close that gap. | Only with a synthetic sequence that releases the capture before the browser has established it |
+| `01-load` · no console errors, no failed requests, boots to attract | pass | — | 97 requests, all same-origin, boot 5.6 s, 0 console errors, 0 uncaught exceptions, 0 failed / ≥ 400 responses; one app-log warning "Stored settings were incomplete… repaired" (the test seeds only the graphics section) |
+| `01-load` · first run without a preset: device chooser inside reach, dismissible | pass | — | 4 device cards |
+| `02-rounds` · desktop 1280×720, buttons only, real-time aim | pass | — | 6 presses, aim error 1.4 cm → won `sakura.monster` → win card → PLAY AGAIN |
+| `02-rounds` · portrait32 1080×1920 | pass | — | won on the 1st centred grab, PLAY AGAIN |
+| `02-rounds` · portrait86 2160×3840 | pass | — | won on the 1st centred grab, PLAY AGAIN |
+| `02-rounds` · presets keep their own layout across reloads | pass | — | |
+| `03-safe-zone` · 1080×1920: HUD, tutorial, every settings tab, theme picker, collection, win card | pass | — | panel 0.528–0.672 (centre 0.600 = anchor 0.6), START 0.556–0.632, menu row 0.643–0.665, dialog 0.258–0.742, win card 0.296–0.535, PLAY AGAIN 0.489–0.524 |
+| `03-safe-zone` · 2160×3840 | pass | — | same normalised zones; START 292×292 px, direction button 132 px |
+| `04-settings-dialog` · desktop / portrait32 / portrait86 (3 tests) | pass ×3 | — | dialog 905×691 / 1004×1843 / 874×929; tab list left (184 / 276 / 182 px), content right; Graphics tab 1543 / 2879 / 1629 px scrolls inside 574 / 1643 / 802 px |
+| `04-settings-dialog` · short window 900×480 | pass | — | dialog 603×456, tab list 379 px in 379 px (no real overflow occurred, so only reachability is shown) |
+| `05-input` · hold / release, lost capture, blur, hidden tab, dialog | pass | pass | |
+| `05-input` · typing in a settings field | pass | pass | no movement, no grab |
+| `05-input` · keyboard, diagonals | pass | pass | straight 0.420 m/s, diagonal 0.420 m/s (0.297 + 0.297) |
+| `05-input` · two-finger touch diagonal, `touchcancel` | **fail** (test bug 1) | **pass** | two-finger diagonal 0.420 m/s |
+| `06-outcomes` · centre grab wins; 2nd GRAB ignored; one award | pass | — | won on try 1, grip quality 0.62 |
+| `06-outcomes` · empty spot | pass | — | nearest toy 38.6 cm away → `empty`, contact `none`, nothing awarded |
+| `06-outcomes` · off-centre can slip | pass | — | 7 rounds: 4.5 cm off ×4 won (q 0.28–0.37); 6 cm off: 2 won, 1 **slipped (eccentric, during LIFTING, q 0.11)** |
+| `07-settlement` · collection changes only at the chute sensor, once | pass | — | award and sensor in the same step (1188), toy inside the chute; restart during TRANSPORTING gives no credit |
+| `07-settlement` · demo rounds never touch the collection | pass | — | demo round won, collection unchanged; take-over during DESCENDING |
+| `09-themes` · five themes swap cabinet, characters, UI colours, music | pass | — | sakura `#ff8fb3`, storybook `#ff8a6b`, ocean `#6ab8e6`, cosmic `#9b7bff`, gpu `#76b900`; 18 toys of the theme's own 6 (GPU: 7) characters; music track = theme each time; collection lists 31 characters |
+| `09-themes` · dialog text contrast in every theme | pass | — | 0 texts below 3:1 in all five themes |
+| `09-themes` · theme picked mid-round waits | pass | — | Cosmic picked during LIFTING: stays sakura, "pending", changes after the round |
+| `10-audio` · locked → running; volume, mute, preview, output device | pass | — | after START: context running 44.1 kHz, music `sakura`, `usingFallbackSynth` false (logged, not asserted); master 0.8 → 0.3 preview → mute → Cancel 0.8; Ocean preview on its own bus; `setSinkId` present, 0 outputs listed → explanatory note; mute survives reload |
+| `11-settings` · preview, cancel, apply, persistence, reset tab | pass | — | language → `zh` gives `<html lang="zh-Hans">`, survives reload |
+| `11-settings` · export / import, garbage rejected, clamping, no secrets | pass | — | export 8397 bytes, 9 sections, nothing key-like; hostile file clamped (`moveSpeed` 0.9, `toyCount` 6, `aimTimeLimit` 60, `master` 1, …) |
+| `11-settings` · corrupt stored settings repaired; no raw translation keys | pass | — | |
+| `12-ai-offline` · no key | pass | — | only `GET /api/ai/status` called; 4 local subtitles (first play, grab, prize, tip); test button: "Not connected: The server has no OpenAI API key; local lines are in use" |
+| `12-ai-offline` · API unreachable | pass | — | same, playable |
+| `12-ai-offline` · slow fake server claiming a key | pass | — | round won in 16.7 s wall time while 2 line requests hung; local lines only; states `checking → error`, never `gpt` |
+| `12-ai-offline` · guide off | pass | — | no subtitles |
+| `13-camera-denied` | **fail** (test bug 1) | **pass** | `NotAllowedError: Permission denied`; one `getUserMedia({video 640×480 ideal, 30 fps, user}, audio:false)`; eye fixed at (0, 0.856, 2.698); "Fixed viewpoint" |
+| `13-camera-fallback` · no camera | **fail** (test bug 1) | **pass** | `NotFoundError: Requested device not found` → `no_device`, same fixed eye |
+| `14-camera-fake` (project `camera-fake`) | **fail** (test bug 1) | **pass** | `fake_device_0` 640×480, video only; GPU delegate skipped on software GL → `worker-cpu`; 4 inferences, 0 faces → `searching`, view source `neutral`; off ends the track, on restarts; no request with a body |
+| `17-viewpoint` · desktop 1280×720 | pass | — | window corners → NDC corners for every eye (max error 6.7·10⁻¹⁶); x ±0.25 → P[8] ∓0.93; y 0.2 → P[9] −0.94 → −2.24; z −0.3 → P[0] 2.34 → 1.28; still exact after resize 1280×720 → 1024×648 and render scale 0.35 → 0.7 |
+| `17-viewpoint` · portrait86 1080×1920 | pass | — | same invariants (max error 4.4·10⁻¹⁶); after resize 864×1728 and render scale change |
+| `18-graphics-midround` | pass | — | during LIFTING: custom-low → Safe (1116×627) → Medium (1280×720) preview: round, phase, steps, 18 toy poses, claw identical; after Apply largest toy movement 3.54 cm (the lifted toy), one result |
+| `19-stability` · ten rounds + theme switches | **fail** (test bug 2) | **pass** | 10 rounds (5 won, 5 slipped) over sakura → ocean → cosmic → storybook → sakura: geometries 62 → 62 (max 63), textures 32 → 32, programs 21, bodies 24, joints 3, 18 toys; toy colliders = their proxies at all 10 checkpoints (75, 75, 93, 95, 78, 78, 72, 72, 75, 78), the other colliders 23 at every checkpoint, 0 stale handles; JS heap 54 MB throughout |
+| `19-stability` · hidden tab mid-round | pass | pass | 0 steps while hidden, audio suspended; 0.125 s (15 steps) in the first 3 frames after 6 s hidden — no catch-up; largest toy displacement 5.62 cm; one result |
+| `20-screenshots` · desktop / portrait32 / portrait86 (3 tests) | skipped | — | only run with `PLUSH_SHOTS` set; not run this round (see item 20 below) |
+| `21-points` · demo track vs player track | pass | — | demo win (`sakura.tanuki`) scored 300 on the DEMO track, player best / lifetime 0, nothing stored; player win settled once: 850, stored `{best 850, lifetime 850}` |
+| `22-idle-attract` · idle reset on 86" (touch) | pass | — | reset after 13.9 s wall time with `idleSeconds` 10: dialog closed, session cleared, light show `attract`; call to action 512×167 px at y 0.344–0.430 (inside 0.25–0.75), larger than START (y 0.555–0.632) |
+| `23-frame` · portrait32 in 1280×720 | pass | — | root, canvas and HUD 405×720 at x 437; score popup inside the box (611, 316) |
+| `23-frame` · portrait86 in 1280×720 | pass | — | same box; popup at (621, 253) |
+| `23-frame` · 9:16 window used whole | pass | — | no box, no surround |
+| `24-phone` · 844×390, taps, a full round | pass | — | profile `mobile`, landscape; D-pad 200 px, action 140 px, menu buttons 44 px, no overlaps; hold ▶ 0.3 s moved the claw 0.060 → 0.264, stopped at 0.274 (wall 0.370); round 2 won (`sakura.capybara`) |
 
-## Visual review of the screenshots
+Totals: full run 41 / 5 / 3 (pass / fail / skip); after the fixes every non-skipped test has passed on this
+build (46 pass, 0 fail, 3 skip), the five fixed ones only in their own re-run.
 
-`docs/screenshots/` holds 18 JPEGs (95–209 KB): `{desktop,portrait32,portrait86}-{sakura,storybook,ocean,cosmic}-attract.jpg`,
-`…-win.jpg`, `…-settings.jpg`. Desktop is 1280×720, both portrait layouts are
-1080×1920. Graphics preset **Medium** with the automatic optimiser switched off
-(on software GL it would otherwise strip particles, bloom, shadows and lower
-the 3D resolution, and the pictures would not show the preset). Rendered by
-SwiftShader: anti-aliasing and timing differ on a real GPU; no claim is made
-about how it looks on a physical 32" or 86" screen.
+## Failures in the full run and how they were classified
 
-Every picture was looked at. What is right: the cabinet, glass, claw, prize
-chute and the six characters of each theme are visible in all three layouts;
-the four themes are clearly distinct in palette, wallpaper, decorations and
-characters; the portrait 86" control panel sits in the middle band of the
-screen with the toys above it; dialogs and the win card are inside that band;
-the won toy is visible in the prize tray behind the win card.
+| # | Tests | What failed | Classification | Fix (test-only) |
+| --- | --- | --- | --- | --- |
+| 1 | `05-input` touch, `13-camera-denied`, `13-camera-fallback`, `14-camera-fake` | The first three create their own browser context with `baseURL: 'http://127.0.0.1:8799'`, so with `PLUSH_E2E_PORT=8811` they got `net::ERR_CONNECTION_REFUSED` on the first `goto`. `14-camera-fake` counted every request not starting with `http://127.0.0.1:8799/` as "left the server": all 122 flagged URLs were `http://127.0.0.1:8811/…`. | **Test bug** — the specs ignored the port the config already makes configurable. With the default port they would pass. | Use Playwright's configured `baseURL` fixture (`05-input.spec.ts`, `13-camera-denied.spec.ts`, `13-camera-fallback.spec.ts`), and compare with its origin (`14-camera-fake.spec.ts`). |
+| 2 | `19-stability` ten rounds | `expect(last.colliders).toBe(first.colliders)`: 98 at the start of sakura, 101 after round 10 (sakura). | **Test bug.** A toy has one collider per collision proxy and characters have different numbers of proxies; a won toy is restocked with another character, so the total follows the field's composition. In the failing run the total only changed after won rounds, never after slips. The re-run's split proves it: toy colliders equalled the proxies of the toys on the field at every checkpoint, the other (cabinet / claw / sensor) colliders stayed at 23 throughout, no stale handle. | `counts()` now also reports toy colliders, their proxies, the other colliders and stale handles; the test asserts toy colliders = proxies and no stale handle at every checkpoint and the other colliders unchanged at every checkpoint (stricter than before, across all themes), instead of an equal total. |
 
-Concrete defects seen:
+Note: the edits to the four port specs were made while the full run was in progress (before those specs were
+reached), but Playwright kept the version it had loaded at start, so the full run still failed them; they were
+re-run afterwards. **No product bug was found by this run.** No spec was flaky in the sense of failing and
+then passing unchanged.
 
-1. **Desktop, Cosmic** — status line partly unreadable over the bright prize chute (open defect C).
-2. **Portrait 32" and 86", all themes** — the 3D "PLUSH PORTAL" badge is half hidden behind the control panel; cabinet light strips and the round opening show through the translucent panel (open defect D).
-3. **Portrait 86"** — the lower 40 % of the screen shows only the cabinet base (prize door, round opening). That keeps controls reachable, but a large part of the picture carries no play content.
-4. **All layouts** — the attract-mode demo is not part of the pictures (they are taken before it starts); Momo has no speech bubble in attract mode.
-5. **Win card, Cosmic** — the three `*-win.jpg` were taken while the card title used the light glow colour, which is weak against the bright centre of the card. The final stylesheet keeps the original deep purple for that title; the pictures were not retaken after that one-line change.
-6. **Before the fixes above** the Cosmic settings dialog showed white-on-white option pills and an unreadable info box; the committed `*-settings.jpg` were retaken after the fix and are readable.
+## Coverage map — original acceptance items (round 1)
+
+"e2e" = browser specs above (run on this build); "unit" = Vitest files under `tests/unit` (all passing on
+sources A).
+
+| # | Item | Covered by | Status here |
+| --- | --- | --- | --- |
+| 1 | Clean install, dev start, production build, no blocking console errors / 404s | `npm run build`; e2e `01-load` (production build) | Build and production load verified. Clean `npm ci` and `npm run dev` **not run** in this session (see above). |
+| 2 | Desktop, 1080×1920, 2160×3840 each complete a round; presets don't overwrite each other | e2e `02-rounds` (4); unit `layout/solve`, `settings/store` | Verified (viewports only) |
+| 3 | 86": start / direction / grab / result / play again / theme / close-settings in y 0.25–0.75 | e2e `03-safe-zone` (2), `22-idle-attract` (call to action); unit `layout/solve` | Verified at 1080×1920 and 2160×3840 (not on a panel) |
+| 4 | "i" and central entry open the same dialog; tabs left / content right | e2e `04-settings-dialog` (4) | Verified; tab-list overflow scrolling itself never occurred |
+| 5 | Hold-to-move, release, diagonals, blur, pointer cancel, dialog pause | e2e `05-input` (4), `24-phone`; unit `layout/phoneBehaviour` | Verified with synthetic events, not real touch hardware |
+| 6 | Empty grab, win, grip-then-slip are real physical paths; one grab per round; no double settlement | e2e `06-outcomes` (3), `07-settlement`; unit `game/rounds`, `game/RoundMachine` | Verified |
+| 7 | Prize counts only after it enters the exit; reset / theme switch / repeats never double-award | e2e `07-settlement` (2), `21-points`, `09-themes` (mid-round switch); unit `core/collection`, `game/RoundMachine`, `game/scoring` | Verified |
+| 8 | Dents, sag, sway, squash / rebound, release recovery visible; no obvious clipping | — | **Not covered.** Needs a person looking at it on a real GPU. |
+| 9 | Themes differ in characters, finish, lighting, UI, music, win feedback | e2e `09-themes` (3); unit `themes/*`, `audio/music` ("tracks are different pieces"), `audio/studio`, `fx/aura` (motif per theme) | Ids, palettes, casts, music track and stinger files differ per theme (measured). Finish / lighting / look **not judged** here. |
+| 10 | Music and main SFX play; volume, mute, preview, AI ducking | e2e `10-audio`; scratch audio check below; unit `audio/engine`, `audio/studio`, `ai/speech` (music duck while the guide speaks) | Engine state, gains, decoded studio files and the SFX calls verified. **Nothing was heard.** |
+| 11 | Settings preview / cancel / save / reset / import / export, persistence | e2e `11-settings` (3); unit `settings/*` | Verified |
+| 12 | No key / offline / AI timeout / voice unavailable: game and local subtitles work | e2e `12-ai-offline` (4); unit `ai/director`, `ai/probe`, `ai/speech` (system / local voice fallback), `server/app` | Verified for no key, aborted API, fake slow server; voice fallback unit-tested only |
+| 13 | Camera denied / ignored / missing / busy → fixed viewpoint | e2e `13-camera-denied`, `13-camera-fallback`; unit `tracking/cameraSource` (`NotReadableError` etc. → `in_use`), `tracking/faceTracker` (unanswered prompt never blocks) | Denied and missing verified in the browser; ignored and busy unit-tested only |
+| 14 | Tracking off stops the video track; on recovers; status accurate | e2e `14-camera-fake`; unit `tracking/faceTracker` | Verified with the synthetic camera (lifecycle only) |
+| 15 | Repeatable off-axis maths tests | unit `perspective/offAxis` (17), `perspective/OffAxisCamera` (12), `perspective/simulatedScreen` (6); e2e `17-viewpoint` | Verified |
+| 16 | Real camera: lateral / vertical / depth, head turn, loss / re-acquire, bystander | unit tests on **synthetic** landmarks only (`tracking/eyeEstimator`, `headPose`, `primarySelector`, …) | **Not covered — needs a real camera and a real person.** Not faked. |
+| 17 | Tracking never moves the claw; HUD does not drift; projection survives resize / dynamic resolution | e2e `17-viewpoint` (2); unit `core/independence`, `tracking/viewpointController` | Verified with the test viewpoint (not with real tracking) |
+| 18 | Graphics quality never changes physics, win conditions, prize count, layout | e2e `18-graphics-midround`; unit `core/independence` ("never reads graphics settings"), `scene/graphicsTiers` | Verified |
+| 19 | Many rounds / theme switches: no resource growth; background / return safe | e2e `19-stability` (2); unit `fx/pooling` (no pool growth after 60 rounds) | Verified (counts in software GL; no GPU memory measurement) |
+| 20 | Screenshots of the layouts and themes; fix clipping / covered buttons / overflow / glare / unclear characters | e2e `20-screenshots` (skipped by default) | **Not redone this round.** `docs/screenshots/` still holds the 18 round-1 pictures (2026-11-24 07:57–08:19 UTC: four themes, no GPU Party, no phone layout, no score HUD or call to action). They do not show this build. |
+
+## Coverage map — round-2 requests
+
+| # | Request | Covered by | Status here |
+| --- | --- | --- | --- |
+| R1 | Very high-precision models, materials, textures, environment | unit `plush/library`, `plush/manifest`, `plush/material`, `plush/importGenerated`, `scene/graphicsTiers`, `scene/texgen`, `scene/toyVisuals`; e2e `01-load` (all textured assets load, no 404) | Loading, LOD / texture-tier choice and fallbacks verified. **Visual quality not judged** — needs eyes on a real GPU. |
+| R2 | Supplied OpenAI key is the default; replaceable in Settings | unit `server/keys` (21), `server/app` (37), `server/config`, `server/sdk-integration` (mock OpenAI) | Server-side key logic unit-tested with fake keys. **Not covered by e2e by design** (the suite must run keyless); e2e `11` / `12` only show that no key-like string reaches the page, the export or `localStorage`. Live use of the real key: not tested here. |
+| R3 | Playable on (widescreen) phones, 32" and 86" | e2e `24-phone`, `02-rounds`, `03-safe-zone`, `23-frame`; unit `layout/phoneLayout`, `phoneBehaviour`, `phoneCss`, `labelFit` | Verified in emulation (844×390 phone, 1080×1920, 2160×3840). **Real phones / panels not tested.** Upright phone and other phone sizes: unit only. |
+| R4 | Points per toy triggering special, particle and light effects | e2e `21-points`; unit `game/scoring`, `game/rarity`, `persistence/scores`, `fx/tiers`, `fx/aura`, `fx/pooling`, `fx/scaling`, `fx/render` | Scoring, settlement-once, demo track, storage verified; effect escalation by tier unit-tested (counts, modes). **How "cool" it looks: not judged.** |
+| R5 | Camera on phone and computer for the naked-eye 3D effect | e2e `14-camera-fake` (desktop, synthetic camera); unit `tracking/devicePolicy`, `cameraTransform` (sensor rotation / mirror), `backends`, `server/tls` (HTTPS for phones) | Camera lifecycle on desktop Chromium only. **No phone camera, no face, no 3D effect seen.** |
+| R6 | NVIDIA-keynote-style theme (original "Keynote Chief", plush GPU items, pile, own SFX and music) | e2e `09-themes` (GPU Party: 7 own characters, own palette, own music track); unit `themes/gpuTheme`, `themes/gpuDesigns`, `audio/gpu`; scratch audio check (own takes, stingers, 7 voices) | Theme content and audio files verified. Cuteness, likeness and trademark questions are not testable here (see README). |
+| R7 | Camera on → 3-second countdown → current head direction / eye position becomes the baseline; adjustable in Settings | unit `tracking/countdown` (16), `countdownTracker` (13), `autoCalibration` (13), `baseline` (7), `calibrationOverlay` (5) | **Unit tests on synthetic faces only.** No e2e (the synthetic camera has no face, so a countdown can only fail with `no_face`). Needs a real camera and person on each device. |
+| R8 | Idle N s → full reset into a self-playing demo with win effects; big central "tap to start" | e2e `22-idle-attract`, `07-settlement` (demo never counts), `21-points` (demo track); unit `game/attract` (real physics), `app/demoPilot` | Verified on 86" emulation (reset, dialog closed, call to action in the band, demo wins scored on the DEMO track). The look of the call to action and the effects: not judged. |
+| R9 | English default, Chinese switchable; AI still speaks English after switching | e2e `11-settings` (switch to `zh` → `zh-Hans`, persists); unit `settings/spec` (default `en`), `ai/probe` ("English by default, whatever the interface language"; English local lines with a Chinese UI), `i18n/completeness` | UI switch and the guide-language rule verified; **spoken GPT English not heard / not tested live** (no key). |
+| R10 | 32" and 86" modes simulate a 9:16 portrait screen | e2e `23-frame` (3); unit `layout/frame` (22), `perspective/simulatedScreen` (6) | Verified (405×720 box in a 1280×720 window, popups inside the box, projection uses the simulated panel) |
+| R11 | Dramatic, game-like SFX; different plushies sound different; detailed, finished, per-theme music | e2e `10-audio`, `09-themes` (music track per theme); scratch audio check below; unit `audio/studio` (29), `audio/studioAnalysis` (7), `audio/music` (11), `audio/gpu` (5), `audio/engine`, `audio/sfx`, `audio/synth` | Wiring and files verified: every theme plays its own two studio takes, a won toy triggers **its own** recorded voice on lift and win, tiered win stingers, and the effect layer. Unit tests measure loudness, loop seams and cross-fades. **Nobody listened**, so drama, "real game music" quality and musical fit are unjudged (the two takes of a theme are in different keys — see docs/AUDIO.md). |
+
+### Scratch audio check (item 10, R6, R11), not part of the suite
+
+A one-off script (`<scratch>/final-v1/audio-check.cjs`, sources B) against my own keyless server (port 8812,
+`/api/ai/status` → `configured: false`): for each theme, boot with `?theme=<id>&camera=off`, press START,
+wrap the engine's `playSfx` / `playWin` / `playCharacter`, play centred grabs until a win, and record the
+fetched `/audio/` files and, for each character call, whether the started sound is that character's own
+decoded studio voice buffer.
+
+| Theme | Music | Won toy (tier) | Character voice | Fetched |
+| --- | --- | --- | --- | --- |
+| sakura | "running; studio music", studio player on `sakura_a` / `sakura_b` | `sakura.monster` (epic) | own voice on lift and win | 6 voices, win + jackpot stingers of sakura |
+| storybook | studio, `storybook_a` / `_b` | `storybook.dino` (rare) | own voice on lift and win | 6 voices, storybook stingers |
+| ocean | studio, `ocean_a` / `_b` | `ocean.jellyfish` (epic) | own voice on lift and win | 6 voices, ocean stingers |
+| cosmic | studio, `cosmic_a` / `_b` | `cosmic.starbear` (rare) | own voice on lift and win | 6 voices, cosmic stingers |
+| gpu | studio, `gpu_a` / `_b` | `gpu.chief` (legendary) | own voice on lift and win | 7 voices, gpu stingers |
+
+Sequence in every won round: `grab_confirm → claw_descend → claw_touch → claw_close → plush_rub → claw_lift →
+voice(lift) → claw_open → chute_drop → playWin(theme, tier) → voice(win) → score_count → collect_unlock`.
+0 HTTP errors; the only console messages were SwiftShader / three.js performance warnings. The manifest has
+31 distinct voice files for 31 characters. This proves which sounds are triggered and loaded, not how they
+sound.
+
+## Earlier findings (round 1), not re-checked by this run
+
+Round 1 listed open defects A–E (AI status probe aborted by a busy boot, untranslated optimiser step ids,
+the Cosmic status line over the bright chute, the translucent portrait panel over the 3D badge, release
+relying on pointer capture). Round-2 work reports a fix for A (unit `ai/probe` "robust against a busy page
+and a slow start") and for B (translated optimiser labels); C, D and E were not re-examined here, and none of
+them is visible to the specs above. They need the screenshot pass (item 20) or a manual check.
 
 ## Flakiness and timing
 
-* No test failed intermittently once written correctly; there are no retries.
-* Results that depend on grip tuning are written to tolerate re-tuning: a win is
-  looked for over up to 8 centred grabs (the first grab won in every run so
-  far), a slip over up to 16 off-centre grabs (found on the 7th in the last runs).
-  If the physics is re-tuned so that centred grabs stop winning or nothing ever
-  slips, these tests fail — which is the intent.
-* The real-time, buttons-only aiming test depends on machine speed; it
-  converged in 3–6 presses with 1.1–1.4 cm error here and takes longer on a loaded machine.
-* Dialogs pop in with a 260 ms scale animation; measuring a rectangle before it
-  ends gives a size 18 % too small. The helpers wait for finite animations (`settle`).
-* `__bootDone` is set before the first frame is on screen; on software GL the
-  first frames (shader compilation) can block the page for 10–25 s.
-* Changes of the internal 3D resolution are applied at the start of the next
-  rendered frame; the specs poll for them.
+* No test failed and then passed unchanged. The five failures above were deterministic test bugs.
+* Outcomes of a seeded plan vary between runs: rendered frames between debug calls also advance real game
+  time, so `19-stability` saw 6 / 4 / 0 (won / slipped / empty) in the full run and 5 / 5 / 0 in the re-run
+  with the same aims. Specs that need a win or a slip look for one over several grabs (up to 8 centred, up to 16
+  off-centre) for this reason.
+* The real-time, buttons-only aiming test depends on machine speed (6 presses, 1.4 cm here).
+* Slowest files: `09-themes` 11.7 min (the contrast scan over 5 themes is 7.6 min), `11-settings` 5.7 min,
+  `04-settings-dialog` 5.7 min. The whole suite took 63.6 min on this loaded 4-core machine.
+* The first frames after boot (shader compilation on software GL) can block the page for 10–25 s; changes of
+  the internal 3D resolution apply at the next rendered frame, so specs poll for them.
 
 ## Run record
 
-| Build | Sources | When (UTC, 2026-11-24) |
+| When (UTC, 2026-11-24) | What | Sources | Result |
+| --- | --- | --- | --- |
+| 17:03 | type checks, `npx vitest run`, `npm run build` | A | pass (953 / 953 unit tests) |
+| 17:04:45 – 18:08:19 | `PLUSH_E2E_PORT=8811 PLUSH_E2E_DIST=<scratch>/dist-e2e npm run e2e -- --trace off` | A | 41 passed, 5 failed, 3 skipped |
+| 18:10 – 18:17 | `npx playwright test tests/e2e/<spec>.spec.ts --trace off` for the five failing specs, one at a time | B | 9 / 9 tests passed |
+| 18:18 – 18:20 | scratch audio check, 5 themes | B | see above |
+
+Logs and the audio-check output are in the session scratch folder `final-v1/` (`e2e-full.log`,
+`rerun-*.log`, `audio-check.json`); they are not part of the repository.
+
+## Post-verification fixes (2026-11-24, 18:50 – 19:52 UTC)
+
+Targeted fixes from the completeness critic's must-fix list, applied after the runs above. Rows above
+are unchanged; where they disagree with this section, this section is newer.
+
+| # | Fix | Files | Checked by |
+| --- | --- | --- | --- |
+| 1 | Guide facts use the guide's language (`guideLanguage`), so a Chinese UI no longer puts Chinese toy names into English lines, GPT prompts or the voice | `src/app/Game.ts` | new e2e `12-ai-offline` "Chinese interface: …": zh UI, real win, line "First time catching Marumon! …" (no CJK, English name). This adds the toy-name case the R9 row lacked. |
+| 2 | Jackpot beam strobe 3 Hz → 2 Hz (`JACKPOT_STROBE_HZ`) | `src/scene/fx/constants.ts`, `LightShow.ts` | new unit `fx/scaling` "strobe stays below 3 Hz" (period ≥ 0.45 s; fails with 3 Hz) |
+| 3 | Studio takes in different keys no longer overlap: fade out to the out point, then the next take from its in point with a 0.3 s fade-in (all 5 shipped pairs differ) | `src/audio/studio/playlist.ts` | new unit `audio/studio` plan test (incoming start ≥ fade end, late hand-overs, every shipped pair) and a `StudioPlayer` schedule test; existing cross-fade tests and `studioAnalysis` unchanged and passing |
+| 4 | Voices shorter than 0.4 s (astronaut 0.10 s, tanuki 0.26 s, bot 0.35 s) get the character's own squeak layered under them | `src/audio/AudioEngine.ts`, `src/audio/studio/moments.ts` | new unit `audio/studio`: a 0.10 s voice starts 2 sources, a 1.49 s voice 1. No voice was regenerated; capybara is still about 6 dB under its target. |
+| 5 | Attract mode is no longer silent: theme selected and `unlock()` tried at boot; any pointerdown / pointerup / touchend / keydown unlocks while `locked` | `src/app/Game.ts` | e2e `10-audio` (new attract test; the "locked until START" test now emulates an autoplay block, because Playwright's Chromium always allows autoplay, even with `--autoplay-policy`) |
+| 6 | Phone preset: while `camPos` is the default, the lens position follows `screen.orientation.angle` (90 left, 270 right, 0 top), refreshed on orientation `change` (a 90 ↔ 270 turn fires no resize) | `src/perspective/windowGeometry.ts`, `src/app/Game.ts` | new unit `layout/windowGeometry` (angles 0 / 90 / 270, user value kept); built app in Chromium phone emulation via CDP: 90 → [−0.051, 0, 0], 270 → [0.051, 0, 0], 0 → [0, 0.051, 0]. Not tried on a phone. |
+| 7 | Phone calibration card buttons 40 → 44 px | `src/ui/calibration.css` | layout check at 844×390, en / ja / zh, four card states: every button 44 px tall, the ja failure card is 108 px in its 108 px region (no clip, no overflow) |
+| 8 | GPU Party: dark lettering (#10140c) on filled buttons and the call to action (white was 2.4:1 on the primary, 1.6:1 on the accent) | `src/ui/hud.css` | new e2e `09-themes` "GPU Party: filled buttons …": START 11.9, call to action 7.7, GRAB 7.7, PLAY AGAIN 11.9 (both) : 1 |
+| 9 | Screenshot spec: phone 844×390 and the 86" preset simulated in 1280×720 added; demo rounds off for the pictures (a theme switch outlasted the 1.6 s demo delay and the spec failed on "READY") | `tests/e2e/20-screenshots.spec.ts` | `PLUSH_SHOTS=1`: 5 / 5 passed, 38.1 min; `docs/screenshots/` replaced by 35 pictures of this build (5 layouts × 5 themes in attract, plus a win card and the settings dialog per layout) |
+| 10 | Docs: GPU row in the synthesised-music table, the key-aware hand-over, short-voice squeak and boot unlock | `docs/AUDIO.md`, `docs/ARCHITECTURE.md` | — |
+
+Not covered by the fixes, and still open: the pastel themes also draw white lettering on light faces
+(about 1.7–2.4:1 by the same formula, with a dark text shadow that the formula ignores); the phone win
+card still overlaps the menu row (visible in `mobile-win.jpg`); the GPU float, the tension cue and the
+other optional items of the critic's list were not attempted.
+
+| When (UTC) | What | Result |
 | --- | --- | --- |
-| **F** | The sources of commit `93094b4` (commit `c8b15d3` plus the `src/ui/hud.css` and `src/ui/settings/tabsB.tsx` fixes listed above) | `npm run e2e`, started 08:20:32 |
-| **E** | The working tree between commits `94e3786` and `c8b15d3`, 07:10–07:45: fixes 1–3 present, grip tuning of `c8b15d3` possibly still in progress, **before** the `hud.css` contrast fixes 4–6 | single-file runs |
+| 18:58, 19:53 | `tsc --noEmit` (both configs) | exit 0 |
+| 19:05 | `npx vitest run` | 958 / 958 passed (84 files) |
+| 19:07 | clean copy (`git ls-files`, no `node_modules`, `.env`, `.data`) → `npm ci` (exit 0) → keyless `npm run dev` (`OPENAI_API_KEY=` `PLUSH_KEY_MANAGEMENT=off`) | Vite on 5174, API `configured:false`, source `none`; the page booted to ATTRACT with frames advancing, 0 console errors; `npm run typecheck` exit 0 |
+| 19:07 – 19:10 | e2e `01-load`, `10-audio` | 4 / 4 passed |
+| 19:11 – 19:13 | e2e new `12` zh and `09` GPU tests | 2 test-selector bugs fixed in the new tests, then passed |
+| 19:14 – 19:19 | e2e `05-input`, `22-idle-attract`, `24-phone` | 6 / 6 passed |
+| 19:19 – 19:31 | e2e `09-themes`, `12-ai-offline` (whole files) | 9 / 9 passed |
+| 19:14 – 19:52 | e2e `20-screenshots` with `PLUSH_SHOTS=1` | 5 / 5 passed |
 
-**Last full run (`npm run e2e`, build F): 27 passed, 13 failed, 3 skipped, 17.0 min.**
-
-* The 27 passes are every test of `01-load`, `02-rounds`, `03-safe-zone`,
-  `04-settings-dialog`, `05-input`, `06-outcomes`, `07-settlement`, `09-themes`,
-  `10-audio` and the first two tests of `11-settings`.
-* All 13 failures are `net::ERR_CONNECTION_REFUSED` on the first navigation:
-  the test server on port 8799 stopped answering at about 08:36 while the run
-  was in progress (the workspace was being changed by other work at that time;
-  the cause was not established). They are the third test of `11-settings` and
-  all of `12-ai-offline`, `13-camera-denied`, `13-camera-fallback`,
-  `17-viewpoint`, `18-graphics-midround`, `19-stability` and `14-camera-fake`.
-  **These specs were therefore not run against build F.** Each of them last
-  passed in a single-file run against build E; the table above says so in the
-  "Build" column. Build F differs from E in CSS colours and, possibly, grip
-  tuning; none of these specs asserts colours, but a re-run on the final build
-  is still owed.
-* The 3 skipped tests are the screenshot tests (they only run with `PLUSH_SHOTS`).
-
-Screenshots: the 12 attract and 3 win pictures come from a full screenshot run
-at 07:57–08:13 (sources as build F except two later `hud.css` rules: the
-selected-state colour of tabs / option pills, and the Cosmic win-card title
-colour — see visual defect 5). The 3 settings pictures were retaken at
-08:14–08:18 with the selected-state colour in place.
-
-Unit tests (`npm test`) are not part of this file's runs; the coordinator's
-last recorded figure for them is 39 files / 526 tests passing.
+All e2e runs used a keyless server built from this tree (`--serve-dist`, own port); software WebGL,
+no audio output, no camera, no phone and no large panel.

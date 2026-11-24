@@ -21,7 +21,9 @@ const tracks = (page: Page): Promise<{ live: number; ended: number; kinds: strin
     return { live: all.filter((t) => t.readyState === 'live').length, ended: all.filter((t) => t.readyState === 'ended').length, kinds: all.map((t) => t.kind), calls: w.__gum };
   });
 
-test('14. fake camera: tracking starts after START, toggling off ends the camera track, on restarts it', async ({ page }) => {
+test('14. fake camera: tracking starts after START, toggling off ends the camera track, on restarts it', async ({ page, baseURL }) => {
+  // The test server's origin, from playwright.config.ts (follows PLUSH_E2E_PORT).
+  const origin = new URL(baseURL ?? 'http://127.0.0.1:8799').origin;
   await page.addInitScript((g) => {
     const w = window as any;
     w.__gum = [];
@@ -41,7 +43,7 @@ test('14. fake camera: tracking starts after START, toggling off ends the camera
   }, LOW_GRAPHICS);
   const external: string[] = [];
   page.on('request', (r) => {
-    if (!r.url().startsWith('http://127.0.0.1:8799/') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) external.push(r.url());
+    if (!r.url().startsWith(`${origin}/`) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) external.push(r.url());
   });
   const uploads: string[] = [];
   page.on('request', (r) => {

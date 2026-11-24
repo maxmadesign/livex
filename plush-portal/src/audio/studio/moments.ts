@@ -99,6 +99,12 @@ export const WIN_DUCK: Record<WinTier, number> = { common: 0.5, rare: 0.45, epic
 export const CHARACTER_DUCK = 0.7;
 
 /**
+ * A recorded character voice shorter than this (seconds) is only a blip (storybook.astronaut
+ * 0.10 s, sakura.tanuki 0.26 s, gpu.bot 0.35 s): the character's own squeak is layered under it.
+ */
+export const SHORT_VOICE_S = 0.4;
+
+/**
  * The sounds of a win. With the studio stingers: common = theme win stinger; rare = + sparkle;
  * epic = + firework + confetti; legendary = theme jackpot fanfare + jackpot bells + firework.
  * Without them the synthesised theme jingle (`win`) takes the stinger's place; every layer is an

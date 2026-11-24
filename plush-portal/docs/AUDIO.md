@@ -48,8 +48,12 @@ Each theme has two takes. The engine plays take 1 from its very beginning, then 
 take 2 → take 1 → take 2 … Each hand-over is an **equal-power cross-fade** (cos / sin gain
 curves, `AudioParam.setValueCurveAtTime`) of four beats (1.9–2.4 s), **centred** on the hand-
 over: the outgoing take reaches its out point and the incoming take its in point in the middle
-of the fade, so the two beat grids meet there. Nothing loops hard and no take ever plays its
-generated intro again or reaches its (cut-off) end. The schedule is in AudioContext time and is
+of the fade, so the two beat grids meet there. **Takes in different keys** (by the manifest's
+`key` estimate; every shipped pair is) never overlap: the outgoing take fades out over its
+cross-fade length, ending at its out point, and the incoming take starts right there at its in
+point with a 0.3 s fade-in (`planHandover` mode `sequential`, `src/audio/studio/playlist.ts`), so
+there is a short breath instead of two seconds of D major against A♭ major. Nothing loops hard
+and no take ever plays its generated intro again or reaches its (cut-off) end. The schedule is in AudioContext time and is
 set ~6 s ahead (sample-accurate); the next take is decoded ~30 s ahead, and a take nothing plays
 is released (a decoded two-minute take is ≈45 MB). If the next take is not decoded in time the
 current take cross-fades into itself (its in point). If a take ran out anyway (timers starved),
@@ -86,8 +90,10 @@ LUFS and true peak are ffmpeg `ebur128` on the encoded files. Most takes start a
 0.72–0.96) and are shown because the two takes of a theme are **not** in the same key —
 see "Known limits".
 
-Every hand-over rendered from the encoded files exactly as the engine schedules it
-(`simulateTransition`; loudness = 400 ms momentary, LUFS):
+Every hand-over rendered from the encoded files as an overlapping, centred cross-fade
+(`simulateTransition`; loudness = 400 ms momentary, LUFS). Since the key-aware hand-over (above)
+the engine plays these pairs one after the other instead, so the table describes the overlap the
+engine no longer uses for them (it still applies to takes in the same key, or without an estimate):
 
 | Hand-over | Fade | Before | During (mean) | After | Mix vs power sum of the two | Largest sample step vs the music's own | Beat offset at the fade edges |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -172,7 +178,9 @@ playback rate (±2 % random). A character never repeats a moment, or steps back 
 important one, within 2.6 s; different characters start at least 0.3 s apart. Inside the 2.6 s a
 character may still escalate (lift → slip → win): in headless rounds a lifted toy slips
 0.37–1.79 s after `liftStarted` (9 of 9 slips measured), so without this the slip cry would never
-be heard. The escalating moment fades the character's previous voice out (15 ms time constant,
+be heard. A recording shorter than 0.4 s (`SHORT_VOICE_S`) gets the character's own squeak layered
+under it; since the regeneration described under known limits, no shipped voice is that short. The escalating moment fades the
+character's previous voice out (15 ms time constant,
 source stopped 0.1 s later) so the two never pile up. A lift / slip cry ducks the music to 0.7
 (−3 dB) for its length unless a win is ringing (that duck is deeper already): measured in the
 built app at the default volumes, a lift cry's loudest 400 ms (−19.7 dBFS) only matched the
@@ -242,15 +250,19 @@ stingers 1.2 MB, loop 0.2 MB).
 - Nobody has listened to any of this: this environment has no audio output. Levels, fades,
   timing and decoding are measured (tables above); taste, musical fit and "drama" are not.
 - **The two takes of a theme are in different keys** by the estimate (e.g. sakura D major vs
-  A♭ major, gpu E♭ vs E major), so the 2 s hand-overs will clash harmonically for a moment. The
-  fades are short and beat-aligned for that reason; regenerating the B takes in the A take's key
-  (and tempo) would make the hand-overs musical.
-- Tempos differ by 2–4 % between takes: the grids meet in the middle of the fade and are 15–46 ms
-  apart at its edges.
-- Several generated effects are short or thin (the reason for the `layer` mode), several voices
-  are short (`storybook.astronaut` 0.10 s, `sakura.tanuki` 0.26 s, `gpu.bot` 0.35 s), and some
-  were cut off by the generator (90 ms fade-outs). Regenerating those would help more than any
-  processing.
+  A♭ major, gpu E♭ vs E major). The engine therefore does not overlap them (fade out to the out
+  point, then the next take from its in point with a 0.3 s fade-in): no harmonic clash, but a
+  short dip in the music every ~2 minutes instead of a seamless blend. Regenerating the B takes
+  in the A take's key and tempo would allow a real, musical cross-fade.
+- Tempos differ by 2–4 % between takes (this mattered for the overlapping cross-fade: the grids
+  met in the middle of the fade and were 15–46 ms apart at its edges).
+- Several generated effects are short or thin (the reason for the `layer` mode), and some
+  voices were cut off by the generator (90 ms fade-outs). The first takes of
+  `storybook.astronaut` (0.10 s), `sakura.tanuki` (0.26 s), `gpu.bot` (0.35 s),
+  `sakura.capybara` (≈ 6 dB under target, gain cap) and `ocean.turtle` were regenerated once
+  with more explicit prompts and re-imported: they now last 1.26–1.48 s and reach their target
+  level without the gain cap. A voice shorter than 0.4 s (`SHORT_VOICE_S`) would still get the
+  character's own squeak (`squeakPitch(assetId)` × the moment's rate) layered under it.
 
 ## Synthesised music
 
@@ -260,6 +272,7 @@ stingers 1.2 MB, loop 0.2 MB).
 | `storybook` | Storybook Stroll | G major · 108 BPM swing | A A′ B A″, 32 bars | 71.1 s | clarinet and flute, felt piano, pizzicato strings and bass, celesta, brushes, wood blocks |
 | `ocean` | Drift Glass | D major · 84 BPM | A B A′, 24 bars | 68.6 s | glass bowls, marimba in 3-3-2, breathing pad, sine sub, dusty half-time beat, bubbles, surf |
 | `cosmic` | Neon Orbit | F♯ minor / A major · 126 BPM | verse chorus ×2, 32 bars | 60.9 s | pulse lead, arcade arpeggio with ping-pong delay, pumping pad and bass, four-on-the-floor, blips and arcade toms |
+| `gpu` | Overclock Party | E major / C♯ minor · 120 BPM | verse chorus bridge chorus′, 32 bars | 64.0 s | square-wave chip lead, chiptune 16th arpeggio, glassy side-chain-pumped supersaw pad, octave-bounce bass, FM sparkle keys, electro kick, gated snare and clap, noise hats, data blips and risers |
 
 The scores live in `src/audio/synth/scores/*.ts` as chord progressions, melodies in a small
 text notation and arrangement code. All tracks are levelled to −16 LUFS.
@@ -338,6 +351,12 @@ replacements under different file names.
 - `unlock()` must run inside a user gesture. It never throws; `status()` says `running`,
   or `locked` with the reason when the browser refused. Effects are fetched and decoded
   before the first gesture (offline context), so the first tap can already make sound.
+  The game (`Game.init`) selects the theme and calls `unlock()` once at boot, so a browser that
+  allows autoplay (a kiosk, `--autoplay-policy=no-user-gesture-required`) plays the attract demo
+  with its theme music at once; elsewhere a capture-phase listener calls `unlock()` on any
+  pointerdown / pointerup / touchend / keydown while the state is `locked` (any tap, not only
+  START). Playwright's Chromium always allows autoplay, so the blocked case is e2e-tested with an
+  emulated policy (`tests/e2e/10-audio.spec.ts`).
 - Music: only the current theme is downloaded; other tracks load on demand and at most two
   decoded tracks are kept. Theme changes cross-fade (≈1.3 s); selecting the same theme
   again, or a new round, never restarts the track. `setMusicTrack` overrides the theme,

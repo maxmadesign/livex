@@ -1,5 +1,5 @@
 import { FIELD } from '../../physics/fieldSpec';
-import { DEFAULT_FOCUS, FLASH_MIN_INTERVAL, JACKPOT_SECONDS, MODE, SHAPE, WIN_SECONDS, spriteCode } from './constants';
+import { DEFAULT_FOCUS, FLASH_MIN_INTERVAL, JACKPOT_SECONDS, JACKPOT_STROBE_HZ, MODE, SHAPE, WIN_SECONDS, spriteCode } from './constants';
 import { hueRgb, type Rgb, type ThemePalettes } from './palette';
 import type { SpriteBatch } from './SpriteBatch';
 
@@ -233,7 +233,7 @@ export class LightShow {
       const level = this.level[i]! * this.alpha * lightScale;
       if (level < 0.002) continue;
       let strobe = 1;
-      if (jackpot && !reducedMotion) strobe = fract(time * 3 + i * 0.5) < 0.5 ? 1 : 0.3;
+      if (jackpot && !reducedMotion) strobe = fract(time * JACKPOT_STROBE_HZ + i * 0.5) < 0.5 ? 1 : 0.3;
       const src = BEAM_SOURCES[i]!;
       const sx = src[0];
       const sz = src[1];

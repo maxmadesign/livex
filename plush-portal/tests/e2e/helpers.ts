@@ -582,3 +582,60 @@ export const lowContrast = (page: Page, min = 3, scope = '[role="dialog"]'): Pro
     },
     { min, scope },
   );
+
+export interface ButtonContrast {
+  /** data-testid (or class) of the button. */
+  id: string;
+  text: string;
+  /** Lowest contrast of the text colour against the colours of the button's face gradient. */
+  ratio: number;
+  color: string;
+  faces: string[];
+}
+
+/**
+ * Contrast of the lettering on filled (gradient) buttons: `.pp-btn` faces come from `--face`, the
+ * attract call to action's from `--face-a/b/c`. `lowContrast` skips gradients, so these need their own scan.
+ */
+export const buttonContrast = (page: Page, selector = '.pp-btn:not(.soft):not(.round), .pp-cta'): Promise<ButtonContrast[]> =>
+  page.evaluate((selector) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    const rgb = (css: string): number[] => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return [d[0]!, d[1]!, d[2]!];
+    };
+    const lum = (c: number[]) => {
+      const f = (x: number) => {
+        const s = x / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+    };
+    const ratio = (a: number[], b: number[]) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number];
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const out: { id: string; text: string; ratio: number; color: string; faces: string[] }[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      const text = (el.textContent ?? '').trim();
+      if (!text) continue;
+      const faces = (el.classList.contains('pp-cta') ? ['--face-a', '--face-b', '--face-c'] : ['--face']).map((v) => cs.getPropertyValue(v).trim()).filter(Boolean);
+      if (!faces.length) continue;
+      // Text colour of the lettering itself (the title / label child where there is one).
+      const label = el.querySelector<HTMLElement>('.title, span') ?? el;
+      const color = getComputedStyle(label).color;
+      const fg = rgb(color);
+      out.push({ id: el.getAttribute('data-testid') ?? String(el.className).split(' ').slice(0, 3).join('.'), text: text.slice(0, 30), ratio: +Math.min(...faces.map((f) => ratio(fg, rgb(f)))).toFixed(2), color, faces });
+    }
+    return out;
+  }, selector);

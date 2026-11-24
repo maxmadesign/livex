@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { THEMES, aim, boot, click, closeSettings, collection, ff, ffUntil, fieldToys, finishRound, lowContrast, openSettings, plush, results, settle, start, state, switchTheme, type Theme } from './helpers';
+import { THEMES, aim, boot, buttonContrast, click, closeSettings, collection, ff, ffUntil, fieldToys, finishRound, lowContrast, openSettings, plush, results, settle, start, state, switchTheme, winARound, type Theme } from './helpers';
 
 const look = (page: import('@playwright/test').Page) =>
   page.evaluate(() => {
@@ -83,6 +83,33 @@ test.describe('9. themes', () => {
       console.log(`${id}: ${unique.length} text(s) below 3:1${unique.length ? `: ${unique.slice(0, 12).map((f) => `${f.ratio}:1 "${f.text}" (${f.where})`).join('; ')}` : ''}`);
       expect(unique, `low-contrast text in the ${id} theme`).toEqual([]);
     }
+  });
+
+  test('GPU Party: filled buttons and the call to action have dark, readable lettering', async ({ page }) => {
+    test.setTimeout(900_000);
+    await boot(page, { display: 'desktop', theme: 'gpu' });
+    expect((await state(page)).theme).toBe('gpu');
+    const seen = new Map<string, number>();
+    const scan = async (where: string, expectIds: string[]) => {
+      await settle(page);
+      const found = await buttonContrast(page);
+      console.log(`gpu ${where}: ${found.map((b) => `${b.id} "${b.text}" ${b.ratio}:1 (${b.color} on ${b.faces.join(' / ')})`).join('; ')}`);
+      for (const id of expectIds) expect(found.some((b) => b.id === id || b.id.startsWith(id)), `${id} scanned in ${where}`).toBe(true);
+      for (const b of found) {
+        seen.set(b.id, b.ratio);
+        // WCAG AA for normal text; white on these lime faces was 1.6–2.4:1.
+        expect(b.ratio, `${b.id} "${b.text}" in ${where}`).toBeGreaterThanOrEqual(4.5);
+      }
+    };
+    await scan('attract', ['attract-cta', 'start']);
+    await start(page);
+    await scan('aiming', ['grab']);
+    // PLAY AGAIN (and the win card's button) only appear after a win.
+    await winARound(page, 10);
+    await expect.poll(async () => (await state(page)).phase, { timeout: 60_000 }).toBe('RESULT');
+    await expect(page.getByTestId('result-win')).toBeVisible();
+    await scan('result', ['again', 'result-again']);
+    console.log(`gpu filled buttons: ${JSON.stringify(Object.fromEntries(seen))}`);
   });
 
   test('a theme picked in the middle of a round waits for the round to end', async ({ page }) => {

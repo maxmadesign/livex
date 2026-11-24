@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine } from '../../../src/audio/index';
 import { parseStudioManifest, studioSharedFiles, studioThemeFiles, themeOfCharacter, type StudioManifest } from '../../../src/audio/studio/manifest';
-import { CHARACTER_DUCK, CooldownGate, attractChimeDelayMs, characterVoicing, squeakPitch, winPlan, CHARACTER_COOLDOWN_MS } from '../../../src/audio/studio/moments';
-import { PLAYLIST_LOOKAHEAD, PLAYLIST_PREFETCH, StudioPlayer, equalPowerCurves, nextTakeIndex, planHandover, transitionCrossfade } from '../../../src/audio/studio/playlist';
+import { CHARACTER_DUCK, CooldownGate, SHORT_VOICE_S, attractChimeDelayMs, characterVoicing, squeakPitch, winPlan, CHARACTER_COOLDOWN_MS } from '../../../src/audio/studio/moments';
+import { KEY_CHANGE_FADE_IN, PLAYLIST_LOOKAHEAD, PLAYLIST_PREFETCH, StudioPlayer, equalPowerCurves, keysClash, nextTakeIndex, planHandover, transitionCrossfade } from '../../../src/audio/studio/playlist';
 import { decodeWav16 } from '../../../src/audio/synth/wav';
 import { SFX_NAMES, type AudioPort } from '../../../src/core/contracts';
 import { THEME_IDS } from '../../../src/core/types';
@@ -169,6 +169,40 @@ describe('play-list cross-fade schedule', () => {
     expect(veryLate.fadeEnd).toBeLessThanOrEqual(10 + A.duration);
   });
 
+  it('does not overlap takes in different keys: fade out to the out point, then start at the in point', () => {
+    const Akey = { ...A, key: 'D major' };
+    const Bkey = { ...B, key: 'A♭ major' };
+    expect(keysClash(Akey, Bkey)).toBe(true);
+    expect(keysClash(Akey, { ...B, key: ' d  MAJOR ' })).toBe(false);
+    expect(keysClash({ key: 'A♭ major' }, { key: 'Ab major' })).toBe(false);
+    expect(keysClash(Akey, B)).toBe(false); // no estimate: keep the centred cross-fade
+    const h = planHandover(Akey, 10, Bkey);
+    expect(h.mode).toBe('sequential');
+    expect(h.fadeEnd).toBe(10 + A.outPoint); // the outgoing take is silent by its out point
+    expect(h.fadeStart).toBe(10 + A.outPoint - A.crossfade);
+    expect(h.incomingStart).toBeGreaterThanOrEqual(h.fadeEnd); // no overlap at all
+    expect(h.incomingOffset).toBe(B.inPoint);
+    expect(h.incomingStart - h.incomingZero).toBeCloseTo(B.inPoint, 9);
+    expect(h.incomingFade).toBe(KEY_CHANGE_FADE_IN);
+    expect(h.junction).toBe(h.fadeEnd);
+    // Late: the fade-out starts at once, stays inside the outgoing file, the incoming still follows it.
+    const late = planHandover(Akey, 10, Bkey, 109.5);
+    expect(late.fadeStart).toBe(109.5);
+    expect(late.incomingStart).toBeGreaterThanOrEqual(late.fadeEnd);
+    const veryLate = planHandover(Akey, 10, Bkey, 119.5);
+    expect(veryLate.fadeEnd).toBeLessThanOrEqual(10 + A.duration);
+    expect(veryLate.incomingStart).toBeGreaterThanOrEqual(veryLate.fadeEnd);
+    // Every shipped theme: its two takes are in different keys, so both hand-overs are sequential.
+    for (const theme of THEME_IDS) {
+      const [a, b] = studio.music[theme]!.takes;
+      for (const [x, y] of [[a!, b!], [b!, a!]]) {
+        const plan = planHandover(x, 0, y);
+        expect(plan.mode, `${theme} ${x.key} → ${y.key}`).toBe(keysClash(x, y) ? 'sequential' : 'crossfade');
+        if (plan.mode === 'sequential') expect(plan.incomingStart, theme).toBeGreaterThanOrEqual(plan.fadeEnd);
+      }
+    }
+  });
+
   it('alternates the takes and repeats the current one when the next is not decoded', () => {
     expect(nextTakeIndex(0, 2, () => true)).toBe(1);
     expect(nextTakeIndex(1, 2, () => true)).toBe(0);
@@ -181,17 +215,17 @@ describe('StudioPlayer against a fake AudioContext', () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }));
   afterEach(() => vi.useRealTimers());
 
-  function setup(ready = [true, true]) {
+  function setup(ready = [true, true], takes: (typeof A & { key?: string })[] = [A, B]) {
     const ctx = new FakeContext();
     ctx.state = 'running';
     const out = ctx.createGain();
-    const decoded = ready.map((r, i) => (r ? { name: `take${i}`, duration: [A, B][i]!.duration } : null));
+    const decoded = ready.map((r, i) => (r ? { name: `take${i}`, duration: takes[i]!.duration } : null));
     const requests: number[] = [];
     const releases: number[] = [];
     const player = new StudioPlayer({
       ctx: ctx as unknown as BaseAudioContext,
       output: out as unknown as AudioNode,
-      takes: [A, B],
+      takes,
       buffer: (i) => (decoded[i] as unknown as AudioBuffer) ?? null,
       request: (i) => {
         requests.push(i);
@@ -247,6 +281,39 @@ describe('StudioPlayer against a fake AudioContext', () => {
     advance(zero2 + B.outPoint - B.crossfade / 2 - PLAYLIST_LOOKAHEAD + 0.5);
     expect(ctx.started.map((s) => s.buffer!.name)).toEqual(['take0', 'take1', 'take0']);
     expect(ctx.started[2]!.startArgs!.offset).toBeCloseTo(A.inPoint - transitionCrossfade(B, A) / 2, 9);
+    player.stop(ctx.currentTime);
+    expect(ctx.started.every((s) => s.stopped)).toBe(true);
+  });
+
+  it('takes in different keys: the outgoing fades out to its out point, then the incoming starts at its in point', () => {
+    const Akey = { ...A, key: 'D major' };
+    const Bkey = { ...B, key: 'A♭ major' };
+    const { ctx, player, releases, advance } = setup([true, true], [Akey, Bkey]);
+    player.start(0, 0);
+    const first = ctx.started[0]!;
+    advance(A.outPoint - A.crossfade / 2 - PLAYLIST_LOOKAHEAD + 0.5);
+    expect(ctx.started).toHaveLength(2);
+    const second = ctx.started[1]!;
+    const outCurve = (first.outputs[0] as FakeGain).gain.history.find((h) => h.kind === 'curve')!;
+    const inCurve = (second.outputs[0] as FakeGain).gain.history.find((h) => h.kind === 'curve')!;
+    // Fade-out ends exactly at A's out point; B starts there (not earlier) from its in point.
+    expect(outCurve.time).toBeCloseTo(A.outPoint - A.crossfade, 9);
+    expect(outCurve.time + outCurve.duration!).toBeCloseTo(A.outPoint, 9);
+    expect(second.startArgs!.when).toBeGreaterThanOrEqual(outCurve.time + outCurve.duration! - 1e-9);
+    expect(second.startArgs!.offset).toBeCloseTo(B.inPoint, 9);
+    expect(inCurve.time).toBeCloseTo(A.outPoint, 9);
+    expect(inCurve.duration).toBeCloseTo(KEY_CHANGE_FADE_IN, 9);
+    expect(inCurve.curve![0]).toBe(0);
+    expect(first.stopAt).toBeCloseTo(A.outPoint + 0.05, 9);
+    expect(player.history[0]!.handover.mode).toBe('sequential');
+    advance(A.outPoint + KEY_CHANGE_FADE_IN + 0.5);
+    expect(releases).toEqual([0]);
+    // B → A: the same, on B's own schedule.
+    const zero2 = A.outPoint - B.inPoint;
+    advance(zero2 + B.outPoint - B.crossfade / 2 - PLAYLIST_LOOKAHEAD + 0.5);
+    expect(ctx.started.map((s) => s.buffer!.name)).toEqual(['take0', 'take1', 'take0']);
+    expect(ctx.started[2]!.startArgs!.when).toBeCloseTo(zero2 + B.outPoint, 9);
+    expect(ctx.started[2]!.startArgs!.offset).toBeCloseTo(A.inPoint, 9);
     player.stop(ctx.currentTime);
     expect(ctx.started.every((s) => s.stopped)).toBe(true);
   });
@@ -494,6 +561,37 @@ describe('character voices', () => {
     expect(squeak.buffer!.name).toMatch(/^sfx\/plush_squeak_\d\.wav$/);
     expect(squeak.playbackRate.value).toBeGreaterThan(squeakPitch('future.friend') * 0.9);
     expect(squeak.playbackRate.value).toBeLessThan(squeakPitch('future.friend') * 1.1);
+  });
+
+  it('layers the character’s own squeak under a near-empty voice (< 0.4 s), not under a full one', async () => {
+    const { engine, clock } = engineWith();
+    // The shipped voices are all longer than SHORT_VOICE_S now; the engine decides on the decoded
+    // buffer's length, so a near-empty recording is simulated by decoding it as 0.1 s.
+    const short = studio.voices['storybook.astronaut']!;
+    const full = studio.voices['storybook.cowpony']!;
+    expect(full.duration).toBeGreaterThan(SHORT_VOICE_S);
+    FakeContext.durations.set(short.file, 0.1);
+    FakeContext.durations.set(full.file, full.duration);
+    engine.setTheme('storybook');
+    await engine.unlock();
+    await flush(30);
+    const ctx = playbackContext();
+    let before = ctx.started.length;
+    engine.playCharacter('storybook.astronaut', 'lift');
+    const blip = ctx.started.slice(before);
+    expect(blip).toHaveLength(2);
+    expect(blip[0]!.buffer!.name).toBe(short.file);
+    expect(blip[1]!.buffer!.name).toMatch(/^sfx\/plush_squeak_\d\.wav$/);
+    // The squeak is pitched for this character (× the moment's rate, ± the effect's own variation).
+    const want = squeakPitch('storybook.astronaut') * blip[0]!.playbackRate.value;
+    expect(blip[1]!.playbackRate.value).toBeGreaterThan(want * 0.9);
+    expect(blip[1]!.playbackRate.value).toBeLessThan(want * 1.1);
+    clock.now += 1000;
+    before = ctx.started.length;
+    engine.playCharacter('storybook.cowpony', 'lift');
+    const voiced = ctx.started.slice(before);
+    expect(voiced).toHaveLength(1);
+    expect(voiced[0]!.buffer!.name).toBe(full.file);
   });
 
   it('a lifted toy that slips cries out at once, cutting its lift voice short without a click', async () => {

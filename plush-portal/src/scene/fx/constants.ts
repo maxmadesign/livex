@@ -113,6 +113,11 @@ export const WIN_SECONDS = 2.6;
 export const JACKPOT_SECONDS = 4;
 /** Minimum time between two global flashes (keeps well under three flashes per second). */
 export const FLASH_MIN_INTERVAL = 0.45;
+/**
+ * Jackpot beam strobe rate, Hz. 3 Hz sits exactly on the photosensitivity limit (no more than
+ * three flashes in any one second; public 86" screens), so the beams alternate at 2 Hz (0.5 s).
+ */
+export const JACKPOT_STROBE_HZ = 2;
 
 /** Where the prize exit is when nobody says otherwise (front-left chute mouth). */
 export const DEFAULT_FOCUS = { x: -0.35, y: 0.02, z: -0.15 } as const;

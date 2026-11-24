@@ -2,6 +2,9 @@
  * Studio music play-list: the takes of a theme play one after another, each from its
  * in point to its out point, joined by equal-power cross-fades that are centred on the
  * hand-over so the two beat grids meet in the middle of the fade. Nothing loops hard.
+ * Takes in different keys (by the manifest's estimate) never overlap: the outgoing take
+ * fades out ending at its out point and the incoming one starts there, at its in point,
+ * with a short fade-in (a two-second overlap of, say, D and A♭ major clashes).
  *
  * All timing is in AudioContext time, so a suspended context (hidden page) simply pauses
  * the plan; the service timer only decides *when* to schedule the next hand-over.
@@ -15,8 +18,18 @@ export const PLAYLIST_PREFETCH = 30;
 /** Service period, ms. */
 export const PLAYLIST_TICK_MS = 250;
 const CURVE_POINTS = 64;
+/** Fade-in of the incoming take when the two takes are in different keys and do not overlap, seconds. */
+export const KEY_CHANGE_FADE_IN = 0.3;
 
-export type TakeShape = Pick<StudioTake, 'inPoint' | 'outPoint' | 'crossfade' | 'duration'>;
+export type TakeShape = Pick<StudioTake, 'inPoint' | 'outPoint' | 'crossfade' | 'duration' | 'key'>;
+
+/** True when both takes have an estimated key and the keys differ ("D major" vs "A♭ major"). */
+export function keysClash(a: Partial<TakeShape>, b: Partial<TakeShape>): boolean {
+  const norm = (k: string | undefined) => (k ?? '').trim().toLowerCase().replace(/♭/g, 'b').replace(/♯/g, '#').replace(/\s+/g, ' ');
+  const ka = norm(a.key);
+  const kb = norm(b.key);
+  return ka.length > 0 && kb.length > 0 && ka !== kb;
+}
 
 /** Cross-fade length a → b: a's fade, limited by the room before b's in point and after a's out point. */
 export function transitionCrossfade(a: TakeShape, b: TakeShape): number {
@@ -24,12 +37,21 @@ export function transitionCrossfade(a: TakeShape, b: TakeShape): number {
 }
 
 export interface Handover {
+  /**
+   * 'crossfade': both takes sound together for `crossfade` seconds, centred on the junction.
+   * 'sequential': the takes are in different keys; the outgoing fades out first, then the incoming starts.
+   */
+  mode: 'crossfade' | 'sequential';
   /** Context time where the outgoing reaches its out point and the incoming its in point. */
   junction: number;
+  /** Fade-out of the outgoing take (and, for a cross-fade, fade-in of the incoming one). */
   fadeStart: number;
   fadeEnd: number;
   crossfade: number;
-  /** Position in the incoming file at `fadeStart`. */
+  /** Context time at which the incoming source starts, and the length of its fade-in. */
+  incomingStart: number;
+  incomingFade: number;
+  /** Position in the incoming file at `incomingStart`. */
   incomingOffset: number;
   /** Context time at which position 0 of the incoming file would play. */
   incomingZero: number;
@@ -41,6 +63,7 @@ export interface Handover {
  * then, the outgoing simply plays a little past its out point.
  */
 export function planHandover(cur: TakeShape, zero: number, next: TakeShape, notBefore = -Infinity): Handover {
+  if (keysClash(cur, next)) return planSequential(cur, zero, next, notBefore);
   let crossfade = transitionCrossfade(cur, next);
   let junction = zero + cur.outPoint;
   let fadeStart = junction - crossfade / 2;
@@ -52,7 +75,26 @@ export function planHandover(cur: TakeShape, zero: number, next: TakeShape, notB
     junction = fadeStart + crossfade / 2;
   }
   const incomingOffset = Math.max(0, next.inPoint - crossfade / 2);
-  return { junction, fadeStart, fadeEnd: fadeStart + crossfade, crossfade, incomingOffset, incomingZero: fadeStart - incomingOffset };
+  return { mode: 'crossfade', junction, fadeStart, fadeEnd: fadeStart + crossfade, crossfade, incomingStart: fadeStart, incomingFade: crossfade, incomingOffset, incomingZero: fadeStart - incomingOffset };
+}
+
+/**
+ * Hand-over between takes in different keys: no overlap. The outgoing take fades out over its
+ * cross-fade, ending at its out point; the incoming one starts right after, at its in point, with
+ * a short fade-in. A late hand-over starts the fade-out at `notBefore` (inside the outgoing file).
+ */
+function planSequential(cur: TakeShape, zero: number, next: TakeShape, notBefore: number): Handover {
+  let crossfade = Math.max(0.05, Math.min(cur.crossfade, cur.outPoint - cur.inPoint));
+  let fadeEnd = zero + cur.outPoint;
+  let fadeStart = fadeEnd - crossfade;
+  if (fadeStart < notBefore) {
+    fadeStart = notBefore;
+    const room = zero + cur.duration - fadeStart;
+    crossfade = Math.max(0.05, Math.min(crossfade, room - 0.02));
+    fadeEnd = fadeStart + crossfade;
+  }
+  const incomingOffset = next.inPoint;
+  return { mode: 'sequential', junction: fadeEnd, fadeStart, fadeEnd, crossfade, incomingStart: fadeEnd, incomingFade: KEY_CHANGE_FADE_IN, incomingOffset, incomingZero: fadeEnd - incomingOffset };
 }
 
 /** The take after `current`: the next one in order when it is ready, otherwise the same take again. */
@@ -154,7 +196,8 @@ export class StudioPlayer {
     const now = ctx.currentTime;
     if (this.pending) {
       // The previous hand-over completed: release what the outgoing take held.
-      if (now >= this.pending.handover.fadeEnd + 0.1) {
+      const h = this.pending.handover;
+      if (now >= Math.max(h.fadeEnd, h.incomingStart + h.incomingFade) + 0.1) {
         const old = this.pending.previous;
         this.pending = null;
         if (old.take !== this.current.take) this.deps.release(old.take);
@@ -182,8 +225,8 @@ export class StudioPlayer {
     const next = this.makeItem(nextIndex, buffer, h.incomingZero);
     const now = ctx.currentTime;
     next.gain.gain.setValueAtTime(0, now);
-    next.gain.gain.setValueCurveAtTime(fadeIn, h.fadeStart, h.crossfade);
-    next.source.start(h.fadeStart, h.incomingOffset);
+    next.gain.gain.setValueCurveAtTime(fadeIn, h.incomingStart, h.incomingFade);
+    next.source.start(h.incomingStart, h.incomingOffset);
     cur.gain.gain.cancelScheduledValues(h.fadeStart);
     cur.gain.gain.setValueCurveAtTime(fadeOut, h.fadeStart, h.crossfade);
     try {

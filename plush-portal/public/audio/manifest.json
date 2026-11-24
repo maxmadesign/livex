@@ -1849,19 +1849,19 @@
       },
       "gpu.bot": {
         "file": "studio/voices/gpu/bot.wav",
-        "gain": 1.6,
-        "duration": 0.354,
-        "bytes": 31266,
+        "gain": 0.8131,
+        "duration": 1.404,
+        "bytes": 123876,
         "source": {
           "generator": "Higgsfield",
           "model": "Mirelo text-to-audio",
-          "job": "hf_20261124_130105_541fe6f5-09f0-4887-90c2-af046cae66a2.mp3",
+          "job": "hf_20261124_184627_18efd08d-8f7e-4308-9142-6d93071423bd.mp3",
           "input": "voices/gpu.bot.mp3"
         },
         "notes": [
           "lead trimmed 16 ms",
-          "kept 0.016–0.370 s of 1.50 s",
-          "needs 4.7 dB to reach its target; capped at +4.1 dB"
+          "kept 0.016–1.420 s of 1.50 s",
+          "noise floor -69 dBFS RMS gated (−24 dB below -57 dBFS)"
         ]
       },
       "gpu.card": {
@@ -2037,20 +2037,18 @@
       },
       "ocean.turtle": {
         "file": "studio/voices/ocean/turtle.wav",
-        "gain": 1.6,
-        "duration": 0.794,
-        "bytes": 70074,
+        "gain": 0.4248,
+        "duration": 1.39,
+        "bytes": 122642,
         "source": {
           "generator": "Higgsfield",
           "model": "Mirelo text-to-audio",
-          "job": "hf_20261124_125959_74f7b3d5-6007-4ba8-9483-5f8ef24c6621.mp3",
+          "job": "hf_20261124_184627_c5a1b783-bd70-4f2f-92cd-d8b4677f73a4.mp3",
           "input": "voices/ocean.turtle.mp3"
         },
         "notes": [
-          "lead trimmed 6 ms",
-          "kept 0.006–0.800 s of 1.50 s",
-          "noise floor -66 dBFS RMS gated (−24 dB below -54 dBFS)",
-          "needs 7.2 dB to reach its target; capped at +4.1 dB"
+          "kept 0.000–1.390 s of 1.50 s",
+          "noise floor -58 dBFS RMS gated (−24 dB below -46 dBFS)"
         ]
       },
       "ocean.whale": {
@@ -2103,20 +2101,19 @@
       },
       "sakura.capybara": {
         "file": "studio/voices/sakura/capybara.wav",
-        "gain": 1.6,
-        "duration": 1.484,
-        "bytes": 130932,
+        "gain": 0.3679,
+        "duration": 1.264,
+        "bytes": 111528,
         "source": {
           "generator": "Higgsfield",
           "model": "Mirelo text-to-audio",
-          "job": "hf_20261124_125839_2a283445-25c8-4e07-b603-ea4633beaf7f.mp3",
+          "job": "hf_20261124_184627_58f8a011-f7b5-4ea4-9d07-d74fbd04a4ac.mp3",
           "input": "voices/sakura.capybara.mp3"
         },
         "notes": [
-          "lead trimmed 16 ms",
-          "kept 0.016–1.500 s of 1.50 s",
-          "noise floor -70 dBFS RMS gated (−24 dB below -58 dBFS)",
-          "needs 10.0 dB to reach its target; capped at +4.1 dB"
+          "lead trimmed 6 ms",
+          "kept 0.006–1.270 s of 1.50 s",
+          "noise floor -60 dBFS RMS gated (−24 dB below -48 dBFS)"
         ]
       },
       "sakura.monster": {
@@ -2153,35 +2150,36 @@
       },
       "sakura.tanuki": {
         "file": "studio/voices/sakura/tanuki.wav",
-        "gain": 1.0783,
-        "duration": 0.264,
-        "bytes": 23328,
+        "gain": 0.438,
+        "duration": 1.394,
+        "bytes": 122994,
         "source": {
           "generator": "Higgsfield",
           "model": "Mirelo text-to-audio",
-          "job": "hf_20261124_125925_5d0cb0cb-ec97-4805-a7a8-118b0d52e59e.mp3",
+          "job": "hf_20261124_184627_63268064-246f-4c29-bd18-4ad70ed4000f.mp3",
           "input": "voices/sakura.tanuki.mp3"
         },
         "notes": [
-          "lead trimmed 6 ms",
-          "kept 0.006–0.270 s of 1.50 s",
-          "noise floor -71 dBFS RMS gated (−24 dB below -59 dBFS)"
+          "lead trimmed 16 ms",
+          "kept 0.016–1.410 s of 1.50 s"
         ]
       },
       "storybook.astronaut": {
         "file": "studio/voices/storybook/astronaut.wav",
-        "gain": 1.437,
-        "duration": 0.104,
-        "bytes": 9216,
+        "gain": 0.4881,
+        "duration": 1.484,
+        "bytes": 130932,
         "source": {
           "generator": "Higgsfield",
           "model": "Mirelo text-to-audio",
-          "job": "hf_20261124_125924_7a48a11e-af9a-4141-9117-6352895d4394.mp3",
+          "job": "hf_20261124_184627_b6afb608-938b-4f12-b29a-96d59a4233a4.mp3",
           "input": "voices/storybook.astronaut.mp3"
         },
         "notes": [
           "lead trimmed 16 ms",
-          "kept 0.016–0.120 s of 1.50 s"
+          "kept 0.016–1.500 s of 1.50 s",
+          "noise floor -61 dBFS RMS gated (−24 dB below -49 dBFS)",
+          "sound was cut off by the generator: 90 ms fade-out"
         ]
       },
       "storybook.cowpony": {
@@ -2273,11 +2271,11 @@
     ],
     "bytes": {
       "themes": {
-        "sakura": 5632369,
-        "storybook": 5659272,
-        "ocean": 5501507,
+        "sakura": 5712631,
+        "storybook": 5780988,
+        "ocean": 5554075,
         "cosmic": 5542970,
-        "gpu": 5787351
+        "gpu": 5879961
       },
       "shared": 2360926
     }

@@ -146,6 +146,26 @@ test.describe('12. AI guide without GPT', () => {
     expect(w.pageErrors).toEqual([]);
   });
 
+  test('Chinese interface: Momo’s English win line names the prize in English (no Chinese toy name)', async ({ page }) => {
+    await boot(page, { display: 'desktop', lang: 'zh' });
+    expect(await plush(page, (p) => p.settings().system.language)).toBe('zh');
+    expect(await plush(page, (p) => p.settings().ai.voiceLanguage)).toBe('en');
+    await recordLines(page);
+    await start(page);
+    const { result } = await winARound(page, 10);
+    expect(result.outcome).toBe('won');
+    const names = await plush(page, (p, id) => p.game.library.assets().find((a: any) => a.id === id).name, result.targetTypeId);
+    await expect.poll(async () => (await lines(page)).some((l) => l.event === 'prize_won'), { timeout: 60_000 }).toBe(true);
+    const win = (await lines(page)).filter((l) => l.event === 'prize_won').at(-1)!;
+    console.log(`zh UI, ${result.targetTypeId} (en "${names.en}", zh "${names.zh}"): "${win.text}"`);
+    expect(win.text).not.toMatch(/[一-鿿぀-ヿ]/);
+    expect(win.text).toContain(names.en);
+    expect(win.text).not.toContain(names.zh);
+    // The interface itself stays Chinese.
+    await expect(page.getByTestId('start').or(page.getByTestId('grab')).or(page.getByTestId('again')).first()).toBeVisible();
+    expect(await page.evaluate(() => document.querySelector('.pp-root[data-lang]')?.getAttribute('data-lang'))).toBe('zh');
+  });
+
   test('guide switched off: no subtitles at all', async ({ page }) => {
     await boot(page, { display: 'desktop', settings: { ai: { enabled: false } } });
     await recordLines(page);

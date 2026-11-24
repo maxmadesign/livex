@@ -351,7 +351,22 @@ export class Cabinet {
     // Stickers on the body panel: a price card under the badge, a caution label in the corner.
     const panelW = Math.min(panelR, HW) - panelL;
     if (lowH > 0.32 && panelW > 0.18) this.decal(b, 'free', Math.min(0.2, panelW * 0.62), pcx, badgeY - badgeR - 0.06, -0.0443);
-    if (panelW > 0.2) this.decal(b, 'caution', Math.min(0.16, panelW * 0.4), Math.min(panelR, HW) - Math.min(0.16, panelW * 0.4) * 0.55, -FT - 0.075, -0.0443);
+    if (panelW > 0.2) {
+      // The label's printed strip is 0.92 w wide and 0.4 w tall (see makeDecalAtlas). On short cabinets the
+      // badge reaches up to the label's height: then the label goes between the badge's chrome ring and the
+      // panel edge (smaller if needed) instead of being drawn half under the badge.
+      const right = Math.min(panelR, HW);
+      const cy = -FT - 0.075;
+      let cw = Math.min(0.16, panelW * 0.4);
+      let cx = right - cw * 0.55;
+      const ring = badgeR + 0.008;
+      if (Math.abs(cy - badgeY) < ring + cw * 0.2 && cx - cw * 0.46 < pcx + ring) {
+        const left = pcx + ring + 0.012;
+        cw = Math.min(cw, (right - 0.01 - left) / 0.92);
+        cx = left + cw * 0.46;
+      }
+      if (cw >= 0.07) this.decal(b, 'caution', cw, cx, cy, -0.0443);
+    }
     if (landscape) {
       const leftR = BIN.xMin - 0.02, leftL = -half + F - 0.01;
       b.add(M.fascia, worldUV(this.box(leftR - leftL, lowH, 0.02), 'xy', 2.2), (leftL + leftR) / 2, lowMid, -0.055, 0, 0, 0, { receive: true });

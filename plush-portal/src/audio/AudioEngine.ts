@@ -28,7 +28,7 @@ import {
 } from '../core/contracts';
 import { THEME_IDS, type ThemeId, type Unsubscribe } from '../core/types';
 import { parseStudioManifest, studioSharedFiles, studioThemeFiles, themeOfCharacter, type StudioManifest } from './studio/manifest';
-import { CHARACTER_DUCK, CooldownGate, WIN_DUCK, attractChimeDelayMs, characterVoicing, squeakPitch, winPlan } from './studio/moments';
+import { CHARACTER_DUCK, CooldownGate, SHORT_VOICE_S, WIN_DUCK, attractChimeDelayMs, characterVoicing, squeakPitch, winPlan } from './studio/moments';
 import { StudioPlayer } from './studio/playlist';
 import { parseAudioManifest, type AudioManifest } from './synth/manifest';
 import type { SynthRequest, SynthResponse } from './synthWorker';
@@ -1359,6 +1359,10 @@ class AudioEngine implements AudioPort {
     if (voice && buffer && themeOfCharacter(assetId)) {
       const shot = this.startOneShot(buffer, { gain: voice.gain * volume, rate: v.rate, pan: options.pan, delay: base + v.delay, key: 'character' });
       if (shot) started.push(shot);
+      // A near-empty recording (a 0.1–0.35 s blip) gets the character's own squeak layered under it.
+      if (buffer.duration < SHORT_VOICE_S) {
+        this.playEffect('plush_squeak', { pitch: squeakPitch(assetId) * v.rate, volume, pan: options.pan, delay: base + v.delay + 0.001 }, started);
+      }
     } else {
       // Characters without their own voice still sound different: a squeak at their own pitch.
       this.playEffect('plush_squeak', { pitch: squeakPitch(assetId) * v.rate, volume, pan: options.pan, delay: base + v.delay + 0.001 }, started);
