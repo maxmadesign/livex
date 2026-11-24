@@ -5,7 +5,7 @@
  */
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { GuideFacts } from '../src/core/contracts';
-import { buildInstructions, buildLineInput } from '../src/ai/prompt';
+import { buildInstructions, buildLineInput, promptBrand } from '../src/ai/prompt';
 import type { LineResponseBody } from '../src/ai/protocol';
 import { fitLine } from '../src/ai/textLength';
 import { textCapability, type LearnedOverride } from './capabilities';
@@ -97,6 +97,7 @@ function buildBody(job: LineJob, learned: LearnedOverride | undefined): Record<s
   const { request, model } = job;
   const capability = textCapability(model, learned);
   const reasons = capability.reasoningEffort !== null && capability.reasoningEffort !== 'none';
+  const facts = request.event.facts as GuideFacts;
   const body: Record<string, unknown> = {
     model,
     instructions: buildInstructions({
@@ -104,9 +105,11 @@ function buildBody(job: LineJob, learned: LearnedOverride | undefined): Record<s
       persona: job.useClientPrompt ? request.persona : undefined,
       lang: request.lang,
       length: request.length,
+      // The brand exception to the "no real names" rule only for the names of a kit that allows them.
+      brand: promptBrand(request.theme, facts),
     }),
     input: buildLineInput({
-      event: { type: request.event.type, facts: request.event.facts as GuideFacts },
+      event: { type: request.event.type, facts },
       theme: request.theme,
       recentLines: request.recentLines,
     }),

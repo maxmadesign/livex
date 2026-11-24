@@ -13,6 +13,7 @@
 import type { GuideEmotion, GuideEvent } from '../core/contracts';
 import { hashString } from '../core/math';
 import type { Lang, ThemeId } from '../core/types';
+import { rewardFor, usableBrand } from './brand';
 import { directionKey } from './lines/direction';
 import type { LineLength } from './protocol';
 
@@ -165,15 +166,21 @@ export function factsCacheKey(event: GuideEvent): string {
     case 'slipped_after_grip':
       return [demo, f.slipReason ?? '-', f.contact ?? ''].join('|');
     case 'prize_won':
-      return [demo, f.toy?.typeId ?? '', f.toy?.name ?? '', f.newCharacter ? 'new' : ''].join('|');
+      return [demo, f.toy?.typeId ?? '', f.toy?.name ?? '', f.newCharacter ? 'new' : '', rewardKey(event)].join('|');
     case 'idle_hint':
     case 'user_requested_tip':
       return f.headTracking ? 'tracking' : '';
     case 'retry_prompt':
-      return f.lossStreak >= 3 ? 'streak' : '';
+      return rewardKey(event) || (f.lossStreak >= 3 ? 'streak' : '');
     default:
       return '';
   }
+}
+
+/** A line inviting the player to scan a QR must never be reused when there is none (or vice versa). */
+function rewardKey(event: GuideEvent): string {
+  const reward = rewardFor(event.type, event.facts);
+  return reward ? `qr:${reward.options}` : '';
 }
 
 export function lineCacheKey(parts: {
@@ -185,9 +192,11 @@ export function lineCacheKey(parts: {
   /** System prompt + persona, so edited prompts do not reuse old lines. */
   promptText: string;
 }): string {
+  // Lines that name an event are kept apart from the theme's generic ones (both kits share a theme).
+  const brand = usableBrand(parts.theme, parts.event.facts.brand);
   return [
     parts.event.type,
-    parts.theme,
+    brand ? `${parts.theme}@${brand.event}` : parts.theme,
     parts.lang,
     parts.length,
     parts.model || 'default',

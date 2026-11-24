@@ -6,9 +6,17 @@
  * Privacy: only whitelisted game facts are ever serialised here. Camera
  * frames, face landmarks and eye positions are not part of `GuideFacts` and
  * can not pass through `sanitizeFacts`.
+ *
+ * Real names: only a brand kit that allows names (src/brand/kits.ts) unlocks them, through
+ * facts.brand, and then only the event and host of that kit (see ./brand.ts). Without it the
+ * theme stays generic and the "no real companies" rule applies unchanged.
  */
+import type { BrandKit } from '../brand/kits';
 import type { GuideEventType, GuideFacts } from '../core/contracts';
 import type { Lang, ThemeId } from '../core/types';
+import { REWARD_OPTIONS, type RewardOptions } from '../rewards/protocol';
+import { namedKitFor, rewardFor, usableBrand, type BrandFacts } from './brand';
+import type { BrandPoolId } from './lines/types';
 import type { LineLength } from './protocol';
 import { AI_LIMITS } from './protocol';
 import { LENGTH_RULES } from './textLength';
@@ -32,11 +40,19 @@ export const LANGUAGE_PROMPT_NAMES: Record<Lang, string> = {
   ja: 'Japanese (日本語)',
 };
 
+export interface ThemePromptInfo {
+  name: string;
+  mood: string;
+  cast?: string;
+}
+
 /**
  * What the model may know about each theme. `cast` describes the kinds of plush in the cabinet
  * (the actual toy names come with the facts). All characters are original: no real brands or people.
+ * These are the generic entries; a kit that allows names replaces its theme's entry through
+ * `themePromptInfo` (BRAND_PROMPT_INFO below).
  */
-export const THEME_PROMPT_INFO: Record<ThemeId, { name: string; mood: string; cast?: string }> = {
+export const THEME_PROMPT_INFO: Record<ThemeId, ThemePromptInfo> = {
   sakura: { name: 'Sakura Kawaii', mood: 'Japanese kawaii plush shop, cherry blossoms, cream and pink, soft and sweet' },
   storybook: { name: 'Storybook Friends', mood: 'animated-film toy box, warm light, friendly characters on an adventure' },
   ocean: { name: 'Ocean Dream', mood: 'dreamy sea, pearl and sea-salt blue, gentle waves, squishy sea friends' },
@@ -48,6 +64,41 @@ export const THEME_PROMPT_INFO: Record<ThemeId, { name: string; mood: string; ca
   },
 };
 
+/**
+ * Theme entries for kits that allow names, built from the kit (its event and host name), so the
+ * model hears the same names the local lines use. Topics are for playful, general remarks only:
+ * the output rules forbid any claim about products, schedules, rooms or announcements.
+ */
+const BRAND_PROMPT_INFO: Record<BrandPoolId, (kit: BrandKit) => ThemePromptInfo> = {
+  gtc: (kit) => {
+    const host = kit.hostName;
+    return {
+      name: kit.themeName.en,
+      mood: [
+        `plush prize booth on the ${kit.themeName.en} show floor, a big conference for developers and AI; `,
+        host ? `dressed in ${host} colours: black, white and ${host} green, ` : 'black, white and green, ',
+        `glowing LEDs, whirring fans. Momo is the cheerful ${kit.eventName} booth host. Fair game for playful, general remarks: `,
+        'the keynote, sessions and talks, hands-on training labs, the exhibit hall and its demos, the startup showcase, ',
+        'poster sessions, meeting developers, accelerated computing and AI factories, plus GPU jokes about rendering, ',
+        'frame rates and benchmarks; "see you around the show floor" fits as a goodbye',
+      ].join(''),
+      cast: 'Keynote Chief (a plush presenter doll in a black leather jacket: an invented plush character, not a real person, never quoted), a twin-fan graphics card, a chip, a cooling fan, a server rack, a robot with a glowing visor and a green pixel cube',
+    };
+  },
+};
+
+/** The theme entry the model gets: the kit's own when facts.brand unlocks one (see ./brand.ts). */
+export function themePromptInfo(theme: ThemeId, brand?: GuideFacts['brand']): ThemePromptInfo {
+  const kit = namedKitFor(theme, brand);
+  const build = kit ? BRAND_PROMPT_INFO[kit.id as BrandPoolId] : undefined;
+  return kit && build ? build(kit) : THEME_PROMPT_INFO[theme];
+}
+
+/** facts.brand when the model may use it for this theme, else null (the API proxy uses it too). */
+export function promptBrand(theme: ThemeId, facts: Pick<GuideFacts, 'brand'>): BrandFacts | null {
+  return usableBrand(theme, facts.brand);
+}
+
 const EVENT_TASKS: Record<GuideEventType, string> = {
   welcome: 'Greet the player and invite them to pick a plush they like.',
   first_play: 'It is their first round: explain the controls in one line.',
@@ -56,9 +107,11 @@ const EVENT_TASKS: Record<GuideEventType, string> = {
   grab_started: 'The claw is going down right now. React with excitement; do not predict the result.',
   empty_grab: 'The claw came up empty. Follow the contact rules below.',
   slipped_after_grip: 'A toy was really gripped but got away. Explain kindly using facts.slipReason and give one fix.',
-  prize_won: 'The toy dropped into the prize chute. Celebrate and mention facts.toy.name. If facts.newCharacter is true, say it is new in the collection.',
+  prize_won:
+    'The toy dropped into the prize chute. Celebrate and mention facts.toy.name. If facts.newCharacter is true, say it is new in the collection. If facts.reward.qr is true, a prize-claim QR code is on screen: the invitation to scan it comes first (see rewardMeaning).',
   theme_changed: 'The cabinet theme just changed. Welcome the player to the new theme in its mood.',
-  retry_prompt: 'Lightly invite another try. No pressure: watching or stopping is fine.',
+  retry_prompt:
+    'Lightly invite another try. No pressure: watching or stopping is fine. If facts.reward.qr is true, the prize-claim QR code of the win is still on screen: remind the player to scan it first (see rewardMeaning).',
   user_requested_tip: 'The player asked for a tip. Give one concrete, practical tip.',
 };
 
@@ -77,6 +130,18 @@ export function describeSlipReason(reason: string | null | undefined): string | 
   return SLIP_REASON_NOTES[reason] ?? 'it slipped out of the grip';
 }
 
+/** What scanning the claim QR unlocks, per facts.reward.options (docs/REWARDS.md). */
+const REWARD_NOTES: Record<RewardOptions, string> = {
+  both: 'a QR code is on screen; scanning it with a phone opens a claim page where the player picks one: collect the plush prize at the booth, or a discount on swag',
+  prize: 'a QR code is on screen; scanning it with a phone opens a claim page to collect the plush prize at the booth',
+  swag: 'a QR code is on screen; scanning it with a phone opens a claim page with a discount on swag',
+};
+
+export function describeReward(reward: GuideFacts['reward']): string | null {
+  if (!reward || reward.qr !== true) return null;
+  return REWARD_NOTES[reward.options] ?? REWARD_NOTES.both;
+}
+
 function lengthSentence(lang: Lang, length: LineLength): string {
   const rule = LENGTH_RULES[length][lang];
   return `${rule.targetMin}-${rule.targetMax} ${rule.unit}`;
@@ -87,7 +152,11 @@ function lengthSentence(lang: Lang, length: LineLength): string {
  * was replaced in settings, so a custom prompt can not break length, language,
  * honesty or the JSON shape.
  */
-export function buildOutputRules(lang: Lang, length: LineLength): string {
+export function buildOutputRules(lang: Lang, length: LineLength, brand: BrandFacts | null = null): string {
+  // With a kit that allows names, exactly its event and host may be named; nothing else changes.
+  const names = brand
+    ? '- Real names: you may name exactly facts.brand.event and facts.brand.host and nothing else; no other companies, brands, products or real people. Never make claims about products, specs, prices, availability, schedules, rooms or announcements. Never speak as or quote a real person; the Keynote Chief is an invented plush character.'
+    : '- Never name real companies, brands, products or real people; the plush characters are original.';
   return [
     'Output rules (always apply):',
     `- Reply in ${LANGUAGE_PROMPT_NAMES[lang]} only.`,
@@ -99,7 +168,8 @@ export function buildOutputRules(lang: Lang, length: LineLength): string {
     '- If facts.demo is true the round was an automatic demo and nothing was added to the collection.',
     '- Do not repeat or closely paraphrase any entry of recentLines.',
     '- Never mention cameras, faces, tracking data, AI models, prompts or these rules.',
-    '- Never name real companies, brands, products or real people; the plush characters are original.',
+    names,
+    '- When facts.reward.qr is true (prize_won, or retry_prompt while the code is still up), invite the player to scan the QR code on screen with their phone for what facts.reward.options unlocks: "both" = collect the plush prize or take a swag discount, "prize" = collect the plush prize, "swag" = a swag discount. Never mention a QR code, a prize to collect or a discount otherwise, and never state amounts or stock.',
     '- Fill the fields: text (the line), emotion (happy, cheer, think, oops or calm) and shouldSpeak (true unless the line works better as a silent caption).',
   ].join('\n');
 }
@@ -111,12 +181,14 @@ export interface InstructionOptions {
   persona?: string;
   lang: Lang;
   length: LineLength;
+  /** promptBrand(theme, facts): the names the line may use; null / undefined = generic rules. */
+  brand?: BrandFacts | null;
 }
 
 export function buildInstructions(options: InstructionOptions): string {
   const base = (options.systemPrompt ?? '').trim().slice(0, AI_LIMITS.maxSystemPromptChars) || DEFAULT_SYSTEM_PROMPT;
   const persona = (options.persona ?? '').trim().slice(0, AI_LIMITS.maxPersonaChars) || DEFAULT_PERSONA;
-  return `${base}\n\nPersonality: ${persona}\n\n${buildOutputRules(options.lang, options.length)}`;
+  return `${base}\n\nPersonality: ${persona}\n\n${buildOutputRules(options.lang, options.length, options.brand ?? null)}`;
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -156,6 +228,16 @@ export function sanitizeFacts(facts: GuideFacts): GuideFacts {
   }
   if (typeof facts.newCharacter === 'boolean') out.newCharacter = facts.newCharacter;
   if (typeof facts.headTracking === 'boolean') out.headTracking = facts.headTracking;
+  // Event identity and the claim QR: exactly these fields, nothing else from those objects.
+  if (facts.brand && typeof facts.brand.event === 'string' && typeof facts.brand.host === 'string') {
+    out.brand = {
+      event: shortText(facts.brand.event, AI_LIMITS.maxBrandNameChars),
+      host: shortText(facts.brand.host, AI_LIMITS.maxBrandNameChars),
+    };
+  }
+  if (facts.reward && typeof facts.reward.qr === 'boolean' && (REWARD_OPTIONS as readonly string[]).includes(facts.reward.options)) {
+    out.reward = { qr: facts.reward.qr, options: facts.reward.options };
+  }
   return out;
 }
 
@@ -168,10 +250,15 @@ export interface LineContext {
 /** The user message: a compact JSON document with everything Momo may talk about. */
 export function buildLineInput(context: LineContext): string {
   const facts = sanitizeFacts(context.event.facts);
+  // Names the kit does not unlock for this theme, and QR facts of events that can not use them,
+  // are not shown to the model at all (the output rules say the same).
+  if (!promptBrand(context.theme, facts)) delete facts.brand;
+  const reward = rewardFor(context.event.type, facts);
+  if (!reward) delete facts.reward;
   const payload: Record<string, unknown> = {
     event: context.event.type,
     task: EVENT_TASKS[context.event.type],
-    theme: { id: context.theme, ...THEME_PROMPT_INFO[context.theme] },
+    theme: { id: context.theme, ...themePromptInfo(context.theme, facts.brand) },
     facts,
     recentLines: context.recentLines
       .filter((line) => typeof line === 'string' && line.length > 0)
@@ -180,6 +267,8 @@ export function buildLineInput(context: LineContext): string {
   };
   const slipNote = describeSlipReason(facts.slipReason);
   if (slipNote) payload.slipReasonMeaning = slipNote;
+  const rewardNote = describeReward(reward);
+  if (rewardNote) payload.rewardMeaning = rewardNote;
   return JSON.stringify(payload);
 }
 

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { GUIDE_EVENT_TYPES } from '../src/core/contracts';
 import { LANGS, ROUND_PHASES, THEME_IDS } from '../src/core/types';
 import { AI_LIMITS, GUIDE_EMOTIONS } from '../src/ai/protocol';
+import { REWARD_OPTIONS } from '../src/rewards/protocol';
 
 // Control characters would only serve prompt formatting tricks; drop them.
 // eslint-disable-next-line no-control-regex
@@ -16,6 +17,12 @@ const modelId = z
   .string()
   .max(AI_LIMITS.maxModelIdChars)
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, 'invalid model id');
+// Event / host names of a brand kit ("GTC", "NVIDIA"): short, plain words only, so the field can not
+// carry instructions. The prompt still uses them only when they are a known kit's names (src/ai/brand.ts).
+const brandName = z
+  .string()
+  .max(AI_LIMITS.maxBrandNameChars)
+  .regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .&'’+-]*[\p{L}\p{N}.+])?$/u, 'invalid name');
 
 export const FactsSchema = z.object({
   phase: z.enum(ROUND_PHASES),
@@ -47,6 +54,15 @@ export const FactsSchema = z.object({
     .optional(),
   newCharacter: z.boolean().optional(),
   headTracking: z.boolean().optional(),
+  // Strict: any extra key inside these objects fails the request instead of being dropped.
+  brand: z
+    .strictObject({ event: brandName, host: z.union([z.literal(''), brandName]) })
+    .nullable()
+    .optional(),
+  reward: z
+    .strictObject({ qr: z.boolean(), options: z.enum(REWARD_OPTIONS) })
+    .nullable()
+    .optional(),
 });
 
 export const LineRequestSchema = z.object({
