@@ -99,15 +99,16 @@ particles → bloom → resolution × 0.9 … — "AO off" is never waited for.
 
 Rules:
 
-- A sliding window of the last 120 frame times is evaluated about once per
-  second: after at least 0.9 s of frame time and 30 samples, or — at very low
-  frame rates — after at least 6 samples and 2.5 s.
+- Frame times are judged in consecutive windows of about one second: a window
+  closes after at least 0.9 s of frame time and 30 samples, or — at very low
+  frame rates — after at least 6 samples and 2.5 s. Each window is judged on its own frames only.
 - **Reduce** by one effective step when the 80th-percentile frame time is above
-  `1.22 × (1000 / target)` on two evaluations in a row (20.3 ms at 60 fps, 40.7 ms at 30 fps).
-- **Restore** one list position when it is below `0.72 ×` the target frame time on seven
-  evaluations in a row (12 ms at 60 fps). The gap between the two thresholds and
+  `1.22 × (1000 / target)` in three windows in a row (20.3 ms at 60 fps, 40.7 ms at 30 fps).
+  A dip of a second or two therefore removes nothing. When the machine is far
+  over budget (80th percentile above `2.5 ×` the target frame time) two steps are taken at once.
+- **Restore** one list position when it is below `0.72 ×` the target frame time in seven
+  windows in a row (12 ms at 60 fps). The gap between the two thresholds and
   the slow recovery keep it from oscillating.
-- After every change the window is cleared so the new configuration is judged on its own.
 - A single frame longer than 250 ms is ignored as a hitch (shader compilation,
   tab switch). Two or more such frames in a row are a slow machine: they count,
   clamped to 250 ms each, so the optimiser also steps down on a device that

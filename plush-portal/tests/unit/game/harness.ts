@@ -81,6 +81,12 @@ export interface PlayOptions {
   /** Called every fixed step (after the step). */
   onStep?: (core: GameCore) => void;
   demo?: boolean;
+  /**
+   * A patient player: once the trolley has stopped, wait up to this many
+   * seconds for the claw to stop swinging before pressing the button.
+   * 0 (default) presses as soon as the trolley stands still.
+   */
+  settleSwing?: number;
 }
 
 /**
@@ -117,6 +123,7 @@ export function playRound(core: GameCore, x: number, z: number, options: PlayOpt
   const maxSteps = Math.ceil((options.maxSeconds ?? 40) / FIXED_DT);
   const ax = Math.min(CLAW.maxX, Math.max(CLAW.minX, x));
   const az = Math.min(CLAW.maxZ, Math.max(CLAW.minZ, z));
+  let waited = 0;
   for (let i = 0; i < maxSteps && !result; i++) {
     if (m.phase === 'READY' || m.phase === 'AIMING') {
       const dx = ax - core.claw.trolleyX;
@@ -129,7 +136,11 @@ export function playRound(core: GameCore, x: number, z: number, options: PlayOpt
         core.controller.inputZ = dz * k;
       } else {
         core.controller.clearInput();
-        if (Math.hypot(core.claw.trolleyVX, core.claw.trolleyVZ) < 0.01) core.controller.requestGrab();
+        if (Math.hypot(core.claw.trolleyVX, core.claw.trolleyVZ) < 0.01) {
+          const calm = core.claw.swingSpeed() < 0.02;
+          if (calm || waited >= (options.settleSwing ?? 0)) core.controller.requestGrab();
+          else waited += FIXED_DT;
+        }
       }
     }
     core.fixedStep();

@@ -75,6 +75,16 @@ describe('AdaptiveQuality', () => {
     expect(user).toEqual(graphics('ultra'));
   });
 
+  it('a one-second dip to half the frame rate removes nothing', () => {
+    const a = new AdaptiveQuality();
+    feed(a, 16.7, 10);
+    for (let i = 0; i < 5; i++) {
+      expect(feed(a, 33, 1)).toBe(0);
+      expect(feed(a, 16.7, 6)).toBe(0);
+    }
+    expect(a.level).toBe(0);
+  });
+
   it('skips steps that would change nothing for the selected quality', () => {
     const a = new AdaptiveQuality();
     a.level = 5; // particles, bloom, ao, reflections, glass
@@ -87,6 +97,8 @@ describe('AdaptiveQuality', () => {
   it('recovers slowly and does not flap on borderline frame times', () => {
     const a = new AdaptiveQuality();
     feed(a, 34, 8);
+    // The one-second window that straddles the end of the slow period may still count as slow.
+    feed(a, 16.7, 2);
     const reduced = a.level;
     expect(reduced).toBeGreaterThanOrEqual(2);
     // Frames inside the hysteresis band (neither clearly slow nor clearly fast) change nothing.

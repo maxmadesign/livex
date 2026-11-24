@@ -44,6 +44,8 @@ export const ROUND_TUNING = {
   slackAllowance: 0.022,
   /** Seconds the claw must sit still on something before the descent is declared finished. */
   stallTime: 0.12,
+  /** Total time the claw may be carried by toys before the descent ends regardless of motion. */
+  maxSlackTime: 0.9,
   /** Hub speed below which the claw counts as "sitting still" (m/s). */
   stallSpeed: 0.035,
 };
@@ -71,6 +73,7 @@ export class RoundController {
   private releasedHolding = false;
   private palmTime = 0;
   private stallTime = 0;
+  private slackTotal = 0;
   private awardTime = -1;
   /** Seconds left on the aim timer, or -1 when there is no limit. */
   aimTimeLeft = -1;
@@ -170,6 +173,7 @@ export class RoundController {
         this.grip.markAim();
         this.palmTime = 0;
         this.stallTime = 0;
+        this.slackTotal = 0;
         claw.stopTrolley();
         claw.setFingers(1);
         claw.setWinch(CLAW.ropeMax, this.params.descendSpeed);
@@ -313,7 +317,13 @@ export class RoundController {
         this.palmTime = palm ? this.palmTime + dt : 0;
         const resting = claw.slackTime > 0.05 && claw.hubSpeed() < ROUND_TUNING.stallSpeed;
         this.stallTime = resting ? this.stallTime + dt : 0;
-        const slack = (this.palmTime > 0.05 && claw.slackTime > 0.03) || this.stallTime > ROUND_TUNING.stallTime;
+        // Fallback: a claw that keeps wriggling on top of a wobbling toy never looks "stalled".
+        // After it has been carried by something for a while in total, it has landed.
+        if (claw.slackTime > 0) this.slackTotal += dt;
+        const slack =
+          (this.palmTime > 0.05 && claw.slackTime > 0.03) ||
+          this.stallTime > ROUND_TUNING.stallTime ||
+          this.slackTotal > ROUND_TUNING.maxSlackTime;
         const bottom = claw.ropeLength > CLAW.ropeMax - 0.004 && Math.abs(claw.ropeSpeed) < 0.02;
         if (m.phaseTime > 0.25 && (slack || bottom)) {
           if (!this.touched) {

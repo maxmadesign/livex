@@ -1,8 +1,8 @@
 import type { GraphicsSettings } from '../settings/spec';
 
 /**
- * Automatic optimiser. Watches a sliding window of frame times and, only when
- * the target cannot be held, removes cost in this order:
+ * Automatic optimiser. Judges the frame times of consecutive ~1 s windows and, only when
+ * the target cannot be held for several windows in a row, removes cost in this order:
  *   decorative particles → bloom → ambient occlusion → expensive reflections /
  *   glass → internal resolution → shadow resolution.
  * It never touches physics, input, the number of toys or the layout. Upper and
@@ -66,23 +66,30 @@ export class AdaptiveQuality {
     this.cursor = (this.cursor + 1) % WINDOW;
     this.count = Math.min(WINDOW, this.count + 1);
     this.sinceEval += frameMs;
-    // Normally ~1 s and 30 frames of evidence; at very low frame rates a handful of frames must do.
+    // Each evaluation looks only at the frames since the previous one (about 1 s; at very low
+    // frame rates a handful of frames must do), so a short burst cannot colour several verdicts.
     const enough = this.count >= 30 || (this.count >= 6 && this.sinceEval >= 2500);
     if (this.sinceEval < 900 || !enough) return false;
     this.sinceEval = 0;
     const sorted = Array.from(this.samples.subarray(0, this.count)).sort((a, b) => a - b);
+    this.count = 0;
+    this.cursor = 0;
     const p80 = sorted[Math.floor(sorted.length * 0.8)]!;
     const target = 1000 / targetFps;
     const before = this.level;
     if (p80 > target * 1.22) {
       this.fastEvals = 0;
-      if (++this.slowEvals >= 2 && this.level < STEPS.length) {
-        // Advance to the next step that really changes something for these settings.
-        const before = user ? this.apply(user).reductions.length : -1;
-        do this.level++;
-        while (user && this.level < STEPS.length && this.apply(user).reductions.length === before);
+      // Three slow windows in a row (about 3 s) before anything is removed, so a dip of a second
+      // or two changes nothing. A machine that is far over budget drops two steps at a time.
+      if (++this.slowEvals >= 3 && this.level < STEPS.length) {
+        const jumps = p80 > target * 2.5 ? 2 : 1;
+        for (let j = 0; j < jumps && this.level < STEPS.length; j++) {
+          // Advance to the next step that really changes something for these settings.
+          const active = user ? this.apply(user).reductions.length : -1;
+          do this.level++;
+          while (user && this.level < STEPS.length && this.apply(user).reductions.length === active);
+        }
         this.slowEvals = 0;
-        this.count = 0; // measure the new configuration from scratch
       }
     } else if (p80 < target * 0.72) {
       this.slowEvals = 0;
@@ -90,7 +97,6 @@ export class AdaptiveQuality {
       if (++this.fastEvals >= 7 && this.level > 0) {
         this.level--;
         this.fastEvals = 0;
-        this.count = 0;
       }
     } else {
       this.slowEvals = 0;

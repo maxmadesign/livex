@@ -12,10 +12,12 @@ export class DemoPilot {
   private wait = 0;
   private aimX = 0;
   private aimZ = 0;
+  private aimTime = 0;
 
   reset(): void {
     this.target = null;
     this.wait = 0;
+    this.aimTime = 0;
   }
 
   private pick(core: GameCore): void {
@@ -37,9 +39,11 @@ export class DemoPilot {
     }
     this.target = best;
     if (best) {
+      // Aim at the centre of mass, but never at a point the trolley cannot reach
+      // (the pilot used to wait forever for a target a few millimetres outside the rails).
       const com = best.body.worldCom();
-      this.aimX = com.x;
-      this.aimZ = com.z;
+      this.aimX = Math.min(CLAW.maxX, Math.max(CLAW.minX, com.x));
+      this.aimZ = Math.min(CLAW.maxZ, Math.max(CLAW.minZ, com.z));
     }
     this.wait = 0.9;
   }
@@ -66,6 +70,13 @@ export class DemoPilot {
     const dx = this.aimX - core.claw.trolleyX;
     const dz = this.aimZ - core.claw.trolleyZ;
     const d = Math.hypot(dx, dz);
+    this.aimTime += dt;
+    if (this.aimTime > 8) {
+      // Safety net: a demo round always ends, wherever the claw got to.
+      c.clearInput();
+      c.requestGrab();
+      return;
+    }
     if (d > 0.005) {
       // Ease in towards the target like a careful player.
       const k = Math.min(1, d / 0.06 + 0.12) / d;

@@ -225,6 +225,9 @@ function TopBar({ layout }: { layout: HudLayout }) {
   const rich = layout.density !== 'minimal';
   const b = layout.topBar;
   const iSize = Math.max(layout.touch * 0.7, 44);
+  // Where the top bar lies outside the interactive safe zone (86" portrait) the theme name is
+  // only a label; themes are opened from the control panel. The "i" is the one deliberate exception.
+  const reachable = b.y >= layout.safeTop - 1 && b.y + b.h <= layout.safeBottom + 1;
   return (
     <>
       <div className="pp-topbar" style={{ left: b.x, top: b.y, width: b.w - iSize - 14 * layout.unit, minHeight: b.h }}>
@@ -234,11 +237,16 @@ function TopBar({ layout }: { layout: HudLayout }) {
             <b>PLUSH</b> <i>PORTAL</i>
           </span>
         </div>
-        {rich ? (
+        {rich && reachable ? (
           <button type="button" className="pp-chip" onClick={() => open('themes')} data-testid="theme-chip">
             <i className="dot" style={{ background: 'var(--c-primary)' }} />
             {t(`theme.${themeId}.name`)}
           </button>
+        ) : rich ? (
+          <span className="pp-chip" data-testid="theme-chip">
+            <i className="dot" style={{ background: 'var(--c-primary)' }} />
+            {t(`theme.${themeId}.name`)}
+          </span>
         ) : null}
         <span className="pp-spacer" />
         {layout.density === 'rich' && wins > 0 ? <span className="pp-chip">{t('hud.wins', { count: wins })}</span> : null}

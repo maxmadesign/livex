@@ -31,6 +31,8 @@ const difficulties = (value('difficulty', 'arcade') === 'all' ? ['easy', 'arcade
 const seeds = Array.from({ length: Number(value('seeds', '2')) }, (_, i) => 11 + i * 17);
 const verbose = flag('verbose');
 const OFFSETS_CM = value('offsets', '0,1.5,3,4.5,6,8,10').split(',').map(Number);
+/** --patient [s]: the simulated player waits up to s seconds (default 2.5) for the claw to stop swinging before grabbing. */
+const patient = args.includes('--patient') ? Number(value('patient', '2.5')) || 2.5 : 0;
 /** Optional overrides for experiments: --assist 0 --force 0.8 --swing 1 */
 const overrides: Record<string, number> = {};
 if (args.includes('--assist')) overrides.gripAssist = Number(value('assist', '1'));
@@ -106,7 +108,7 @@ async function sweep(difficulty: Difficulty): Promise<void> {
             const label = `${difficulty}/${theme}/seed${seed}/${target.type}@${off}cm`;
             let trace: RoundTrace;
             try {
-              trace = playRound(core, x, z);
+              trace = playRound(core, x, z, { settleSwing: patient });
             } catch (error) {
               anomalies.push(`${label}: ${(error as Error).message}`);
               core.dispose();
@@ -143,7 +145,7 @@ async function sweep(difficulty: Difficulty): Promise<void> {
         if (clear) for (const t of core.field.onField()) if (Math.hypot(comOf(t).x - ex, comOf(t).z - ez) < 0.24) core.phys.removeToy(t);
         const x = Math.min(CLAW.maxX, Math.max(CLAW.minX, ex));
         const z = Math.min(CLAW.maxZ, Math.max(CLAW.minZ, ez));
-        const trace = playRound(core, x, z);
+        const trace = playRound(core, x, z, { settleSwing: patient });
         checkRound(`${difficulty}/${theme}/seed${seed}/empty(${ex},${ez})`, core, trace);
         add(emptyTally, trace);
         if (trace.result.outcome !== 'empty') anomalies.push(`${difficulty}/${theme}/seed${seed}: empty spot (${ex},${ez}) ended ${trace.result.outcome} contact=${trace.result.contact}`);
@@ -201,7 +203,7 @@ async function longRun(count: number): Promise<void> {
       const steps0 = core.phys.stepCount;
       let trace: RoundTrace;
       try {
-        trace = playRound(core, x, z);
+        trace = playRound(core, x, z, { settleSwing: patient });
       } catch (error) {
         anomalies.push(`${label}: ${(error as Error).message}`);
         break;

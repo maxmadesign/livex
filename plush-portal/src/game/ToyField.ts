@@ -148,14 +148,17 @@ export class ToyField {
       const yaw = (this.rng() - 0.5) * 0.7;
       placed.push(this.phys.addToy(asset, [x, 0.004, z], yawQuat(yaw), scale, this.options.massScale));
     }
-    // Second layer: dropped from above between the first-layer toys.
-    let layerY = 0.3;
-    while (placed.length < count) {
+    // Second layer: dropped from above between the first-layer toys. The drop
+    // heights cycle through a few levels that all stay below the ceiling (a
+    // large, dense field used to spawn toys above the cabinet roof, where they
+    // stayed); toys on the same level get different spots from findDropSpot.
+    const topLevel = Math.max(0, Math.min(3, Math.floor((FIELD.ceilingY - 0.22 - 0.3) / 0.16)));
+    for (let k = 0; placed.length < count; k++) {
       const asset = this.nextAsset();
       const spot = this.findDropSpot(asset.footprint * scale, placed.length);
       const yaw = (this.rng() - 0.5) * 1.6;
-      placed.push(this.phys.addToy(asset, [spot[0], layerY, spot[2]], yawQuat(yaw), scale, this.options.massScale));
-      layerY += 0.16;
+      const y = 0.3 + (k % (topLevel + 1)) * 0.16;
+      placed.push(this.phys.addToy(asset, [spot[0], y, spot[2]], yawQuat(yaw), scale, this.options.massScale));
     }
     this.phys.snapPoses();
     return placed;
@@ -226,10 +229,31 @@ export class ToyField {
       preStep?.();
       this.phys.step();
       postStep?.();
+      this.calmWobble();
       calm = this.phys.maxToySpeed() < 0.02 ? calm + 1 : 0;
       if (steps > 40 && calm > 24) break;
     }
     this.phys.snapPoses();
     return steps * FIXED_DT;
+  }
+
+  /**
+   * Freshly placed round-bottomed toys rock for many seconds before they come
+   * to rest. Settling runs off-screen, so the rocking of toys that are already
+   * slow is damped hard here (and only here, never during play): the field is
+   * at rest when the player first sees it.
+   */
+  private calmWobble(): void {
+    const keepSpin = Math.max(0, 1 - 14 * FIXED_DT);
+    const keepSlide = Math.max(0, 1 - 4 * FIXED_DT);
+    for (const toy of this.phys.toys.values()) {
+      const body = toy.body;
+      if (body.isSleeping()) continue;
+      const v = body.linvel();
+      if (Math.hypot(v.x, v.y, v.z) > 0.35) continue; // still falling or tumbling: leave it alone
+      const w = body.angvel();
+      body.setAngvel({ x: w.x * keepSpin, y: w.y * keepSpin, z: w.z * keepSpin }, false);
+      body.setLinvel({ x: v.x * keepSlide, y: v.y, z: v.z * keepSlide }, false);
+    }
   }
 }

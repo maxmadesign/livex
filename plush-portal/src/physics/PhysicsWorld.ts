@@ -85,6 +85,12 @@ export interface PhysicsOptions {
 const TOY_GROUPS = groups(GROUP.TOY, GROUP.STATIC | GROUP.TOY | GROUP.CLAW | GROUP.SENSOR);
 const TOY_SOFT_GROUPS = groups(GROUP.TOY_SOFT, GROUP.STATIC | GROUP.CLAW | GROUP.SENSOR);
 const STATIC_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.TOY_SOFT | GROUP.CLAW);
+/**
+ * The clear guard around the exit only stops the solid body of a toy. Floppy
+ * ears and tails drape over it: otherwise a released prize could hang on the
+ * guard by an ear instead of dropping into the exit.
+ */
+const GUARD_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.CLAW);
 const SENSOR_GROUPS = groups(GROUP.SENSOR, GROUP.TOY | GROUP.TOY_SOFT);
 const NO_GROUPS = groups(GROUP.NONE, GROUP.NONE);
 
@@ -158,7 +164,7 @@ export class PhysicsWorld {
       .setTranslation(cx, cy, cz)
       .setFriction(friction)
       .setRestitution(restitution)
-      .setCollisionGroups(STATIC_GROUPS);
+      .setCollisionGroups(kind === 'chuteWall' ? GUARD_GROUPS : STATIC_GROUPS);
     const collider = this.world.createCollider(desc, body);
     this.staticKinds.set(collider.handle, kind);
     return collider;
