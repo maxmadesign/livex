@@ -1,3 +1,20 @@
+import { ACTIVE_BRAND, type BrandId } from '../../brand';
+
+/** GPU theme copy per brand kit (see ui.en.ts). */
+const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
+  gtc: {
+    tagline: 'GTC 展台抓娃娃机，赢取 GPU 毛绒玩偶',
+    welcome: '欢迎来到 {event}',
+    sub: '免费畅玩 · 赢取 GPU 毛绒玩偶',
+  },
+  neutral: {
+    tagline: '霓虹绿的毛绒芯片和显卡',
+    welcome: '欢迎来到 {event}！',
+    sub: '免费畅玩 · 赢取可爱毛绒玩偶',
+  },
+};
+const kit = GPU_KIT[ACTIVE_BRAND.id];
+
 /** zh translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiZh: Record<string, string> = {
 
@@ -109,9 +126,31 @@ export const uiZh: Record<string, string> = {
   'theme.ocean.tagline': '软软的海盐色白日梦',
   'theme.cosmic.name': '宇宙街机',
   'theme.cosmic.tagline': '来自轨道的霓虹小伙伴',
-  'theme.gpu.name': '显卡派对',
-  'theme.gpu.tagline': '霓虹绿的毛绒芯片和显卡',
+  'theme.gpu.name': ACTIVE_BRAND.themeName.zh,
+  'theme.gpu.tagline': kit.tagline,
   'theme.switching': '正在切换主题…',
+
+  'brand.logo.alt': '{event} 标志',
+  'brand.attract.welcome': kit.welcome,
+  'brand.attract.sub': kit.sub,
+  'brand.attract.reward.both': '免费畅玩 · 抓到娃娃扫码领奖，或享周边折扣',
+  'brand.attract.reward.prize': '免费畅玩 · 抓到娃娃扫码即可领奖',
+  'brand.attract.reward.swag': '免费畅玩 · 抓到娃娃扫码享周边折扣',
+  'brand.status.title': '品牌套件',
+  'brand.status.kit': '套件',
+  'brand.status.event': '活动标志',
+  'brand.status.host': '主办方标志',
+  'brand.status.font': '品牌字体',
+  'brand.status.checking': '正在检查…',
+  'brand.status.logo.official': '正在使用官方文件（{path}）',
+  'brand.status.logo.placeholder': '正在使用占位图。如需替换，请将官方文件放到 public/{path}',
+  'brand.status.logo.missing': '未显示。如需显示，请将官方文件放到 public/{path}',
+  'brand.status.logo.none': '此套件没有',
+  'brand.status.logo.original': '原创图案（{path}）',
+  'brand.status.font.loaded': '已加载 {family}',
+  'brand.status.font.fallback': '未找到 {family}，正在使用 {fallback}。如需使用，请将字体文件放到 public/{path}',
+  'brand.status.font.none': '此套件没有，正在使用 {fallback}',
+  'brand.status.note': '官方文件请放到 public/{dir}（或生产构建中的同一文件夹），下次加载页面时生效。',
 
   'guide.name': 'Momo',
   'guide.source.gpt': 'GPT',

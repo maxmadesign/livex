@@ -353,22 +353,12 @@ button.pp-chip { cursor: pointer; }
 .pp-seg button:not([aria-pressed="true"]),
 .pp-input, .pp-select, .pp-textarea,
 .pp-note, .pp-kv, .pp-card, .pp-toy { color: #3a2e44; }
-/* Cosmic is the one dark theme: text drawn in the "deep" primary (section headings, dialog
-   titles, direction arrows) was below 3:1 against its dark surfaces. The win card keeps the deep
-   primary: its title sits on the light centre of the card. */
+/* Cosmic is a dark theme: text drawn in the "deep" primary (section headings, dialog titles,
+   direction arrows) was below 3:1 against its dark surfaces. The win card keeps the deep primary:
+   its title sits on the light centre of the card. The GPU theme has its own sheet (theme-gpu.css). */
 .pp-root[data-theme="cosmic"] .pp-sec,
 .pp-root[data-theme="cosmic"] .pp-modal header h1,
-.pp-root[data-theme="cosmic"] .pp-dpad .pp-btn,
-.pp-root[data-theme="gpu"] .pp-sec,
-.pp-root[data-theme="gpu"] .pp-modal header h1,
-.pp-root[data-theme="gpu"] .pp-dpad .pp-btn { color: var(--c-glow); }
-/* GPU Party's button faces are light lime (primary #76b900, accent #9be33a, accent2 #e4ff9e): white
-   lettering was 2.4:1 on the primary (GRAB) and 1.6:1 on the accent (START, PLAY AGAIN). Filled buttons
-   and the attract call to action use the theme's dark paper colour instead (7.7:1 / 11.9:1). */
-.pp-root[data-theme="gpu"] .pp-btn:not(.soft):not(.round),
-.pp-root[data-theme="gpu"] .pp-cta { color: var(--c-paper); text-shadow: 0 calc(var(--u) * 2) 0 rgba(255, 255, 255, 0.3); }
-.pp-root[data-theme="gpu"] .pp-cta .title { text-shadow: 0 calc(var(--u) * 4) 0 rgba(255, 255, 255, 0.35), 0 0 calc(var(--u) * 22) rgba(255, 255, 255, 0.55); }
-.pp-root[data-theme="gpu"] .pp-cta .sub { text-shadow: none; }
+.pp-root[data-theme="cosmic"] .pp-dpad .pp-btn { color: var(--c-glow); }
 
 /* ===================================================================== phones
    Phone preset (data-profile="mobile"): the solver (src/layout/solve.ts → solvePhone) places every

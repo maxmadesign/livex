@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ACTIVE_BRAND } from '../../../src/brand';
 import { LANGS } from '../../../src/core/types';
 import { hasString, translate } from '../../../src/i18n';
 import { registerAllStrings } from '../../../src/i18n/all';
@@ -87,7 +88,9 @@ describe('GPU Party theme definition', () => {
 
   it('has its own strings in every language', () => {
     const keys = Object.keys(gpuStrings.en).sort();
-    for (const key of ['gpu.tagline', 'gpu.description', 'gpu.track', 'gpu.originals', 'gpu.char.chief', 'gpu.char.pixel']) expect(keys).toContain(key);
+    for (const key of ['gpu.tagline', 'gpu.description', 'gpu.track', 'gpu.char.chief', 'gpu.char.pixel']) expect(keys).toContain(key);
+    // The "all characters are original" note belongs to the neutral kit only (src/i18n/strings/gpu.ts).
+    expect(keys.includes('gpu.originals')).toBe(ACTIVE_BRAND.id === 'neutral');
     for (const lang of LANGS) {
       expect(Object.keys(gpuStrings[lang]).sort(), lang).toEqual(keys);
       for (const key of keys) {

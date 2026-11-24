@@ -1,13 +1,16 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createApp, type App as AppInstance } from '../app/bootstrap';
+import { brandForTheme } from '../brand';
+import { loadBrandFont } from '../brand/fonts';
 import { logError } from '../diagnostics/log';
 import { registerAllStrings } from '../i18n/all';
 import type { FrameBox } from '../layout/frame';
 import { THEMES } from '../themes/themes';
 import { AttractOverlay } from './AttractOverlay';
+import { BootScreen } from './BootScreen';
 import { CalibrationOverlay } from './CalibrationOverlay';
 import { AppContext, useApp, useSettings, useUi } from './context';
-import { BootScreen, CollectionDialog, DeviceChooser, ThemePicker, TutorialDialog } from './Dialogs';
+import { CollectionDialog, DeviceChooser, ThemePicker, TutorialDialog } from './Dialogs';
 import { Hud } from './Hud';
 import { ScoreHud } from './ScoreHud';
 import { useModals } from './modals';
@@ -122,6 +125,20 @@ function Shell({ onFrame }: { onFrame: (report: FrameReport) => void }) {
     app.game.setModalOpen(true);
   }, [app, phase, demo]);
 
+  // The brand typeface is fetched only once a theme dressed by the kit is shown (other themes never
+  // ask for its files); the fallback stack is in place before the first paint (src/brand/fonts.ts).
+  const kit = brandForTheme(themeId);
+  useLayoutEffect(() => {
+    if (kit) void loadBrandFont(kit);
+    // From here on the stylesheet colours the page for the theme (index.html marked it before load).
+    delete document.documentElement.dataset.bootTheme;
+    // Phone browsers paint their toolbar in the theme colour: black for the kit's theme, else the page default.
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) return;
+    meta.dataset.initial ??= meta.content;
+    meta.content = kit ? kit.palette.black : meta.dataset.initial;
+  }, [kit]);
+
   const ui = THEMES[themeId].ui;
   // The page positions the canvas and this HUD in the box (before paint, so nothing flashes).
   const frame = layout.frame;
@@ -145,7 +162,7 @@ function Shell({ onFrame }: { onFrame: (report: FrameReport) => void }) {
 
   return (
     <div className="pp-hud-root" style={{ ...style, position: 'absolute', inset: 0, pointerEvents: 'none' }} data-reduced={reduced}>
-      <div className="pp-root" data-lang={lang} data-theme={themeId} data-profile={layout.profile} data-reduced={reduced} style={{ ...style, background: 'none', pointerEvents: 'none' }}>
+      <div className="pp-root" data-lang={lang} data-theme={themeId} data-brand={kit?.id} data-profile={layout.profile} data-reduced={reduced} style={{ ...style, background: 'none', pointerEvents: 'none' }}>
         {/* Stacking follows document order: HUD, score, attract call to action, calibration countdown, then dialogs. */}
         {bootStage === 'ready' ? <Hud layout={layout} /> : null}
         {bootStage === 'ready' ? <ScoreHud layout={layout} /> : null}

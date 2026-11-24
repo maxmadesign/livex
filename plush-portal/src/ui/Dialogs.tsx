@@ -163,36 +163,3 @@ export function CollectionDialog({ layout }: { layout: HudLayout }) {
     </Modal>
   );
 }
-
-export function BootScreen() {
-  const t = useT();
-  const boot = useUi((s) => s.boot);
-  return (
-    <div className="pp-boot" data-done={boot.stage === 'ready'} data-testid="boot" aria-hidden={boot.stage === 'ready'}>
-      <div>
-        <h1>
-          PLUSH <i>PORTAL</i>
-        </h1>
-        {boot.stage === 'error' ? (
-          <div className="error">
-            <p>{t('boot.error.title')}</p>
-            <p style={{ fontWeight: 500, opacity: 0.8, margin: '0.5em 0 1em' }}>{boot.error}</p>
-            <p style={{ fontWeight: 500 }}>{t('boot.error.hint')}</p>
-            <p style={{ marginTop: '1em' }}>
-              <button type="button" className="pp-btn" style={{ ['--u' as string]: '1px', ['--touch' as string]: '56px' }} onClick={() => location.reload()}>
-                {t('boot.retry')}
-              </button>
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="bar">
-              <i style={{ width: `${Math.round(boot.progress * 100)}%` }} />
-            </div>
-            <p>{t(`boot.${boot.label}`)}</p>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
