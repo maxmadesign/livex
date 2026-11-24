@@ -1,3 +1,4 @@
+import { NVIDIA_PALETTE as N } from '../brand/kits';
 import type { ThemeId } from '../core/types';
 
 export type ParticleKind = 'petals' | 'confetti' | 'bubbles' | 'stars';
@@ -236,9 +237,10 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     backdrop: { top: '#2a2058', bottom: '#191233', bokeh: ['#57e0f0', '#ff9ec0', '#a98bff', '#ffe3a8'] },
     particles: { kind: 'stars', colors: ['#57e0f0', '#ff9ec0', '#ffe9a8', '#ffffff', '#b79cff'] },
   },
-  // GPU Party: plush merchandise from a graphics-card / AI-computing fan shop. A matte black
-  // lacquered cabinet with a vivid lime accent stripe, lime LEDs chasing like data on a bus,
-  // a cool white key light with a green rim, and green "data bit" confetti for wins.
+  // GPU theme, dressed by the active brand kit (GTC by default): a keynote-stage booth. A black
+  // lacquered cabinet with a brand-green accent stripe, an LED wall carrying the event logo, green
+  // and white LEDs chasing like data on a bus, a white key light with a green rim, and green / white
+  // "data bit" confetti for wins.
   // UI text (ink) on paper / panel: 17.5:1 / 15.4:1; primary 7.7:1, accent 11.9:1 on paper.
   gpu: {
     id: 'gpu',
@@ -252,40 +254,42 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
       panel: '#1a2212',
       glow: '#b6ff5c',
     },
+    // Everything below `ui` uses only the brand palette (src/brand/kits.ts NVIDIA_PALETTE): green,
+    // black, white and neutral greys; the derived greenLight only where light is emitted.
     cabinet: {
-      frame: '#0d0e0f',
-      frameAccent: '#76b900',
-      metalTint: '#dde3e8',
-      clawCap: '#76b900',
-      backboard: '#0e120b',
-      backboardInk: '#3f6310',
-      // Backdrop / decor kit (owned by the environment workstream): PCB wallpaper, chips,
-      // fans, "GPU" block letters and the replaceable emblem (public/assets/themes/gpu/logo.svg).
+      frame: N.gray950,
+      frameAccent: N.green,
+      metalTint: N.gray100,
+      clawCap: N.green,
+      backboard: N.gray950,
+      backboardInk: N.gray800,
+      // Backdrop / decor kit: PCB wallpaper, the LED wall with the brand kit's event logo
+      // (src/scene/ledWall.ts), black anodised fans, chips and lit traces.
       pattern: 'circuit',
-      mat: '#171d12',
-      matInk: '#33500f',
-      fascia: '#0b0c0d',
-      velvet: '#1e3209',
-      acrylicEdge: '#8fd61a',
-      led: ['#76b900', '#9be33a', '#b6ff5c', '#76b900', '#e8ffd0'],
+      mat: N.gray900,
+      matInk: N.gray700,
+      fascia: N.black,
+      velvet: N.gray900,
+      acrylicEdge: N.green,
+      led: [N.green, N.white, N.green, N.greenLight],
       ledMode: 'chase',
     },
     lights: {
-      key: '#eef4ff',
-      keyIntensity: 3.0,
-      sky: '#d4e2f6',
-      ground: '#141c0d',
-      hemiIntensity: 0.55,
-      rim: '#7fd400',
-      rimIntensity: 1.8,
+      key: N.white,
+      keyIntensity: 3.1,
+      sky: N.gray100,
+      ground: N.gray950,
+      hemiIntensity: 0.5,
+      rim: N.green,
+      rimIntensity: 1.6,
       envIntensity: 0.55,
-      env: ['#e6edf6', '#2c4a12', '#0b0e09'],
-      exposure: 1.08,
+      env: [N.gray100, N.gray800, N.black],
+      exposure: 1.0,
       caustics: false,
     },
-    backdrop: { top: '#10160c', bottom: '#050705', bokeh: ['#76b900', '#b6ff5c', '#9be33a', '#e8ffd0', '#4fd1ff'] },
-    // Flipping square "data bits" (the confetti shape) in the green family.
-    particles: { kind: 'confetti', colors: ['#76b900', '#b6ff5c', '#9be33a', '#e8ffd0', '#ffffff'] },
+    backdrop: { top: N.gray950, bottom: N.black, bokeh: [N.green, N.white, N.greenLight, N.gray400] },
+    // Flipping square "data bits" (the confetti shape): brand green, white and grey.
+    particles: { kind: 'confetti', colors: [N.green, N.white, N.greenLight, N.gray300] },
   },
 };
 

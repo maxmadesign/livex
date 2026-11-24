@@ -2,6 +2,7 @@ import { Group, type Vector3 } from 'three';
 import { makeRng } from '../core/math';
 import { CHUTE } from '../physics/fieldSpec';
 import type { ThemeDef } from '../themes/themes';
+import { logoKeepOut, WALL_Z } from './brandScene';
 import type { FxApi, FxBurstKind, FxStats, FxTier, Vec3Like } from './fx/api';
 import { AURA_RADIUS, Aura } from './fx/Aura';
 import { ambientTarget, lightScale, particleScale } from './fx/budget';
@@ -21,7 +22,7 @@ import {
 import { LightShow, type LightShowMode } from './fx/LightShow';
 import { ColorCache, type Palette, type Rgb, TIER_INDEX, ThemePalettes, mixRgb } from './fx/palette';
 import { ParticlePool, SHELL_EVENT_STRIDE, TRAIL_EVENT_STRIDE } from './fx/ParticlePool';
-import { DUST, FLAME_B, FxRecipes, WHITE } from './fx/recipes';
+import { FxRecipes, WHITE } from './fx/recipes';
 import { SpriteBatch } from './fx/SpriteBatch';
 
 export type { LightShowMode };
@@ -67,7 +68,6 @@ const DISC_CODE = spriteCode(SHAPE.DISC, MODE.FLAT);
 const LINE_CODE = spriteCode(SHAPE.LINE, MODE.AXIAL);
 const STAR_CODE = spriteCode(SHAPE.STAR, MODE.BILLBOARD);
 const GLOW_CODE = spriteCode(SHAPE.GLOW, MODE.BILLBOARD);
-const FIZZLE: Rgb = { r: 0.55, g: 0.62, b: 0.8 };
 
 /** Height of the chute mouth (top of its clear guard walls): rings and shockwaves sit there. */
 const MOUTH_Y = CHUTE.wallHeight + 0.012;
@@ -166,6 +166,11 @@ export class Effects implements FxApi {
     this.rec.pal = this.pal;
     const brightness = themeBrightness(theme);
     this.addBatch.setCoverGain(coverGainOf(brightness));
+    // A brand kit's logo on the back wall: light passes around it, never over it (paper confetti
+    // is a physical object like the toys and may still fly in front of it).
+    this.addBatch.setKeepOut(logoKeepOut(theme), WALL_Z + 0.008);
+    this.addBatch.setWhiteCores(!this.pal.rainbow);
+    this.normBatch.setWhiteCores(!this.pal.rainbow);
     this.light.brightness = brightness;
     this.addPool.clear();
     this.normPool.clear();
@@ -238,9 +243,9 @@ export class Effects implements FxApi {
         break;
       case 'slip': {
         // Sad grey dust and a few sparks fizzling down.
-        const dust = mixRgb(this.tmpRgb, this.pal.fluff, DUST, 0.55);
+        const dust = mixRgb(this.tmpRgb, this.pal.fluff, this.pal.dust, 0.55);
         rec.puffs(x, y, z, rec.n(8), custom ?? dust, 0.45, true);
-        rec.colors(null, FIZZLE).sparks(x, y, z, rec.n(5), 0.15, 0.35, false, 0.5, 0.8, 0.003, 0.04, -1.2, 1.5, FAMILY.SPARK, false, 1.2);
+        rec.colors(null, this.pal.fizzle).sparks(x, y, z, rec.n(5), 0.15, 0.35, false, 0.5, 0.8, 0.003, 0.04, -1.2, 1.5, FAMILY.SPARK, false, 1.2);
         break;
       }
       case 'drop': {
@@ -264,8 +269,8 @@ export class Effects implements FxApi {
         // Flames swirling up around the point.
         const oy = inChute(x, z) ? Math.max(y, MOUTH_Y - 0.04) : y;
         rec.flameSwirl(x, oy, z, rec.n(26));
-        rec.ring(x, oy - 0.04, z, 0.05, 0.16, 0.6, custom ?? FLAME_B, 0.6);
-        rec.colors(null, custom ?? FLAME_B).sparks(x, oy, z, rec.n(6), 0.5, 0.8, true, 0.4, 0.6, 0.005, 0.05, -0.8, 2);
+        rec.ring(x, oy - 0.04, z, 0.05, 0.16, 0.6, custom ?? this.pal.flameB, 0.6);
+        rec.colors(null, custom ?? this.pal.flameB).sparks(x, oy, z, rec.n(6), 0.5, 0.8, true, 0.4, 0.6, 0.005, 0.05, -0.8, 2);
         break;
       }
       case 'score':

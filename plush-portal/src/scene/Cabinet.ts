@@ -24,7 +24,9 @@ import { makeRng } from '../core/math';
 import type { WindowLayout } from '../perspective/windowGeometry';
 import { BIN, CHUTE, FIELD } from '../physics/fieldSpec';
 import type { ThemeDef } from '../themes/themes';
-import { axisUV, boltShape, boxUV, fanBladeShape, fanFrameShape, letterShape, TESSELLATION } from './decor';
+import { LED_BEZEL, LED_WALL } from './brandScene';
+import { axisUV, boxUV, fanBladeShape, fanFrameShape, TESSELLATION } from './decor';
+import type { BrandWall } from './ledWall';
 import { UV_DENSITY, type CabinetMaterials, type DetailLevel } from './materials';
 import { decalUv, makeBackdropTexture, type DecalId } from './textures';
 
@@ -408,7 +410,6 @@ export class Cabinet {
       [M.badge, 2],
       [M.decal, 3],
     ]);
-    if (M.emblem) order.set(M.emblem, 3);
     b.build(this.group, order);
 
     // Out-of-focus arcade backdrop seen through the side glass (portrait) and in reflections.
@@ -462,61 +463,39 @@ export class Cabinet {
   }
 
   /**
-   * GPU Party wall kit (original designs, no real-world logos): the replaceable emblem on a chip
-   * carrier, "GPU" block letters, two spinning case fans with lit rings, floating chips on
-   * stand-offs, lightning bolts and raised glowing circuit traces with vias.
+   * GPU wall kit. When a brand kit dresses the theme (src/brand), the play field's own back wall
+   * carries the LED wall with the event logo (and the host logo once its official file exists)
+   * under a slim lighting truss, and the rest of the kit moves to the side bays (landscape): black
+   * anodised case fans with green rings, chips on stand-offs and circuit traces with a few lit
+   * runs. Without a kit the kit spreads over the whole wall. Original designs only; logos come from
+   * the kit's slots and are never drawn in code.
    */
   private buildCircuitDecor(b: Builder, rng: () => number, reach: number): void {
     const M = this.mats;
     const wall = -FIELD.depth + 0.001;
-    const lime = M.leds[0]!;
-    const glow = M.leds[1 % M.leds.length]!;
+    const green = M.leds[0]!;
+    const brand = M.brand;
+    // With the LED wall in place, decor keeps to the side bays.
+    const keepOut = brand ? FIELD.halfWidth + 0.03 : 0;
     const placed: { x: number; y: number; r: number }[] = [];
-    const free = (x: number, y: number, r: number) => !placed.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + r + 0.02);
-
-    // Hero items sit on the play field's own back wall (always in view, also in portrait).
-    const inner = Math.min(reach, FIELD.halfWidth - 0.06);
-    // Emblem (logo slot) on a chip carrier: upper left, clear of the claw's home position.
-    const ex = -inner * 0.58, ey = 0.6, es = Math.min(0.19, inner * 0.46);
-    placed.push({ x: ex, y: ey, r: es * 0.75 });
-    b.add(M.chip, this.box(es, es, 0.016, 0.004), ex, ey, wall + 0.03);
-    b.add(M.dark, new CylinderGeometry(0.008, 0.008, 0.024, 10), ex, ey, wall + 0.011, Math.PI / 2, 0, 0);
-    const pins = this.detail >= 2 ? 9 : 6;
-    for (let i = 0; i < pins; i++) {
-      const o = -es * 0.38 + (i / (pins - 1)) * es * 0.76;
-      b.add(M.chrome, this.box(0.005, 0.02, 0.004), ex + o, ey + es / 2 + 0.006, wall + 0.03);
-      b.add(M.chrome, this.box(0.005, 0.02, 0.004), ex + o, ey - es / 2 - 0.006, wall + 0.03);
-      b.add(M.chrome, this.box(0.02, 0.005, 0.004), ex + es / 2 + 0.006, ey + o, wall + 0.03);
-      b.add(M.chrome, this.box(0.02, 0.005, 0.004), ex - es / 2 - 0.006, ey + o, wall + 0.03);
+    const free = (x: number, y: number, r: number) => Math.abs(x) - r >= keepOut && Math.abs(x) + r <= reach + 0.02 && !placed.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + r + 0.02);
+    if (brand) {
+      this.buildLedWall(b, brand, wall);
+      this.buildTruss(b, wall);
     }
-    if (M.emblem) b.add(M.emblem, new PlaneGeometry(es * 0.92, es * 0.92), ex, ey, wall + 0.0393, 0, 0, 0, { keepUv: true });
 
-    // "GPU" block letters, upper right.
-    const lh = Math.min(0.08, inner * 0.2);
-    const gap = lh * 0.16;
-    const lw = lh * 0.6;
-    const lcx = inner * 0.56;
-    const lx = lcx - (3 * lw + 2 * gap) / 2, ly = 0.6;
-    placed.push({ x: lcx, y: ly + lh / 2, r: (3 * lw + 2 * gap) * 0.6 });
-    (['G', 'P', 'U'] as const).forEach((ch, i) => {
-      const geo = new ExtrudeGeometry(letterShape(ch, lh), {
-        depth: 0.014,
-        bevelEnabled: true,
-        bevelThickness: 0.003,
-        bevelSize: 0.0025,
-        bevelSegments: TESSELLATION.bevelSegments[this.detail],
-        curveSegments: 4,
-      });
-      b.add(M.plaqueA, geo, lx + i * (lw + gap), ly, wall + 0.02, 0, 0, 0, { cast: false });
-    });
-    // Backing bar with a lit underline.
-    b.add(M.chip, this.box(3 * lw + 2 * gap + 0.03, lh + 0.03, 0.008, 0.003), lcx, ly + lh / 2, wall + 0.006);
-    b.add(lime, this.box(3 * lw + 2 * gap, 0.004, 0.004), lcx, ly - 0.008, wall + 0.012);
-
-    // Two case fans with spinning rotors (separate meshes so they can turn).
-    const fanSize = Math.min(0.13, inner * 0.3);
-    const fans =
-      reach > inner + 0.15
+    // Case fans with spinning rotors (separate meshes so they can turn).
+    const inner = Math.min(reach, FIELD.halfWidth - 0.06);
+    const bay = reach - keepOut;
+    const fanSize = brand ? Math.min(0.13, bay * 0.62) : Math.min(0.13, inner * 0.3);
+    const fans = brand
+      ? bay > 0.12
+        ? [
+            { x: -(keepOut + bay / 2), y: 0.62 },
+            { x: keepOut + bay / 2, y: 0.58 },
+          ]
+        : []
+      : reach > inner + 0.15
         ? [
             { x: -(inner + reach) / 2, y: 0.56 },
             { x: (inner + reach) / 2, y: 0.6 },
@@ -530,7 +509,7 @@ export class Cabinet {
       placed.push({ x: f.x, y: f.y, r: fanSize * 0.7 });
       const frame = new ExtrudeGeometry(fanFrameShape(fanSize, fanSize * 0.45, this.radial * 2), { depth: 0.018, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2, curveSegments: 6 });
       b.add(M.anodised, frame, f.x, f.y, wall + 0.004);
-      b.add(glow, new TorusGeometry(fanSize * 0.455, 0.0025, 8, this.radial * 2), f.x, f.y, wall + 0.024);
+      b.add(green, new TorusGeometry(fanSize * 0.455, 0.0025, 8, this.radial * 2), f.x, f.y, wall + 0.024);
       for (const [cx, cy] of [
         [-1, -1],
         [1, -1],
@@ -542,14 +521,16 @@ export class Cabinet {
     }
 
     // Floating chips on stand-offs (a few hero chips bob gently).
-    const chips = Math.round(4 + reach * 4);
+    const randX = () => (brand ? (rng() < 0.5 ? -1 : 1) * (keepOut + rng() * bay) : (rng() * 2 - 1) * reach);
+    const chips = brand ? (bay > 0.1 ? 4 : 0) : Math.round(4 + reach * 4);
     let heroes = 0;
-    for (let i = 0; i < chips * 8 && placed.length < chips + 4; i++) {
+    for (let i = 0, n = 0; i < chips * 10 && n < chips; i++) {
       const s = 0.05 + rng() * 0.04;
-      const x = (rng() * 2 - 1) * reach;
+      const x = randX();
       const y = 0.42 + rng() * 0.42;
       if (!free(x, y, s * 0.8)) continue;
       placed.push({ x, y, r: s * 0.8 });
+      n++;
       const lift = 0.025 + rng() * 0.035;
       const rot = (rng() - 0.5) * 0.5;
       if (heroes < 3 && rng() < 0.6) {
@@ -561,32 +542,130 @@ export class Cabinet {
       }
     }
 
-    // Lightning bolts.
-    for (let i = 0, n = 0; i < 40 && n < 3; i++) {
-      const r = 0.035 + rng() * 0.02;
-      const x = (rng() * 2 - 1) * reach, y = 0.42 + rng() * 0.4;
-      if (!free(x, y, r)) continue;
-      placed.push({ x, y, r });
-      n++;
-      b.add(n % 2 ? M.plaqueC : M.plaqueA, this.plaque(boltShape(r), 0.01), x, y, wall + 0.006, 0, 0, (rng() - 0.5) * 0.6, { cast: false });
-    }
-
-    // Raised circuit traces between the parts: 45°-routed lit strips ending in vias.
+    // Raised circuit traces between the parts: 45°-routed metal runs ending in vias, a few of
+    // them lit in the brand green.
+    if (brand && bay < 0.08) return;
     const traceW = 0.004;
+    const lo = keepOut, hi = reach;
     for (let t = 0; t < Math.round(5 + reach * 3); t++) {
-      let x = (rng() * 2 - 1) * reach, y = 0.4 + rng() * 0.46;
+      const side = rng() < 0.5 ? -1 : 1;
+      let x = brand ? side * (lo + rng() * (hi - lo)) : (rng() * 2 - 1) * reach;
+      let y = 0.4 + rng() * 0.46;
       let dir = Math.floor(rng() * 4) * 2;
       for (let s = 0; s < 3; s++) {
         const len = 0.04 + rng() * 0.09;
         const a = (dir * Math.PI) / 4;
-        const nx = Math.max(-reach, Math.min(reach, x + Math.cos(a) * len)), ny = Math.max(0.38, Math.min(0.88, y + Math.sin(a) * len));
+        let nx = Math.max(-hi, Math.min(hi, x + Math.cos(a) * len));
+        // Runs never cross onto the LED wall.
+        if (brand) nx = side * Math.max(lo, Math.min(hi, Math.abs(nx)));
+        const ny = Math.max(0.38, Math.min(0.88, y + Math.sin(a) * len));
         const segLen = Math.hypot(nx - x, ny - y);
-        if (segLen > 0.01) b.add(s === 1 ? glow : lime, this.box(segLen + traceW, traceW, 0.003), (x + nx) / 2, (y + ny) / 2, wall + 0.0025, 0, 0, Math.atan2(ny - y, nx - x));
+        // Every other run carries one lit segment; the rest is bare metal.
+        const lit = s === 1 && (!brand || t % 2 === 0);
+        if (segLen > 0.01) b.add(lit ? green : M.brushed, this.box(segLen + traceW, traceW, 0.003), (x + nx) / 2, (y + ny) / 2, wall + 0.0025, 0, 0, Math.atan2(ny - y, nx - x));
         x = nx;
         y = ny;
         dir = (dir + (rng() < 0.5 ? 1 : 7)) % 8;
       }
       b.add(M.chrome, new TorusGeometry(0.006, 0.0022, 8, this.radial), x, y, wall + 0.003);
+    }
+  }
+
+  /**
+   * The LED wall on the play field's back wall: a lacquered bezel with a green light line along its
+   * foot, the animated LED screen (one draw, src/scene/ledWall.ts) and the logos on their black
+   * pads. Logos are unlit planes sized from the artwork's own aspect ratio once it has loaded.
+   */
+  private buildLedWall(b: Builder, brand: BrandWall, wall: number): void {
+    const M = this.mats;
+    const { xMin, xMax, yMin, yMax } = LED_WALL;
+    const w = xMax - xMin, h = yMax - yMin;
+    const cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2;
+    const k = LED_BEZEL;
+    // Bezel: four lacquered bars standing 12 mm off the wall, the screen sits 6 mm behind their face.
+    b.add(M.enamel, this.box(w + 2 * k, k, 0.012, 0.003), cx, yMax + k / 2, wall + 0.006);
+    b.add(M.enamel, this.box(w + 2 * k, k, 0.012, 0.003), cx, yMin - k / 2, wall + 0.006);
+    b.add(M.enamel, this.box(k, h, 0.012, 0.003), xMin - k / 2, cy, wall + 0.006);
+    b.add(M.enamel, this.box(k, h, 0.012, 0.003), xMax + k / 2, cy, wall + 0.006);
+    // Green light line along the top of the bezel (the foot is hidden behind the toys).
+    b.add(M.leds[0]!, this.box(w - 0.04, 0.003, 0.003), cx, yMax + k + 0.0015, wall + 0.006);
+
+    const screen = new Mesh(new PlaneGeometry(w, h), brand.ledWall);
+    screen.name = 'led-wall';
+    screen.position.set(cx, cy, wall + 0.006);
+    screen.castShadow = false;
+    screen.receiveShadow = false;
+    screen.updateMatrix();
+    screen.matrixAutoUpdate = false;
+    this.group.add(screen);
+
+    const logo = this.logoMesh(brand, brand.logo, 'brand-logo');
+    const host = brand.hostLogo ? this.logoMesh(brand, brand.hostLogo, 'brand-host-logo') : null;
+    const place = () => {
+      const a = brand.logoPlacement();
+      const status = brand.logoStatus();
+      logo.visible = status.logo.loaded;
+      logo.position.set(a.cx, a.cy, wall + 0.0075);
+      logo.scale.set(a.w, a.h, 1);
+      logo.updateMatrix();
+      if (host) {
+        const hp = brand.hostPlacement();
+        host.visible = !!hp;
+        if (hp) {
+          host.position.set(hp.cx, hp.cy, wall + 0.0075);
+          host.scale.set(hp.w, hp.h, 1);
+          host.updateMatrix();
+        }
+      }
+    };
+    place();
+    this.removeAnimators.push(brand.onChange(place));
+  }
+
+  private logoMesh(brand: BrandWall, material: Material, name: string): Mesh {
+    const mesh = new Mesh(this.unitPlane(), material);
+    mesh.name = name;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.matrixAutoUpdate = false;
+    // Hidden until the artwork has loaded: no empty or stretched frame in the meantime.
+    mesh.visible = false;
+    brand.bindLogoMesh(mesh);
+    this.group.add(mesh);
+    return mesh;
+  }
+
+  private unitPlaneGeometry: PlaneGeometry | null = null;
+  private unitPlane(): PlaneGeometry {
+    return (this.unitPlaneGeometry ??= new PlaneGeometry(1, 1));
+  }
+
+  /**
+   * A slim keynote-stage truss above the LED wall: two chrome chords with zig-zag lacing and a row
+   * of black spot fixtures with white lenses aimed at the play field.
+   */
+  private buildTruss(b: Builder, wall: number): void {
+    const M = this.mats;
+    const half = 0.41, z = wall + 0.05;
+    const yLow = LED_WALL.yMax + 0.03, yHigh = yLow + 0.03;
+    const radial = Math.max(8, this.radial >> 1);
+    for (const y of [yLow, yHigh]) b.add(M.chrome, new CylinderGeometry(0.005, 0.005, 2 * half, radial), 0, y, z, 0, 0, Math.PI / 2);
+    const bays = 14;
+    const step = (2 * half) / bays;
+    const lace = Math.hypot(step, yHigh - yLow);
+    const tilt = Math.atan2(step, yHigh - yLow);
+    for (let i = 0; i < bays; i++) {
+      const x = -half + (i + 0.5) * step;
+      b.add(M.chrome, new CylinderGeometry(0.0022, 0.0022, lace, 6), x, (yLow + yHigh) / 2, z, 0, 0, i % 2 === 0 ? tilt : -tilt);
+    }
+    // Spot fixtures hanging under the lower chord, tilted down and forwards towards the field: the
+    // housing's axis leans 0.75 rad off vertical, the white lens closes its lower end.
+    const lean = 0.75;
+    for (const x of [-0.33, -0.165, 0, 0.165, 0.33]) {
+      const y = yLow - 0.024;
+      b.add(M.dark, this.box(0.004, 0.02, 0.004), x, yLow - 0.01, z);
+      b.add(M.chip, new CylinderGeometry(0.013, 0.016, 0.032, radial), x, y, z + 0.004, -lean, 0, 0);
+      b.add(M.diffuser, new CircleGeometry(0.0145, radial), x, y - 0.0165 * Math.cos(lean), z + 0.004 + 0.0165 * Math.sin(lean), Math.PI / 2 - lean, 0, 0);
     }
   }
 

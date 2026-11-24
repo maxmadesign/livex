@@ -326,7 +326,9 @@ export class Game {
       this.clawVisual = null;
       this.materials?.dispose();
       this.materials = new CabinetMaterials(theme, g.textures, this.deps.font);
-      this.materials.setGlassQuality(this.effectiveGraphics().graphics.glass);
+      const effective = this.effectiveGraphics().graphics;
+      this.materials.setGlassQuality(effective.glass);
+      this.materials.setFxLevel(effective.fxIntensity, effective.lightShow);
       this.stage.setTheme(theme);
       this.effects.setTheme(theme);
     }
@@ -1079,6 +1081,7 @@ export class Game {
     this.stage.applyGraphics(graphics);
     this.stage.setAutoScale(scale);
     this.materials?.setGlassQuality(graphics.glass);
+    this.materials?.setFxLevel(graphics.fxIntensity, graphics.lightShow);
     this.effects.setBudget(graphics.particles);
     this.effects.setIntensity(graphics.fxIntensity);
     this.effects.setLightShowEnabled(graphics.lightShow);

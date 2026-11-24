@@ -12,14 +12,12 @@ import {
   type Material,
   type Texture,
 } from 'three';
-import type { ThemeId } from '../core/types';
 import type { ThemeDef } from '../themes/themes';
+import { sceneInk, sceneKit, sceneParts } from './brandScene';
+import { BrandWall } from './ledWall';
 import { textureBytes } from './texgen';
 import {
   detailSize,
-  drawChipEmblem,
-  drawTexture,
-  loadImageTexture,
   makeBadgeTexture,
   makeBraidNormal,
   makeBrushedMaps,
@@ -43,15 +41,6 @@ export type DetailLevel = 0 | 1 | 2 | 3;
 export function detailLevel(tier: TextureTier): DetailLevel {
   return tier === '512' ? 0 : tier === '1k' ? 1 : tier === '2k' ? 2 : 3;
 }
-
-/**
- * Theme emblems that are loaded from a file at run time (one replaceable file per theme).
- * Replace the file to change the emblem; nothing else needs to change. Paths are relative to
- * the site root (Vite's `public/`).
- */
-export const THEME_EMBLEMS: Partial<Record<ThemeId, string>> = {
-  gpu: 'assets/themes/gpu/logo.svg',
-};
 
 /** Texels per metre of world-projected UVs (box / axis mapping, see Cabinet.ts). */
 export const UV_DENSITY = { lacquer: 6, metal: 3, scratch: 2.2 } as const;
@@ -148,8 +137,11 @@ export class CabinetMaterials {
   readonly sign: MeshBasicMaterial;
   /** Printed stickers (atlas, see textures.decalUv). */
   readonly decal: MeshStandardMaterial;
-  /** Theme emblem (logo slot), or null when the theme has none. */
-  readonly emblem: MeshStandardMaterial | null;
+  /**
+   * The brand kit's back-wall dress (LED wall, event logo, host logo) when a kit dresses this
+   * theme (src/brand: brandForTheme), else null. Logos come from the kit's slots, never from code.
+   */
+  readonly brand: BrandWall | null;
   /** Emissive strip materials, one per LED colour of the theme. */
   readonly leds: MeshBasicMaterial[];
   /** The braid normal map of the cable (null below High). */
@@ -158,7 +150,6 @@ export class CabinetMaterials {
   private readonly textures: Texture[] = [];
   private readonly all: Material[] = [];
   private readonly animators = new Set<Animator>();
-  private disposed = false;
 
   constructor(
     readonly theme: ThemeDef,
@@ -179,6 +170,8 @@ export class CabinetMaterials {
       return t;
     };
     const dark = cab.pattern === 'cosmos' || cab.pattern === 'circuit';
+    const ink = sceneInk(theme);
+    const parts = sceneParts(theme);
 
     /* Lacquer: clearcoat from Medium, metallic flake under the coat from High. */
     const flake = d >= 2 ? tex(makeFlakeNormal(512)) : null;
@@ -218,9 +211,10 @@ export class CabinetMaterials {
       return track(m);
     };
     this.brushed = brushedMetal(cab.metalTint, 0.36, 0.7);
-    this.anodised = brushedMetal(new Color(cab.frameAccent).lerp(new Color(cab.metalTint), 0.25), 0.3, 0.45);
+    // A brand kit asks for black anodising; other themes tint the aluminium with their accent.
+    this.anodised = brushedMetal(parts.anodised ? new Color(parts.anodised) : new Color(cab.frameAccent).lerp(new Color(cab.metalTint), 0.25), 0.3, 0.45);
     const stipple = d >= 1 ? tex(makeStippleNormal(256)) : null;
-    this.rubber = track(new MeshStandardMaterial({ color: '#3a3540', roughness: 0.88, metalness: 0, normalMap: stipple, normalScale: new Vector2(0.6, 0.6) }));
+    this.rubber = track(new MeshStandardMaterial({ color: parts.rubber, roughness: 0.88, metalness: 0, normalMap: stipple, normalScale: new Vector2(0.6, 0.6) }));
     this.plastic =
       d === 0
         ? track(new MeshStandardMaterial({ color: cab.frame, roughness: 0.52, metalness: 0 }))
@@ -248,7 +242,7 @@ export class CabinetMaterials {
     this.glass = track(
       new MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, metalness: 0, transparent: true, opacity: 0.1, depthWrite: false, side: DoubleSide, envMapIntensity: 1.3, ior: 1.5, roughnessMap: scratches }),
     );
-    makeGlassy(this.glass, new Color('#cfeee6'), 0.3);
+    makeGlassy(this.glass, new Color(parts.glassEdge), 0.3);
     this.acrylic = track(
       new MeshPhysicalMaterial({ color: cab.acrylicEdge, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.2, depthWrite: false, side: DoubleSide, envMapIntensity: 1.2, ior: 1.49, roughnessMap: scratches }),
     );
@@ -285,51 +279,33 @@ export class CabinetMaterials {
     this.velvet = track(new MeshPhysicalMaterial({ color: cab.velvet, roughness: 0.95, metalness: 0, sheen: 1, sheenColor: new Color(cab.velvet).lerp(new Color('#ffffff'), 0.4), sheenRoughness: 0.5 }));
     this.cushion = track(
       new MeshPhysicalMaterial({
-        color: new Color(cab.velvet).lerp(new Color('#ffffff'), 0.35),
+        color: new Color(cab.velvet).lerp(new Color('#ffffff'), parts.cushionLift),
         roughness: 0.95,
         normalMap: quilt,
         normalScale: new Vector2(1.2, 1.2),
         sheen: 1,
-        sheenColor: new Color('#ffffff'),
+        sheenColor: new Color('#ffffff').multiplyScalar(parts.cushionSheen),
         sheenRoughness: 0.5,
       }),
     );
-    this.dark = track(new MeshStandardMaterial({ color: '#2c2633', roughness: 0.7, metalness: 0.1 }));
-    this.chip = track(new MeshStandardMaterial({ color: '#15181b', roughness: 0.42, metalness: 0.05, normalMap: stipple, normalScale: new Vector2(0.15, 0.15) }));
-    this.diffuser = track(new MeshBasicMaterial({ color: new Color('#fff8ee').multiplyScalar(1.55) }));
+    this.dark = track(new MeshStandardMaterial({ color: parts.dark, roughness: 0.7, metalness: 0.1 }));
+    this.chip = track(new MeshStandardMaterial({ color: parts.chip, roughness: 0.42, metalness: 0.05, normalMap: stipple, normalScale: new Vector2(0.15, 0.15) }));
+    this.diffuser = track(new MeshBasicMaterial({ color: new Color(parts.diffuser).multiplyScalar(1.55) }));
     const plaque = (color: string) =>
       d === 0 ? track(new MeshStandardMaterial({ color, roughness: 0.45 })) : track(new MeshPhysicalMaterial({ color, roughness: 0.4, clearcoat: 0.7, clearcoatRoughness: 0.15 }));
-    this.plaqueA = plaque(theme.ui.primary);
-    this.plaqueB = plaque(theme.ui.accent);
-    this.plaqueC = plaque(theme.ui.accent2);
-    // Badge, decals and emblem are small (≤ 0.22 m): 1K up to High, 2K on Ultra.
+    this.plaqueA = plaque(ink.primary);
+    this.plaqueB = plaque(ink.accent);
+    this.plaqueC = plaque(ink.accent2);
+    // Badge, decals and logos are small (≤ 0.4 m): 1K up to High, 2K on Ultra.
     const printSize = d === 0 ? 512 : d === 3 ? 2048 : 1024;
     this.badge = track(new MeshStandardMaterial({ map: tex(makeBadgeTexture(theme, printSize, font)), roughness: 0.4, transparent: true }));
     this.sign = track(new MeshBasicMaterial({ map: tex(makeSignTexture(theme, 'PRIZE', font, Math.min(2, printSize / 512))), transparent: true }));
     const decalProps = { map: tex(makeDecalAtlas(theme, printSize, font)), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, roughness: 0.35, metalness: 0 };
     this.decal = d === 0 ? track(new MeshStandardMaterial(decalProps)) : track(new MeshPhysicalMaterial({ ...decalProps, clearcoat: 0.6, clearcoatRoughness: 0.2 }));
 
-    /* Theme emblem (logo slot): procedural stand-in now, the image file as soon as it has loaded. */
-    const emblemPath = THEME_EMBLEMS[theme.id];
-    if (emblemPath) {
-      const fallback = tex(drawTexture(printSize, (g, s) => drawChipEmblem(g, s, theme.ui.primary, font)));
-      const emblem = d === 0 ? new MeshStandardMaterial({ map: fallback, transparent: true, roughness: 0.4 }) : new MeshPhysicalMaterial({ map: fallback, transparent: true, roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.1 });
-      this.emblem = track(emblem);
-      const base = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-      void loadImageTexture(`${base}${emblemPath}`, printSize).then((loaded) => {
-        if (!loaded) return;
-        if (this.disposed) {
-          loaded.dispose();
-          return;
-        }
-        this.textures.push(loaded);
-        emblem.map = loaded;
-        emblem.needsUpdate = true;
-        // The stand-in is no longer needed.
-        this.textures.splice(this.textures.indexOf(fallback), 1);
-        fallback.dispose();
-      });
-    } else this.emblem = null;
+    /* Brand kit: the LED wall and the logos from the kit's slots (official file, else placeholder). */
+    const kit = sceneKit(theme);
+    this.brand = kit ? new BrandWall(kit, printSize) : null;
 
     this.ledBase = cab.led.map((hex) => new Color(hex));
     this.leds = this.ledBase.map((c) => track(new MeshBasicMaterial({ color: c.clone().multiplyScalar(1.6) })));
@@ -365,7 +341,15 @@ export class CabinetMaterials {
     return () => this.animators.delete(fn);
   }
 
-  /** Animates the LED strips. `energy` (0..1) is raised briefly for celebrations. */
+  /**
+   * Effects intensity (graphics.fxIntensity) and light show (graphics.lightShow) for the cabinet's
+   * own light effects (the brand LED wall). The game calls it with the effective graphics settings.
+   */
+  setFxLevel(intensity: number, lightShow: boolean): void {
+    this.brand?.setFx(intensity, lightShow);
+  }
+
+  /** Animates the LED strips (and the brand LED wall). `energy` (0..1) is raised briefly for celebrations. */
   updateLeds(time: number, energy: number, reducedMotion: boolean): void {
     const mode = this.theme.cabinet.ledMode;
     const n = this.leds.length;
@@ -379,13 +363,14 @@ export class CabinetMaterials {
       level += energy * (reducedMotion ? 0.3 : 0.9 * (0.6 + 0.4 * Math.sin(time * 14 + i * 2)));
       this.leds[i]!.color.copy(this.ledBase[i]!).multiplyScalar(level);
     }
+    this.brand?.update(time, energy, reducedMotion);
     for (const fn of this.animators) fn(time, reducedMotion);
   }
 
   /** Approximate GPU memory of this theme's textures (bytes, RGBA8 with mip chains). */
   textureBytes(): number {
     let total = 0;
-    for (const t of this.textures) {
+    for (const t of [...this.textures, ...(this.brand?.textures() ?? [])]) {
       const img = t.image as { width?: number; height?: number } | null;
       if (img && img.width && img.height) total += textureBytes(img.width, img.height, t.generateMipmaps);
     }
@@ -393,8 +378,8 @@ export class CabinetMaterials {
   }
 
   dispose(): void {
-    this.disposed = true;
     this.animators.clear();
+    this.brand?.dispose();
     for (const m of this.all) m.dispose();
     for (const t of this.textures) t.dispose();
   }
