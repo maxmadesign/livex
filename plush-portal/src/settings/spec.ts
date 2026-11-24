@@ -504,6 +504,25 @@ export const settingsSpec = {
     /** Only sent to models that accept it. */
     temperature: num(0.9, 0, 1.5, 0.05),
   },
+  /**
+   * Prize claims (docs/REWARDS.md): after a real win (never a demo) the win card shows a QR code the
+   * visitor scans to collect the plush at the booth or take a swag discount. Codes are issued by
+   * the API server for the kiosk only; without it no QR is shown (nothing is faked).
+   */
+  rewards: {
+    /** 'gtc' = only in the theme dressed by the GTC brand kit (default); 'all' = every theme; 'off'. */
+    mode: en('gtc', ['gtc', 'all', 'off'] as const),
+    /** Which offers a code unlocks: the visitor picks one of them on the claim page. */
+    options: en('both', ['both', 'prize', 'swag'] as const),
+    /** '' = built-in claim page on this machine; else an https URL template with {code}. */
+    claimUrl: str('', 300),
+    /** Swag store link offered with the discount; '' = "show this screen at the swag counter". */
+    swagUrl: str('', 300),
+    /** Short discount wording, e.g. "20% off all swag"; '' = generic wording. */
+    discountText: str('', 80),
+    /** How long the QR card stays up after a win (the idle reset waits for it). */
+    qrSeconds: num(60, 15, 300, 5, 'live', 's'),
+  },
   camera: {
     /** Head Tracking / Window Perspective. */
     enabled: bool(true),

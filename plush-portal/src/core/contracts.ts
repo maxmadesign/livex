@@ -194,6 +194,16 @@ export interface GuideFacts {
   /** True when this is the first time this character was collected. */
   newCharacter?: boolean;
   headTracking?: boolean;
+  /**
+   * Event identity when a brand kit that allows names dresses the theme (src/brand): the line may
+   * name the event and host, e.g. { event: 'GTC', host: 'NVIDIA' }. Absent / null = stay generic.
+   */
+  brand?: { event: string; host: string } | null;
+  /**
+   * prize_won only: a claim code was issued and its QR code is on screen, so the line may invite
+   * the player to scan it. `options` says what it unlocks. Absent / null = no QR (say nothing about one).
+   */
+  reward?: { qr: boolean; options: 'both' | 'prize' | 'swag' } | null;
 }
 
 export interface GuideEvent {

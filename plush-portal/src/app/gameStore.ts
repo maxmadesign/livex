@@ -104,7 +104,43 @@ export interface GameUiState {
   score: ScoreUiState;
   /** Score popups currently on screen (removed by the HUD after their animation). */
   scorePopups: ScorePopup[];
+  /** Prize-claim QR for the last real win (src/rewards, docs/REWARDS.md). */
+  reward: RewardUiState;
 }
+
+/**
+ * idle        – nothing to show (no win yet, rewards off for this theme, or the card was dismissed)
+ * issuing     – a win happened; the code is being requested from the server
+ * ready       – `code` / `url` are real, server-issued values: the QR card is on screen
+ * unavailable – a code was wanted but could not be issued (`reason`); no QR is drawn, ever faked
+ * demoBuild   – public demo build only (VITE_REWARDS_DEMO): a locally made, clearly labelled
+ *               DEMO code that no server knows and nobody can redeem
+ */
+export interface RewardUiState {
+  state: 'idle' | 'issuing' | 'ready' | 'unavailable' | 'demoBuild';
+  /** Round the state belongs to (0 = none). */
+  roundId: number;
+  code: string | null;
+  url: string | null;
+  reach: 'external' | 'lan' | 'loopback' | null;
+  options: 'both' | 'prize' | 'swag';
+  expiresAt: string | null;
+  /** Wall-clock ms when the QR card hides by itself (rewards.qrSeconds after it appeared), or 0. */
+  visibleUntil: number;
+  reason: 'offline' | 'forbidden' | 'rewards_off' | 'rate_limited' | 'storage' | 'error' | null;
+}
+
+export const INITIAL_REWARD: RewardUiState = {
+  state: 'idle',
+  roundId: 0,
+  code: null,
+  url: null,
+  reach: null,
+  options: 'both',
+  expiresAt: null,
+  visibleUntil: 0,
+  reason: null,
+};
 
 export const INITIAL_TRACKER: TrackerStatus = {
   state: 'idle',
@@ -187,6 +223,7 @@ export function createGameStore(profile: DisplayProfileId, profileChosen: boolea
     firstPlayDone: false,
     score: INITIAL_SCORE,
     scorePopups: [],
+    reward: INITIAL_REWARD,
   }));
 }
 
