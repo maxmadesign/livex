@@ -1867,7 +1867,15 @@ classic is untouched (golden trace identical after every change).
    whose genre modules have not landed" (it lists `bridge`, `shelf`, `rush` by name) and "shelf:
    plays ten tries" (a 5-try session locks the claw at try 6; the harness needs `newSession()` when
    the session is over, as PLAY AGAIN does). The rush cases pass. The bridge swap hits the first one
-   too.
+   too. The change (two spots in that file; checked on a temporary copy: 22 passed, bridge still
+   todo):
+
+   ```ts
+   // 'gates the machines whose genre modules have not landed': iterate the pending ones only
+   for (const def of MACHINES.filter((m) => isPendingGenre(GENRES[m.genre]))) { const id = def.id; /* same checks */ }
+   // tenTries, non-classic branch, before playRound: PLAY AGAIN when a tries / timed session ended
+   if (c.session.snapshot().state === 'over') c.session.newSession();
+   ```
 
 ### For the integrator
 
