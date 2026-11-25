@@ -7,6 +7,7 @@ import { useApp, useCollection, useSettings, useT, useUi } from '../context';
 import { useModals } from '../modals';
 import { useReducedMotion } from '../useHudLayout';
 import { MachineCard } from './MachineCard';
+import { ensureMachinePreviews } from './previews';
 import { cardsAcross, initialCardIndex, lobbyFlow, wrapIndex } from './view';
 import './machines.css';
 
@@ -27,6 +28,10 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
   const wins = useCollection((s) => s.wins);
   const machines = useSettings((s) => s.machines);
   const cards: MachineCardInfo[] = useMemo(() => app.game.machineCards(), [app, machine, wins, machines]);
+  // Rendered pictures of the machines in this theme (made once per theme; the SVG art until then).
+  useEffect(() => {
+    ensureMachinePreviews(themeId, [...new Set(cards.map((c) => c.genre))]);
+  }, [themeId, cards]);
   const flow = lobbyFlow(layout);
   const [focus, setFocus] = useState(() => initialCardIndex(cards));
   const track = useRef<HTMLDivElement>(null);

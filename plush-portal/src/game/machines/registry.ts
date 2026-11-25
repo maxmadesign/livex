@@ -96,8 +96,9 @@ export const MACHINES: readonly MachineDef[] = [
   { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: true, unlockAfterWins: 1 },
   // Sweep gates passed with rewardItems 5 (docs/machines/shelf.md); drawn and seen playing in all four layouts.
   { id: 'shelf', genre: 'shelf', order: 2, params: {}, available: true, unlockAfterWins: 3 },
-  // Fails the caging gate until the scoop attachment lands (docs/machines/rush.md); drawn already.
-  { id: 'rush', genre: 'rush', order: 3, params: {}, available: false, unlockAfterWins: 5 },
+  // With the scoop: Arcade and Easy pass every gate (1.31 pieces per centred grab, 27 % of runs reach
+  // the prize at 700; docs/machines/rush.md); drawn and playable.
+  { id: 'rush', genre: 'rush', order: 3, params: {}, available: true, unlockAfterWins: 5 },
 ];
 
 export function isMachineId(id: unknown): id is MachineId {

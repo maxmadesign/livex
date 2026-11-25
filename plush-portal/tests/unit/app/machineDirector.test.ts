@@ -191,9 +191,12 @@ describe('switching (design 4.2)', () => {
 
   it('refuses machines that are not offered, hidden, locked, or when the lobby is off; queues while the claw is busy', { timeout: 60_000 }, async () => {
     const r = await rig({ allowUnavailable: false });
-    // Not offered yet (available: false) and no debug override.
-    expect(r.director.select('shelf')).toBe(false);
+    // An unknown id. (Hidden machines are left out of offered(); this rig is a debug host, which may
+    // still pick them, as the e2e debug override does.)
     expect(r.director.select('nope')).toBe(false);
+    r.settings.machines.hidden = ['shelf'];
+    expect(r.director.offered().map((m) => m.id)).not.toContain('shelf');
+    r.settings.machines.hidden = [];
     r.director.setAllowUnavailable(true);
     r.settings.machines.unlock = 'progress';
     expect(r.director.select('rush')).toBe(false);
@@ -484,9 +487,10 @@ describe('attract mode with several machines (design 4.5)', () => {
 describe("today's pick and the lobby cards (design 4.4)", () => {
   it('candidates are offered, unlocked, available machines; never classic', { timeout: 60_000 }, async () => {
     const r = await rig({ allowUnavailable: false });
-    // Nothing but classic is offered yet: no pick.
+    // Only classic offered (the others hidden): no pick.
+    r.settings.machines.hidden = ['bridge', 'shelf', 'rush'];
     expect(r.director.dailyPick()).toBeNull();
-    r.director.setAllowUnavailable(true);
+    r.settings.machines.hidden = [];
     expect(['bridge', 'shelf', 'rush']).toContain(r.director.dailyPick());
     r.settings.machines.hidden = ['bridge', 'rush'];
     expect(r.director.dailyPick()).toBe('shelf');
