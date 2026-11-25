@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHARACTER_VOICES, COUNTDOWN_SFX, MULTI_DROP_SFX, STAFF_RESET_SFX, SWITCH_SFX, TIME_UP_SFX, impactSfx, itemScoredSfx, rankSfx } from '../../../src/app/machineSfx';
+import { COUNTDOWN_SFX, MULTI_DROP_SFX, STAFF_RESET_SFX, SWITCH_SFX, TIME_UP_SFX, WIN_VOICE, impactSfx, itemScoredSfx, rankSfx } from '../../../src/app/machineSfx';
 import { SFX_NAMES } from '../../../src/core/contracts';
 import { GENRE_IDS } from '../../../src/game/machines/ids';
 
@@ -55,10 +55,8 @@ describe('machine sounds map onto the existing SFX (design 4.10)', () => {
     expect(rankSfx(null)).toBeNull();
   });
 
-  it('character voices: classic as today, items never squeal; the bridge drop keeps the win voice', () => {
-    for (const g of GENRE_IDS) expect(CHARACTER_VOICES[g]).toBeDefined();
-    expect(CHARACTER_VOICES.classic).toEqual({ lift: true, slip: true, win: true });
-    expect(CHARACTER_VOICES.bridge.win).toBe(true);
-    expect(CHARACTER_VOICES.shelf.win || CHARACTER_VOICES.rush.win).toBe(false);
+  it('win voices: classic and the bridge print speak, items machines do not', () => {
+    for (const g of GENRE_IDS) expect(typeof WIN_VOICE[g]).toBe('boolean');
+    expect(WIN_VOICE).toEqual({ classic: true, bridge: true, shelf: false, rush: false });
   });
 });

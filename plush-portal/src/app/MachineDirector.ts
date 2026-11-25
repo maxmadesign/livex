@@ -184,6 +184,8 @@ export class MachineDirector {
   /** Debug only: machines whose genre has landed may be built although they are not offered yet. */
   private allowUnavailable = false;
   private switching = false;
+  /** How the last switch ended (whenSwitched after a switch that failed at once). */
+  private lastOk = true;
   private pending: { id: MachineId; options: SwitchOptions } | null = null;
   /** A settings change of the current genre: the machine is rebuilt at the next fitting boundary. */
   private refreshQueued = false;
@@ -345,7 +347,8 @@ export class MachineDirector {
     }
     this.host.closeLobby();
     const options: SwitchOptions = { start: this.host.inAttract(), guide: true, why: 'player' };
-    if (this.switching) {
+    // One curtain at a time: a switch (or a theme change) under way finishes first.
+    if (this.switching || this.host.ui.getState().themeBusy) {
       this.pending = { id, options };
       return true;
     }
@@ -366,7 +369,7 @@ export class MachineDirector {
 
   /** Resolves once no switch is running or waiting (true when the last one succeeded). */
   whenSwitched(): Promise<boolean> {
-    if (!this.switching && !this.pending) return Promise.resolve(true);
+    if (!this.switching && !this.pending) return Promise.resolve(this.lastOk);
     return new Promise((resolve) => this.waiters.push(resolve));
   }
 
@@ -382,6 +385,7 @@ export class MachineDirector {
     host.setBusy(true);
     this.refreshUi();
     let ok = false;
+    let cleared = false;
     try {
       const m = core.machine;
       if (host.inAttract() && m.phase !== 'ATTRACT') {
@@ -402,6 +406,7 @@ export class MachineDirector {
       this.axisStage = null;
       this.pilot.reset();
       host.clearScene();
+      cleared = true;
       core.setMachine(resolved, { assets: host.enabledAssets(), seed: host.seed(), params: host.roundParams(), field: host.fieldOptions() });
       this.current = id;
       this.machinePilot = this.pilotFor();
@@ -409,6 +414,7 @@ export class MachineDirector {
       this.demoRounds = 0;
       this.setPrints();
       host.buildScene();
+      cleared = false;
       // Each machine keeps its own best and lifetime points; classic's stay in the `scores` record.
       if (id === 'classic') scores.useRecord(loadScores(), (r) => saveScores(r));
       else scores.useRecord(loadMachineRecord(id), (r) => saveMachineRecord(id, r));
@@ -421,6 +427,14 @@ export class MachineDirector {
     } catch (error) {
       host.log('warn', `machine switch to ${id} failed: ${error instanceof Error ? error.message : String(error)}`);
       host.toast('machines.toast.failed');
+      // Never leave the cabinet without its scene (and the claw without its visual).
+      if (cleared) {
+        try {
+          host.buildScene();
+        } catch (inner) {
+          host.log('warn', `scene rebuild after a failed switch failed: ${inner instanceof Error ? inner.message : String(inner)}`);
+        }
+      }
     } finally {
       host.setBusy(false);
       this.switching = false;
@@ -429,6 +443,7 @@ export class MachineDirector {
     // A player's switch is announced (classic too: its facts simply carry no machine).
     if (ok && options.guide) host.emitGuide('machine_selected');
     if (ok && options.start && host.inAttract()) host.pressStart();
+    this.lastOk = ok;
     if (!this.pending) {
       const waiters = this.waiters.splice(0);
       for (const resolve of waiters) resolve(ok);
@@ -444,7 +459,7 @@ export class MachineDirector {
     const m = core.machine;
     const entry = ui.getState().rankEntry;
     if (entry && this.host.now() >= entry.deadline) this.commitRank(UNKNOWN_INITIALS);
-    if (this.switching) return;
+    if (this.switching || ui.getState().themeBusy) return;
     const boundary = m.atRoundBoundary || (this.host.inAttract() && !m.busy);
     if (this.pending && (boundary || (this.host.inAttract() && m.demo))) {
       const { id, options } = this.pending;
@@ -495,12 +510,15 @@ export class MachineDirector {
   onIdleReset(): void {
     this.host.ui.setState({ sessionResult: null, rankEntry: null });
     this.resetSessionState();
+    const cancelled = this.pending !== null;
     this.pending = null;
     const home = this.home();
-    if (home !== this.current) {
-      if (this.switching) this.pending = { id: home, options: { start: false, guide: false, why: 'idle reset' } };
-      else void this.switchTo(home, { start: false, guide: false, why: 'idle reset' });
-    }
+    const options: SwitchOptions = { start: false, guide: false, why: 'idle reset' };
+    // A switch (or a theme change) under way finishes first; then home.
+    if (this.switching || this.host.ui.getState().themeBusy) this.pending = { id: home, options };
+    else if (home !== this.current) void this.switchTo(home, options);
+    // A player's switch that was waiting for the try will not happen.
+    else if (cancelled) for (const resolve of this.waiters.splice(0)) resolve(false);
     this.refreshUi();
   }
 

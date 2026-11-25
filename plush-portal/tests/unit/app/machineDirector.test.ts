@@ -216,6 +216,30 @@ describe('switching (design 4.2)', () => {
     expect(r.core.def.def.id).toBe('shelf');
   });
 
+  it('a switch that fails puts the scene back, lifts the curtain and reports false', { timeout: 60_000 }, async () => {
+    const r = await rig();
+    const setMachine = r.core.setMachine;
+    r.core.setMachine = () => {
+      throw new Error('boom');
+    };
+    expect(r.director.select('shelf')).toBe(true);
+    expect(await r.director.whenSwitched()).toBe(false);
+    expect(r.calls).toEqual(['closeLobby', 'busy:true', 'clearScene', 'buildScene', 'busy:false']);
+    expect(r.toasts).toContain('machines.toast.failed');
+    expect(r.director.machineId).toBe('classic');
+    expect(r.host.ui.getState().machine).toMatchObject({ id: 'classic', switching: false });
+    r.core.setMachine = setMachine;
+    // A theme change under way: the pick waits for it.
+    r.host.ui.setState({ themeBusy: true });
+    expect(r.director.select('shelf')).toBe(true);
+    r.director.update();
+    expect(r.director.machineId).toBe('classic');
+    r.host.ui.setState({ themeBusy: false });
+    r.director.update();
+    expect(await r.director.whenSwitched()).toBe(true);
+    expect(r.director.machineId).toBe('shelf');
+  });
+
   it('a machine switched to from a busy demo round stops the demo and stays in attract mode', { timeout: 60_000 }, async () => {
     const r = await rig({ settings: (s) => (s.machines.attractCycle = false) });
     r.core.machine.start(true);
@@ -412,10 +436,10 @@ describe('prize machines (classic, bridge)', () => {
 });
 
 describe('attract mode with several machines (design 4.5)', () => {
-  it('the idle reset returns home; no plush restock on genres over many rounds, attract and the reset', { timeout: 180_000 }, async () => {
+  it('the idle reset returns home; no plush restock on genres over 50 rounds, attract and the reset', { timeout: 180_000 }, async () => {
     const r = await rig();
     await switchTo(r, 'rush');
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 25; i++) {
       playRound(r.core, 0.1 * ((i % 5) - 2), -0.3 - 0.05 * (i % 4));
       expect(r.core.field.missing()).toBe(0);
       r.core.field.clearBin();
@@ -431,7 +455,7 @@ describe('attract mode with several machines (design 4.5)', () => {
     expect(r.calls.filter((c) => c === 'pressStart')).toHaveLength(1);
     expect(r.guide.filter((g) => g.type === 'machine_selected')).toHaveLength(1);
     await switchTo(r, 'shelf');
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 25; i++) {
       if (r.core.machine.phase === 'RESULT') r.core.machine.next(false);
       shelfTry(r, false);
       expect(r.core.field.missing()).toBe(0);

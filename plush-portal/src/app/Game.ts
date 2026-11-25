@@ -36,7 +36,7 @@ import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { MachineDirector, prizeTypeOf, type DirectorHost, type ItemVisualsPort } from './MachineDirector';
 import type { Pilot } from './MachinePilot';
-import { CHARACTER_VOICES, impactSfx } from './machineSfx';
+import { WIN_VOICE, impactSfx } from './machineSfx';
 import { attachPeekDrag } from './PeekDrag';
 import type { GameStore, MachineCardInfo, PerfSnapshot } from './gameStore';
 
@@ -1051,7 +1051,7 @@ export class Game {
     // Tier-aware win sound (stinger, sparkle / confetti / firework, jackpot fanfare) and the
     // character's own happy voice; a streak adds the combo hit.
     audio.playWin(this.themeId, tier, demo ? { volume: 0.7 } : undefined);
-    if (CHARACTER_VOICES[this.director.genre].win) audio.playCharacter(typeId, 'win', this.voiceOptions(toy, 0));
+    if (WIN_VOICE[this.director.genre]) audio.playCharacter(typeId, 'win', this.voiceOptions(toy, 0));
     if (streak >= 2) audio.playSfx('combo', { delay: 0.5 });
     this.winSoundRound = roundId;
     if (award) {

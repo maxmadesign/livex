@@ -76,11 +76,9 @@ export function rankSfx(position: number | null): SfxCue | null {
   return null;
 }
 
-/** Character voices (lift, slip) on a genre: items are printed boxes and gems, they do not squeal. */
-export const CHARACTER_VOICES: Readonly<Record<GenreId, { lift: boolean; slip: boolean; win: boolean }>> = {
-  classic: { lift: true, slip: true, win: true },
-  // The drop is the win: the printed character's own win voice plays (section 3.1).
-  bridge: { lift: false, slip: false, win: true },
-  shelf: { lift: false, slip: false, win: false },
-  rush: { lift: false, slip: false, win: false },
-};
+/**
+ * Whether a win plays the character's own win voice. Classic: the plush; the bridge: the character
+ * printed on the box (the drop is the win). Items never play lift or slip voices (Game checks
+ * `toy.item`), and shelf / rush prizes come with the session card, not with a single item.
+ */
+export const WIN_VOICE: Readonly<Record<GenreId, boolean>> = { classic: true, bridge: true, shelf: false, rush: false };

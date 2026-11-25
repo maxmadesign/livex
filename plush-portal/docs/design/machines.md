@@ -1994,6 +1994,21 @@ the same arithmetic it always did).
 | D13 | Initials: a 30 s timeout saves `???`; the idle reset drops an unconfirmed entry. | As designed; the deadline is wall clock (`ui.rankEntry.deadline`), checked by `director.update()` every frame. PLAY AGAIN with a place still waiting saves it as `???`. | — |
 | D14 | Session prize prints: least-collected first. | `core.session.prints` is set by the director (enabled characters, fewest in the collection first, manifest order on ties) after every populate and at every session start. | `GameCore.populate` resets it to manifest order. |
 
+### Verified
+
+- Unit: 124 files, 1,496 tests pass; `npx vitest run tests/unit/machines` and
+  `npx tsx tools/dev/golden-classic.ts --check` (identical) before every commit.
+- e2e (production build, SwiftShader, one worker): `29-machines-glue` (2 tests) plus the classic
+  smoke set `02-rounds`, `07-settlement`, `21-points`, `22-idle-attract`: 10 of 10 pass (12.0 min).
+  Spec 29 measured, classic at boot → shelf → classic: bodies 24 → 30 → 24, colliders 98 → 47 → 98
+  (non-toy colliders 23 → 24 → 23), toys 18 → 23 → 18, GPU geometries 67 → 67 → 67, textures
+  35 → 35 → 35, no stale collider handles.
+- Screenshots (desktop, device scale 1): the shelf in READY after the switch shows an empty classic
+  cabinet (items and fixtures are not drawn yet, D6); the session end shows the points and the
+  celebration at the opening with no card (UI workstream); classic after the round trip is a full
+  fresh field; the bridge drop shows the classic win card for the printed character (an epic,
+  +500 and +250 first catch, a claim QR).
+
 ### Not done here (other workstreams)
 
 - The lobby, session HUD, try toast, session card with `InitialsEntry`, deck buttons and strings
