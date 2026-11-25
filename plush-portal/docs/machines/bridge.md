@@ -9,6 +9,22 @@ same opening test as classic.
 Code: `src/game/machines/bridge.ts`. Tests: `tests/unit/machines/bridge.test.ts`. Sweep:
 `tools/dev/machine-sweep.ts --machine bridge` (plug-in `tools/dev/sweeps/bridge.ts`).
 
+**Status:** `available: true` (offered in the lobby).
+
+## How to play (for players)
+
+- A prize box lies across two shiny bars over a hole. You cannot carry it away: each try the claw grabs
+  one end, lifts it a little and lets go right there.
+- The box stays where it landed. Walk it, turn it and tip one end into the gap between the bars, try
+  after try, until it drops through the hole. The box drops = you win the character printed on it.
+- Tries are unlimited (unless the operator set *Tries per box*; then the box goes back to the start
+  after that many tries, never as a win). The HUD shows your try number and a progress meter.
+- Stuck? **Call staff** puts the box back on the bars (you lose the progress, never win anything by it).
+- *Two buttons* controls (if the operator chose them): hold button 1 to move right, let go, then hold
+  button 2 to move back; letting go of button 2 drops the claw.
+- Points: the plush's rarity, like the classic machine (×1.5 on today's pick). A won box gives a claim
+  code on the win card where prize codes are on.
+
 ## Layout as built
 
 Fieldspec frame: +X right, +Y up, +Z towards the player, floor top y = 0, front glass z = 0.

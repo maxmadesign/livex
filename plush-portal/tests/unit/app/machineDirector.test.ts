@@ -13,7 +13,8 @@ import { AttractDirector } from '../../../src/game/attract';
 import type { GameCore } from '../../../src/game/GameCore';
 import { shelfAim } from '../../../src/game/machines/shelf';
 import type { ShelfParams } from '../../../src/game/machines/types';
-import { ScoreKeeper } from '../../../src/game/scoring';
+import { ScoreKeeper, type ScoreAward } from '../../../src/game/scoring';
+import { dailyPick } from '../../../src/game/machines/daily';
 import { createCollectionStore } from '../../../src/persistence/collection';
 import { rankingsOf } from '../../../src/persistence/machines';
 import { FIXED_DT } from '../../../src/physics/fieldSpec';
@@ -863,5 +864,35 @@ describe('review: a fresh field mid-session', () => {
     const open = r.core.session.snapshot();
     repopulate(r);
     expect(r.core.session.snapshot()).toMatchObject({ id: open.id, tries: open.tries, state: 'running' });
+  });
+});
+
+describe("review: today's pick at midnight", () => {
+  it('the bonus is decided at each settlement: a session that runs over midnight gets ×1.5 before and ×1 after, and the HUD follows', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.shelf.tries = 5) });
+    // Two consecutive local dates: shelf is today's pick on the first, not on the second.
+    const ids = ['bridge', 'shelf', 'rush'] as const;
+    let day = new Date(2026, 10, 1);
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const next = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    for (let i = 0; i < 60 && !(dailyPick(ymd(day), [...ids]) === 'shelf' && dailyPick(ymd(next(day)), [...ids]) !== 'shelf'); i++) day = next(day);
+    expect(dailyPick(ymd(day), [...ids])).toBe('shelf');
+    r.clock.today = ymd(day);
+    await switchTo(r, 'shelf');
+    const published: (ScoreAward | null)[] = [];
+    (r.host as { publishScore: DirectorHost['publishScore'] }).publishScore = (a) => published.push(a);
+    expect(r.host.ui.getState().machine.bonus).toBe(1.5);
+    scoringTry(r);
+    const before = published.at(-1)!;
+    expect(before.dailyBonus).toBe(1.5);
+    r.core.field.clearBin();
+    // Midnight between two tries.
+    r.clock.today = ymd(next(day));
+    r.core.machine.next(false);
+    expect(r.host.ui.getState().machine.bonus).toBe(1);
+    scoringTry(r);
+    const after = published.at(-1)!;
+    expect(after.dailyBonus ?? 1).toBe(1);
+    expect(r.director.bonusFor(false)).toBe(1);
   });
 });

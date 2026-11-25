@@ -5,9 +5,20 @@ carries them over the edge; every box that reaches the trough counts, several pe
 Design: `docs/design/machines.md`, section 3.2. Code: `src/game/machines/shelf.ts` (genre module)
 and `src/game/machines/pieces.ts` (what the two items genres share).
 
-**Status: `available: false`.** Every physical gate passes on Arcade except "30-60 % of sessions
-reach 3 boxes", which contradicts "0.8-1.6 items per try" for a 5-try session (see *Gates*). The
-fix is a product number, not physics: `rewardItems` 5 (or 4) — see the last table.
+**Status:** `available: true` (offered in the lobby) with `rewardItems` 5: the gate "30-60 % of
+sessions reach the prize" contradicted "0.8-1.6 items per try" with 3 boxes for a 5-try session, so
+the prize line was raised to 5 boxes (Arcade 41 % of sessions; see *Gates*).
+
+## How to play (for players)
+
+- Stacks of little snack boxes stand on a shelf. Knock, drag or carry them over the front edge: every
+  box that lands in the trough counts, and several in one try are worth more (×1.2 for two, ×1.5 for
+  three, ×2 for four or more).
+- You get **5 tries** per session (*Tries per session*). Drop **5 boxes** in one session
+  (*Boxes for a prize*) and you win a plush: the rarest character printed on the boxes you dropped.
+  The prize comes with one claim code on the session card where prize codes are on.
+- Bigger boxes and rarer characters score more; today's pick adds ×1.5 to the points (not to the prize).
+- After the last try the session card sums it up; PLAY AGAIN restacks the shelf for a new session.
 
 ## Layout (`shelfGeometry`)
 
@@ -60,7 +71,7 @@ RESULT is credited at the next READY, to the next try. `resultExtras`: `won` wit
 
 ## Session, prize, points
 
-- Session: `tries` (5) tries; at least `rewardItems` (3) boxes earn **one** prize, the rarest printed
+- Session: `tries` (5) tries; at least `rewardItems` (5) boxes earn **one** prize, the rarest printed
   character among the dropped boxes, the earliest drop on a tie (`awardSessionPrize`,
   `${sid}-${lastRoundId}-S`). Then the claw is locked until PLAY AGAIN (`newSession` restacks).
 - Points (`shelfModule.scoreTry`, pure): per box the print's tier base (40 / 100 / 200 / 400) × size
@@ -117,13 +128,12 @@ first gate. The two gates only meet with another prize threshold (same Arcade ru
 
 | `rewardItems` | Easy | Arcade | Skill |
 | --- | --- | --- | --- |
-| 3 (default) | 92 % | 80 % | 63 % |
+| 3 (the design's number) | 92 % | 80 % | 63 % |
 | 4 | 86 % | 63 % | 41 % |
-| 5 | 72 % | 41 % | 22 % |
+| **5 (default now)** | 72 % | 41 % | 22 % |
 
-Recommendation for the lead (`[PC 7]`): `rewardItems` 5 (Arcade 41 %) or 4 (63 %, just above the
-band). It must change in `src/settings/spec.ts` (`machines.shelf.rewardItems`) and in
-`SHELF_DEFAULTS` together (the contract test holds them equal), then `available: true`.
+Taken: `rewardItems` 5 (Arcade 41 %), in `src/settings/spec.ts` (`machines.shelf.rewardItems`) and in
+`SHELF_DEFAULTS` together (the contract test holds them equal); the machine is `available: true`.
 
 ## Unit tests
 

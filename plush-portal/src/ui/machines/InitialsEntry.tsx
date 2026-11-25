@@ -12,8 +12,9 @@ import './machines.css';
  * Three initials for a top-10 run (docs/design/machines.md, section 3.3): three big letter tiles
  * with ▲ / ▼ under touch-sized buttons, OK, and a countdown (after it the director saves "???").
  * Keyboard and arcade joystick (wired as arrow keys): ▲ ▼ change the letter, ◀ ▶ move between
- * tiles, letters type directly, Enter confirms. The blocklist is the director's: a refused set of
- * letters keeps the entry open.
+ * tiles, letters type directly, Enter confirms. Anything but three letters A-Z is refused and keeps
+ * the entry open; three letters on the blocklist (src/persistence/machines.ts) are accepted and
+ * saved as `???`.
  */
 export function InitialsEntry({ layout, entry }: { layout: HudLayout; entry: RankEntryUi }) {
   const app = useApp();

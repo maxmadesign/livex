@@ -617,8 +617,9 @@ at 1280 × 720, device pixel ratio 1, automatic optimiser and attract demo off; 
 after each rendered frame, with the shadow passes (key light plus viewer light) and the contact map
 wrapped; six consecutive frames per state ("–" separates the lowest and highest frame). Attract = the
 attract view (eye swaying, claw at home); ready = a player round with the claw parked over the items;
-held = a grab two and a half seconds in (claw closed, lifting or carrying). Shelf and rush are not
-offered to players yet; the measuring build made them available for the run only.
+held = a grab two and a half seconds in (claw closed, lifting or carrying). Shelf and rush were not
+offered to players yet when this was measured; the measuring build made them available for the run only
+(all four machines are offered now).
 
 | Theme, machine | Attract: frame / calls | Ready: frame / calls | Held: frame / calls | Items, main pass (calls) | Shadow passes (calls) | Contact map | Programs |
 | --- | --- | --- | --- | --- | --- | --- | --- |

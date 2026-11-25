@@ -6,11 +6,24 @@ scoop of section 2.7, notes WS-S). Code: `src/game/machines/rush.ts` (genre modu
 scoop's numbers), `src/game/machines/pieces.ts` (shared item parts), `src/physics/ClawRig.ts`
 (`fitScoop`).
 
-**Status: `available: false`** only because the pile is not drawn yet. Every gate passes on Easy and
-Arcade with the scoop and `rewardValue` 700; Skill stays under the caging and prize-share gates
-(see *Gates*).
+**Status:** `available: true` (offered in the lobby). Every gate passes on Easy and Arcade with the
+scoop and `rewardValue` 700; Skill stays under the caging and prize-share gates (see *Gates*).
 
-The sweep also exposes a timer defect in `PlaySession` (WS-A; see *Timer*).
+## How to play (for players)
+
+- A **75-second** run (*Run length*) of quick grabs in a pile of giant gems and coins. The clock starts
+  on your first move and stops while the game is paused.
+- Every piece you drop into the chute scores its value: emerald 10, sapphire 25, ruby 50, diamond 150,
+  coin 5. Three or more in one grab is a *handful*: +25 %. Today's pick adds ×1.5 to the points.
+- When time runs out, a grab already on its way still counts.
+- Reach a gem value of **700** in one run (*Gem value for a prize*; the pieces' values added up, no
+  bonuses) and you win a plush: the higher above 700 (×1.5, ×2, ×3), the rarer it is. It comes with one
+  claim code on the session card where prize codes are on.
+- A top-10 run asks for three initials (you have 30 seconds; after that, or if you press PLAY AGAIN or
+  MACHINES first, the place is kept as `???`).
+  The board ranks the run's points without today's bonus, so days stay comparable; ties keep the older
+  run first.
+- PLAY AGAIN on the session card starts a new run with a full pile.
 
 ## Machine
 
@@ -174,12 +187,12 @@ What still loses pieces:
 
 ### Timer
 
-`PlaySession.preStep` handles the clock running out in AIMING (forced grab), READY (the run ends) and
-busy phases (the run ends at the RESULT). In **RESULT** — Game's 0.35 s hold between tries — it marks
-the run expired but neither ends it nor lets a later step do so, so the player gets one more full
-try (WS-C saw 3 of 24 Arcade runs; none in the 144 runs of the final sweep). The fix belongs in
-`src/game/machines/session.ts` (WS-A): end the run in RESULT as in READY.
-`tests/unit/machines/rush.test.ts` holds it as an `it.fails` case that will flip when the fix lands.
+`PlaySession.preStep` handles the clock running out in AIMING (forced grab), READY and RESULT (the run
+ends without another try) and busy phases (the run ends at that try's RESULT: the last grab counts).
+Two defects were found and fixed: the RESULT hold (Game's 0.35 s between tries) used to give one more
+full try (WS-C saw 3 of 24 Arcade runs), and a try aborted after the clock ran out (Settings → restart
+round, the frame loop's error recovery) used to leave the run open until another try; the run now
+ends at the next READY (`tests/unit/machines/session.test.ts`).
 
 ## Unit tests
 
@@ -191,7 +204,7 @@ fingers stop at the cup, whose floor then covers the axis and opens clear of it;
 cages ≥ 1.2 pieces on average over 2 seeds × 10 grabs); always to the chute; ≥ 60 % of well-aimed
 grabs score; over 120 random grabs nothing scores without a carry; a 75 s run ends on time at a
 RESULT with one prize at the threshold (and none above it) and a step p95 within 1.5 ms; no award
-after the run; the timer edge cases (aiming, between tries, busy, and the RESULT hold as
-`it.fails`); demo rounds never start a run; a classic → rush → classic round trip.
+after the run; the timer edge cases (aiming, between tries, busy, the RESULT hold); demo rounds never
+start a run; a classic → rush → classic round trip.
 `tests/unit/machines/pieces.test.ts`: points, prize bands and order (default threshold 700),
 ranking order and initials.
