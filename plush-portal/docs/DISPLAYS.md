@@ -190,6 +190,14 @@ The screen is treated as a pane of glass in the front of the cabinet
 Without tracking the eye is the preset's **reference eye**. Tracking,
 calibration, filtering and loss handling are in [CALIBRATION.md](CALIBRATION.md).
 
+**Light from your position.** The same eye also carries a small light (*Graphics → Light from your
+position*, on except in the Safe preset): it shines through the glass into the middle of the play
+field and the claw and the toys throw soft shadows onto the mat and the back wall. When the eye moves
+— head tracking, drag-to-peek or the attract sway — the light moves with it, a little above the eye
+and a little further out to the side, so the shadows visibly slide the other way. It works the same
+in all four presets (it is placed in cabinet space from the eye after `eyeToWorld`, so the physical
+scale of the screen does not matter). Details and costs: [PERFORMANCE.md](PERFORMANCE.md#viewer-light).
+
 ## Simulated 9:16 screen
 
 The two portrait presets are designed for a 9:16 panel. When one of them is opened in a

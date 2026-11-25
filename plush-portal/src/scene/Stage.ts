@@ -1,6 +1,5 @@
 import {
   ACESFilmicToneMapping,
-  AdditiveBlending,
   AgXToneMapping,
   Box3,
   Color,
@@ -14,10 +13,8 @@ import {
   PCFShadowMap,
   PMREMGenerator,
   PerspectiveCamera,
-  PlaneGeometry,
   PointLight,
   Scene,
-  ShaderMaterial,
   SRGBColorSpace,
   VSMShadowMap,
   Vector2,
@@ -45,7 +42,9 @@ import type { GraphicsSettings } from '../settings/spec';
 import type { ThemeDef } from '../themes/themes';
 import { CONTACT_RANGE, ContactShadows } from './contactShadows';
 import { buildStudioScene, captureSize, environmentBlur, studioEnvironmentSize } from './environment';
-import { makeScratchTexture, setMaxAnisotropy } from './textures';
+import { FrontGlass } from './glass';
+import { setMaxAnisotropy } from './textures';
+import { VIEWER_ENV_SCALE, VIEWER_FILL_SCALE, ViewerLight } from './viewerLight';
 
 /** What is really being rendered right now (may differ from the selected preset). */
 export interface EffectiveGraphics {
@@ -131,10 +130,10 @@ export class Stage {
   private studioSize = 0;
   /** Prefiltered capture of the real cabinet interior ('refresh' / 'live'). */
   private captureTarget: WebGLRenderTarget | null = null;
-  private readonly frontGlass: Mesh;
-  private readonly frontGlassMaterial: ShaderMaterial;
-  /** Micro-scratch map of the front glass, created on first use (not on the phone tier). */
-  private glassScratches: Texture | null = null;
+  /** The front glass in the screen plane (src/scene/glass.ts). */
+  private readonly frontGlass = new FrontGlass();
+  /** A small light at the player's eye (src/scene/viewerLight.ts). */
+  readonly viewer = new ViewerLight(SHADOW_PASS_LAYER);
   private readonly contact: ContactShadows;
   private contactFrame = 0;
   /** Camera of the shadow pre-pass: sees only `SHADOW_PASS_LAYER`. */
@@ -216,6 +215,8 @@ export class Stage {
 
     this.hemi = new HemisphereLight(0xffffff, 0xcccccc, 0.5);
     this.scene.add(this.hemi);
+    // The viewer light follows the eye (setEyeWorld); its shadow is drawn by the same pre-pass.
+    this.scene.add(this.viewer.light, this.viewer.light.target);
 
     this.ledLights = [-1, 1].map((sx) => {
       const light = new PointLight(0xffffff, 0.22, 0.9, 2);
@@ -226,50 +227,8 @@ export class Stage {
     this.binLight = new PointLight(0xfff0dd, 0.5, 1.2, 2);
     this.scene.add(this.binLight);
 
-    // Front glass: a very subtle reflection that slides with the viewpoint and stays off the centre.
-    // Where a reflection streak crosses them, faint micro-scratches and wipe marks catch the light.
-    this.frontGlassMaterial = new ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      depthTest: false,
-      blending: AdditiveBlending,
-      uniforms: {
-        uEye: { value: new Vector2(0, 0) },
-        uStrength: { value: 0.05 },
-        uTint: { value: new Color(0xffffff) },
-        uAspect: { value: 1 },
-        uScratch: { value: null as Texture | null },
-        uScratchGain: { value: 0 },
-        uScale: { value: new Vector2(1, 1) },
-      },
-      vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
-      fragmentShader: /* glsl */ `
-        varying vec2 vUv;
-        uniform vec2 uEye;
-        uniform float uStrength;
-        uniform vec3 uTint;
-        uniform float uAspect;
-        uniform sampler2D uScratch;
-        uniform float uScratchGain;
-        uniform vec2 uScale;
-        void main() {
-          vec2 p = vUv - 0.5;
-          // Two soft diagonal streaks whose position follows the eye (reflections move with the viewer).
-          float d = ( p.x * uAspect + p.y * 0.62 ) - uEye.x * 0.35 + uEye.y * 0.12;
-          float streak = smoothstep( 0.2, 0.0, abs( d - 0.33 ) ) * 0.7 + smoothstep( 0.07, 0.0, abs( d - 0.52 ) );
-          // Keep the middle of the window clear: reflections live near the edges.
-          float edge = smoothstep( 0.18, 0.5, max( abs( p.x ), abs( p.y ) ) );
-          float fresnel = pow( edge, 2.0 ) * 0.5;
-          // Scratches only show where light grazes them: inside the streaks and towards the frame.
-          float scratch = texture2D( uScratch, vUv * uScale ).r * uScratchGain * ( streak * 0.8 + edge * 0.35 );
-          float a = ( streak * edge + fresnel + scratch ) * uStrength;
-          gl_FragColor = vec4( uTint * a, 1.0 );
-        }`,
-    });
-    this.frontGlass = new Mesh(new PlaneGeometry(1, 1), this.frontGlassMaterial);
-    this.frontGlass.renderOrder = 50;
-    this.frontGlass.frustumCulled = false;
-    this.scene.add(this.frontGlass);
+    // Front glass: reflections, dust and a frame glint fixed to the screen plane.
+    this.scene.add(this.frontGlass.mesh);
 
     this.contact = new ContactShadows(
       { minX: -FIELD.halfWidth, maxX: FIELD.halfWidth, minZ: -FIELD.depth, maxZ: 0, floorY: 0 },
@@ -313,6 +272,7 @@ export class Stage {
     this.pmrem = new PMREMGenerator(this.renderer);
     this.studioTarget = null;
     this.captureTarget = null;
+    this.viewer.invalidate();
     this.onContextRestored?.();
   };
 
@@ -433,6 +393,11 @@ export class Stage {
       // VSM compares moments, not depths: it needs no depth bias but a little normal offset.
       this.key.shadow.bias = filter.type === 'vsm' ? -0.0002 : -0.0005;
     }
+    this.viewer.setQuality(graphics.viewerLight, graphics.shadows);
+    if (this.theme) {
+      this.hemi.intensity = this.theme.lights.hemiIntensity * (graphics.viewerLight ? VIEWER_FILL_SCALE : 1);
+      this.scene.environmentIntensity = this.theme.lights.envIntensity * (graphics.viewerLight ? VIEWER_ENV_SCALE : 1);
+    }
     const contact = CONTACT_SHADOWS[graphics.shadows];
     this.contact.mesh.visible = contact.size > 0;
     if (contact.size > 0) {
@@ -448,14 +413,7 @@ export class Stage {
 
     if (needsComposer) this.buildComposer();
     else if (this.bloomPass) this.bloomPass.strength = 0.015 + graphics.bloom * 0.2;
-    this.frontGlassMaterial.uniforms.uStrength!.value = graphics.glass === 'low' ? 0 : graphics.glass === 'medium' ? 0.045 : 0.07;
-    const scratches = graphics.textures !== '512';
-    if (scratches && !this.glassScratches) {
-      this.glassScratches = makeScratchTexture(1024, 41);
-      this.frontGlassMaterial.uniforms.uScratch!.value = this.glassScratches;
-    }
-    this.frontGlassMaterial.uniforms.uScratchGain!.value = scratches ? 0.55 : 0;
-    this.frontGlass.visible = graphics.glass !== 'low';
+    this.frontGlass.setQuality(graphics.glass, graphics.textures);
     if (prev.reflections !== graphics.reflections) this.envDirty = true;
     this.applySize();
     this.effective.shadows = graphics.shadows;
@@ -476,11 +434,12 @@ export class Stage {
     this.rim.intensity = L.rimIntensity;
     this.hemi.color.set(L.sky);
     this.hemi.groundColor.set(L.ground);
-    this.hemi.intensity = L.hemiIntensity;
+    this.hemi.intensity = L.hemiIntensity * (this.viewer.isEnabled ? VIEWER_FILL_SCALE : 1);
     this.ledLights.forEach((light, i) => light.color.set(theme.cabinet.led[i % theme.cabinet.led.length]!));
-    this.scene.environmentIntensity = L.envIntensity;
+    this.scene.environmentIntensity = L.envIntensity * (this.viewer.isEnabled ? VIEWER_ENV_SCALE : 1);
     this.renderer.toneMappingExposure = this.graphics.exposure * L.exposure;
-    this.frontGlassMaterial.uniforms.uTint!.value.set(theme.backdrop.bokeh[0]!).lerp(new Color(0xffffff), 0.6);
+    this.frontGlass.setTheme(theme);
+    this.viewer.setTheme(theme);
     // Contact shadows take a deep shade of the mat colour rather than pure black.
     const dark = theme.cabinet.pattern === 'cosmos' || theme.cabinet.pattern === 'circuit';
     this.contact.setStyle(new Color(theme.cabinet.mat).multiplyScalar(dark ? 0.08 : 0.22), dark ? 0.78 : 0.62);
@@ -518,9 +477,9 @@ export class Stage {
   refreshEnvironmentFromScene(): void {
     const mode = this.graphics.reflections;
     if (mode === 'static' || this.contextLost || !this.studioTarget) return;
-    const glassVisible = this.frontGlass.visible;
+    const glassVisible = this.frontGlass.mesh.visible;
     const autoShadow = this.renderer.shadowMap.autoUpdate;
-    this.frontGlass.visible = false;
+    this.frontGlass.mesh.visible = false;
     // Light the capture with the studio (never with the previous capture: no feedback), and reuse
     // this frame's shadow map instead of re-rendering it for each of the six faces.
     this.scene.environment = this.studioTarget.texture as Texture;
@@ -528,7 +487,7 @@ export class Stage {
     const size = captureSize(this.graphics.textures, mode);
     const target = this.pmrem.fromScene(this.scene, 0.02, 0.05, 20, { size, position: this.captureOrigin });
     this.renderer.shadowMap.autoUpdate = autoShadow;
-    this.frontGlass.visible = glassVisible;
+    this.frontGlass.mesh.visible = glassVisible;
     this.captureTarget?.dispose();
     this.captureTarget = target;
     this.useEnvironment();
@@ -541,11 +500,8 @@ export class Stage {
 
   setLayout(layout: WindowLayout): void {
     this.camera.setWindow(0, layout.centerY, 0, layout.width, layout.height);
-    this.frontGlass.position.set(0, layout.centerY, -0.0006);
-    this.frontGlass.scale.set(layout.width, layout.height, 1);
-    this.frontGlassMaterial.uniforms.uAspect!.value = layout.aspect;
-    // Scratch texture at a constant physical size (one tile ≈ 0.45 m).
-    (this.frontGlassMaterial.uniforms.uScale!.value as Vector2).set(layout.width / 0.45, layout.height / 0.45);
+    this.frontGlass.setLayout(layout);
+    this.viewer.invalidate();
     this.binLight.position.set(-0.3, layout.binFloorY + 0.32, -0.14);
     // The shadow camera covers the play field plus the nearer part of the side bays.
     const reach = Math.min(1.25, 0.6 + layout.sideBay);
@@ -556,8 +512,8 @@ export class Stage {
 
   setEyeWorld(x: number, y: number, z: number): void {
     this.camera.setEyeWorld(x, y, z);
-    const w = this.camera.getWindow();
-    this.frontGlassMaterial.uniforms.uEye!.value.set((x - w.x) / w.width, (y - w.y) / w.height);
+    // The viewer light stands where the eye is (the camera keeps it in front of the glass).
+    this.viewer.setEye(this.camera.position.x, this.camera.position.y, this.camera.position.z);
     if (this.bokehPass) {
       const u = (this.bokehPass as unknown as { uniforms: Record<string, { value: number }> }).uniforms;
       u.focus!.value = z + FIELD.depth * 0.5;
@@ -654,6 +610,8 @@ export class Stage {
     // Shadow map and contact map, drawn with the toys' coarse shadow meshes.
     this.useShadowGeometry(true);
     try {
+      // The viewer light's map is redrawn only when the eye or a caster (toy, claw) moved.
+      this.viewer.needsShadow(this.poseSignature());
       this.renderShadows();
       const contact = CONTACT_SHADOWS[this.graphics.shadows];
       if (contact.size > 0 && this.contact.mesh.visible && ++this.contactFrame >= contact.every) {
@@ -672,7 +630,7 @@ export class Stage {
    * composer's passes then read without redrawing it.
    */
   private renderShadows(): void {
-    if (!this.key.castShadow) return;
+    if (!this.key.castShadow && !this.viewer.light.castShadow) return;
     const renderer = this.renderer;
     // Every light is visible to the pre-pass too: three.js recompiles nothing when the light set of
     // two consecutive renders is the same, but re-evaluates every lit material when it differs.
@@ -755,6 +713,27 @@ export class Stage {
   }
 
   /**
+   * A number that changes when a shadow caster of the viewer light moved: the poses of the toys and
+   * the claw, rounded to half a millimetre (and 1/2000 of rotation), so the tiny settling motions of
+   * resting toys do not redraw its map every frame. Soft-body denting is left out: its effect on a
+   * shadow cast from the front is far below a texel.
+   */
+  private poseSignature(): number {
+    let signature = 0;
+    let k = 1;
+    for (const root of this.contactRoots) {
+      root.updateMatrixWorld();
+      root.traverse((o) => {
+        if (!(o as Mesh).isMesh || !o.visible || !o.castShadow) return;
+        const e = o.matrixWorld.elements;
+        for (let i = 0; i < 16; i++) signature += Math.round(e[i]! * 2000) * (k + i * 0.618);
+        k += 1.37;
+      });
+    }
+    return signature;
+  }
+
+  /**
    * Compiles every shader used by the scene now, so the first grab does not hitch. Materials are
    * compiled against the composer's half-float scene target, which is where the scene is really
    * drawn: three.js keys programs by output colour space and tone mapping, and a compile against
@@ -812,7 +791,7 @@ export class Stage {
   }
 
   /** Diagnostic snapshot of the lighting configuration (debug API, performance notes). */
-  lightingInfo(): { environment: number; capture: number; shadowMap: number; shadowFilter: string; contact: number } {
+  lightingInfo(): { environment: number; capture: number; shadowMap: number; shadowFilter: string; contact: number; viewerLight: boolean; viewerShadow: number; viewerShadowRenders: number } {
     const s = this.graphics.shadows;
     return {
       environment: this.studioSize,
@@ -820,6 +799,9 @@ export class Stage {
       shadowMap: SHADOW_SIZE[s],
       shadowFilter: s === 'off' ? 'off' : SHADOW_FILTER[s].type,
       contact: CONTACT_SHADOWS[s].size,
+      viewerLight: this.viewer.isEnabled,
+      viewerShadow: this.viewer.shadowMapSize,
+      viewerShadowRenders: this.viewer.shadowRenders,
     };
   }
 
@@ -833,9 +815,8 @@ export class Stage {
     this.captureTarget?.dispose();
     this.pmrem.dispose();
     this.contact.dispose();
-    this.glassScratches?.dispose();
-    this.frontGlass.geometry.dispose();
-    this.frontGlassMaterial.dispose();
+    this.frontGlass.dispose();
+    this.viewer.dispose();
     this.renderer.dispose();
   }
 }

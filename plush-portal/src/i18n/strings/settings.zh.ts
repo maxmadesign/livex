@@ -188,6 +188,8 @@ export const settingsZh: Record<string, string> = {
   'set.graphics.fxIntensity.hint': '粒子爆发和光效的强度。0 = 关闭。',
   'set.graphics.lightShow': '灯光秀',
   'set.graphics.lightShow.hint': '中奖时以及机器等待玩家时播放动态灯光。',
+  'set.graphics.viewerLight': '来自你所在位置的光',
+  'set.graphics.viewerLight.hint': '你眼睛所在的位置有一盏小灯照进机器，并随你移动，爪子和娃娃的影子也会跟着变化。它的阴影质量跟随“阴影”设置。',
   'set.graphics.exposure': '曝光',
   'set.graphics.toneMapping': '色调映射',
   'set.graphics.toneMapping.o.aces': 'ACES',

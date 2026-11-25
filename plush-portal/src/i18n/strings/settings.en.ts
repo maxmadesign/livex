@@ -194,6 +194,8 @@ export const settingsEn: Record<string, string> = {
   'set.graphics.fxIntensity.hint': 'Strength of particle bursts and light effects. 0 = none.',
   'set.graphics.lightShow': 'Light show',
   'set.graphics.lightShow.hint': 'Moving lights when you win and while the machine waits for a player.',
+  'set.graphics.viewerLight': 'Light from your position',
+  'set.graphics.viewerLight.hint': 'A small light where your eyes are shines into the machine and moves with you, so the shadows of the claw and the toys shift as you move. Its shadow follows the Shadows setting.',
   'set.graphics.exposure': 'Exposure',
   'set.graphics.toneMapping': 'Tone mapping',
   'set.graphics.toneMapping.o.aces': 'ACES',

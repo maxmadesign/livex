@@ -188,6 +188,8 @@ export const settingsJa: Record<string, string> = {
   'set.graphics.fxIntensity.hint': 'パーティクルや光のエフェクトの強さです。0 = なし。',
   'set.graphics.lightShow': 'ライトショー',
   'set.graphics.lightShow.hint': '景品をゲットしたときと、プレイヤーを待っている間にライトが動きます。',
+  'set.graphics.viewerLight': 'あなたの位置からの光',
+  'set.graphics.viewerLight.hint': '目の位置にある小さなライトが機械の中を照らし、あなたと一緒に動きます。動くとクレーンやぬいぐるみの影も変わります。影の品質は「影」の設定に従います。',
   'set.graphics.exposure': '露出',
   'set.graphics.toneMapping': 'トーンマッピング',
   'set.graphics.toneMapping.o.aces': 'ACES',
