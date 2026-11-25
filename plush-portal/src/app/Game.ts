@@ -1326,6 +1326,16 @@ export class Game {
       }
       facts.newCharacter = this.deps.ui.getState().prize?.isNew ?? false;
     }
+    // A machine session prize: its session_over line names the character (lines pool session.reward).
+    const sessionToy = result ? null : this.director?.sessionLineToy();
+    if (sessionToy) {
+      const lang = guideLanguage(this.applied.ai, this.language());
+      const asset = this.library.assets().find((a) => a.id === sessionToy);
+      if (asset) {
+        facts.toy = { typeId: asset.id, name: asset.name[lang], kind: asset.kind[lang] };
+        facts.newCharacter = this.deps.ui.getState().prize?.isNew ?? false;
+      }
+    }
     // Event identity for {event} / {host} and the GPT prompt; null (left out) for the neutral kit
     // and for themes no kit dresses, so those lines stay generic.
     const brand = brandFacts(this.themeId);

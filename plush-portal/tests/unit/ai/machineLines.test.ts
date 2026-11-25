@@ -71,11 +71,17 @@ describe('machine events → line pools', () => {
     expect(keysOf(event('session_over'))).toEqual(['session.over']);
   });
 
-  it('a session end never talks about a QR (rewardFor covers the win and the retry prompt only)', () => {
+  it('a session end with a session prize invites the scan only while its claim QR is on screen', () => {
     for (const lang of LANGS) {
-      const e = event('session_over', { machine: shelf({ reason: 'tries' }), reward: { qr: true, options: 'both' } });
-      expect(keysOf(e)).toEqual(['session.over']);
-      for (const c of localCandidates(e, lang)) expect(mentionsQr(c.text, lang), c.text).toBe(false);
+      const toy = { typeId: 'sakura.tanuki', name: 'Tanuki', kind: 'plush' };
+      const withQr = event('session_over', { machine: shelf({ reason: 'tries' }), toy, reward: { qr: true, options: 'both' } });
+      expect(keysOf(withQr)).toEqual(['win.reward']);
+      for (const c of localCandidates(withQr, lang)) expect(mentionsQr(c.text, lang), c.text).toBe(true);
+      const noQr = event('session_over', { machine: shelf({ reason: 'tries' }), toy });
+      expect(keysOf(noQr)).toEqual(['session.reward']);
+      for (const c of localCandidates(noQr, lang)) expect(mentionsQr(c.text, lang), c.text).toBe(false);
+      const plain = event('session_over', { machine: shelf({ reason: 'tries' }) });
+      expect(keysOf(plain)).toEqual(['session.over']);
     }
   });
 });
@@ -206,9 +212,11 @@ describe('facts.machine in the prompt', () => {
     for (const type of ['machine_selected', 'machine_progress', 'items_scored', 'time_low', 'session_over'] as const) {
       const task = taskFor(type, false);
       expect(task, type).toMatch(/facts\.machine/);
-      expect(task, type).not.toMatch(/QR/);
+      // Without a QR on screen no task asks for a scan (session_over says there is none).
+      expect(task, type).not.toMatch(/scan it|invitation to scan/i);
     }
     expect(taskFor('session_over', false)).toMatch(/initials/);
+    expect(taskFor('session_over', true)).toMatch(/claim QR code is on screen/);
     expect(taskFor('machine_progress', false)).toMatch(/Never predict/);
   });
 });

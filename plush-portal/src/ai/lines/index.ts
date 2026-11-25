@@ -107,8 +107,8 @@ export function resolveSituation(event: GuideEvent): LineSituation {
     case 'time_low':
       return at(['time.low']);
     case 'session_over': {
-      // A claim QR on screen is what the player has to act on (only once rewardFor allows it for
-      // this event: today it covers prize_won and retry_prompt, so session lines never talk about a QR).
+      // A session prize's claim QR on screen is what the player has to act on (rewardFor covers
+      // session_over; MachineDirector holds the line until the code is ready, like a classic win).
       const reward = rewardFor(event.type, f);
       if (reward) return at([REWARD_KEYS[reward.options] ?? 'win.reward']);
       if (f.machine?.rank != null) return at(['session.rank']);

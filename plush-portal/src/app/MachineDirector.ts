@@ -78,6 +78,8 @@ export const AUTO_ADVANCE: Readonly<Record<GenreId, { miss: number; scored: numb
 };
 
 /** Initials may be entered for this long; then the place is saved as `???`. */
+/** Longest wait for a session prize's claim code before its line goes out without the scan invitation. */
+const PRIZE_LINE_WAIT_MS = 1500;
 export const INITIALS_SECONDS = 30;
 /** Attract cycle: the next offered machine after this many demo rounds. */
 export const ATTRACT_CYCLE_ROUNDS = 3;
@@ -207,6 +209,10 @@ export class MachineDirector {
   private lastBridge: { progress: number | null; gain: number | null; stuck: boolean } | null = null;
   /** One-shot facts of the event being emitted (items of a try, rank, reason). */
   private context: Partial<MachineFacts> = {};
+  /** Character of the session prize while its session_over line is built (facts.toy). */
+  private sayToy: string | null = null;
+  /** Unsubscribes a session_over line that waits for its claim code. */
+  private pendingSayOff: (() => void) | null = null;
   private readonly settled: Settlement[] = [];
   private readonly offs: (() => void)[] = [];
 
@@ -325,6 +331,7 @@ export class MachineDirector {
   }
 
   dispose(): void {
+    this.pendingSayOff?.();
     for (const off of this.offs.splice(0)) off();
   }
 
@@ -848,8 +855,55 @@ export class MachineDirector {
     const rankCue = rankSfx(rank);
     if (rankCue) this.cue(rankCue, 1, 0.6);
     if (rank === 1) this.host.lightShow('jackpot');
-    this.say('session_over', { reason: reason === 'abandoned' ? null : reason, rank, items: snap.items });
+    const overContext = { reason: reason === 'abandoned' ? null : reason, rank, items: snap.items };
+    if (reward) this.sayWhenCodeSettles(reward.roundId, reward.typeId, overContext);
+    else this.say('session_over', overContext);
     this.refreshUi();
+  }
+
+  /**
+   * The session line names the prize and, when a claim QR is on screen, invites the scan. The code
+   * is requested at the same moment, so the line waits for it (at most PRIZE_LINE_WAIT_MS), like
+   * Game.emitPrizeWon does for a classic win; a new session or a switch first drops the line.
+   */
+  private sayWhenCodeSettles(roundId: number, typeId: string, context: Partial<MachineFacts>): void {
+    this.pendingSayOff?.();
+    const { ui } = this.host;
+    const pending = () => {
+      const r = ui.getState().reward;
+      return r.roundId === roundId && r.state === 'issuing';
+    };
+    const send = () => {
+      this.sayToy = typeId;
+      try {
+        this.say('session_over', context);
+      } finally {
+        this.sayToy = null;
+      }
+    };
+    if (!pending()) {
+      send();
+      return;
+    }
+    let done = false;
+    const finish = (deliver: boolean) => {
+      if (done) return;
+      done = true;
+      unsubscribe();
+      clearTimeout(timer);
+      this.pendingSayOff = null;
+      if (deliver && ui.getState().sessionResult?.roundId === roundId) send();
+    };
+    const unsubscribe = ui.subscribe(() => {
+      if (!pending()) finish(true);
+    });
+    const timer = setTimeout(() => finish(true), PRIZE_LINE_WAIT_MS);
+    this.pendingSayOff = () => finish(false);
+  }
+
+  /** The session prize's character while its line is being built (Game.facts puts it in facts.toy). */
+  sessionLineToy(): string | null {
+    return this.sayToy;
   }
 
   private commitRank(initials: string): void {

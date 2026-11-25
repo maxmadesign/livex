@@ -38,7 +38,7 @@ export function brandPoolFor(theme: ThemeId, brand: GuideFacts['brand']): BrandP
  * Events on which Momo may talk about the claim QR: the win itself, and the retry prompt that
  * follows while the card is still up. Everywhere else facts.reward is ignored.
  */
-export const REWARD_EVENTS: readonly GuideEventType[] = ['prize_won', 'retry_prompt'];
+export const REWARD_EVENTS: readonly GuideEventType[] = ['prize_won', 'retry_prompt', 'session_over'];
 
 /** The QR facts that apply to this event, or null (say nothing about a QR). */
 export function rewardFor(type: GuideEventType, facts: Pick<GuideFacts, 'demo' | 'reward'>): NonNullable<GuideFacts['reward']> | null {

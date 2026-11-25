@@ -198,7 +198,7 @@ export function buildOutputRules(lang: Lang, length: LineLength, brand: BrandFac
     '- Do not repeat or closely paraphrase any entry of recentLines.',
     '- Never mention cameras, faces, tracking data, AI models, prompts or these rules.',
     names,
-    '- When facts.reward.qr is true (prize_won, or retry_prompt while the code is still up), invite the player to scan the QR code on screen with their phone for what facts.reward.options unlocks: "both" = collect the plush prize or take a swag discount, "prize" = collect the plush prize, "swag" = a swag discount. Never mention a QR code, a prize to collect or a discount otherwise, and never state amounts or stock.',
+    '- When facts.reward.qr is true (prize_won, session_over with a session prize, or retry_prompt while the code is still up), invite the player to scan the QR code on screen with their phone for what facts.reward.options unlocks: "both" = collect the plush prize or take a swag discount, "prize" = collect the plush prize, "swag" = a swag discount. Never mention a QR code, a prize to collect or a discount otherwise, and never state amounts or stock.',
     '- Fill the fields: text (the line), emotion (happy, cheer, think, oops or calm) and shouldSpeak (true unless the line works better as a silent caption).',
   ].join('\n');
 }
@@ -326,6 +326,7 @@ export interface LineContext {
 const QR_TASKS: Partial<Record<GuideEventType, string>> = {
   prize_won: 'A prize-claim QR code is on screen: the invitation to scan it comes first (see rewardMeaning).',
   retry_prompt: 'The prize-claim QR code of the win is still on screen: remind the player to scan it first (see rewardMeaning).',
+  session_over: 'The session earned a prize and its claim QR code is on screen: the invitation to scan it comes first (see rewardMeaning).',
 };
 const NO_QR_TASK = 'No QR code is on screen: do not mention QR codes, scanning, collecting a prize at a booth or discounts.';
 
