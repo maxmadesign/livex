@@ -2019,6 +2019,17 @@ neither the bloom nor the screen; finite colours pass unchanged.
 | E12 | — | Anisotropic metals (brushed, anodised: rails, claw knuckles, fan frames) use the orthonormal anisotropy frame on Medium and better: their highlights are bounded; where the frame was fine they look as before. | The NaN source above. |
 | E13 | gpu palette rule. | `itemColors(gpu)` comes from the kit palette: gems grey → greens → white, silver coins, black cards with green borders, palette rarity stripes, no iridescence, no character colours on cards or fallbacks (the portraits themselves are the characters' own art). `printAtlas.test.ts` checks every colour and every painted fill. | — |
 
+### Available flags
+
+`bridge` and `shelf` are `available: true` (registry.ts): both were seen drawn and playing in a
+browser via `?machine=<id>` in all four layouts (desktop, portrait32, portrait86 simulated, phone;
+Sakura and GPU Party): a bridge box walked, jammed and dropped through the pit into the bin (desktop,
+phone, portrait32; in the portrait86 run the debug impulses of the e2e recipe left the box jammed at
+a steeper tilt, drawn correctly, without a drop), a shelf grab lifting a stack and dropping snack
+boxes into the trough (all four). `rush` stays `available: false` (its caging gate waits for the scoop);
+its pieces are drawn in every layout. Unit suite (121 files), machine tests and the golden trace
+pass with the flags flipped.
+
 ### For the integrator
 
 - Merge after WS-D: their `Game.itemVisuals` stays `null` (or `= this.toyVisuals.items`); keep both of
