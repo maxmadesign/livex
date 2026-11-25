@@ -532,6 +532,11 @@ export const settingsSpec = {
   camera: {
     /** Head Tracking / Window Perspective. */
     enabled: bool(true),
+    /**
+     * Drag-to-peek: while no tracked face drives the view (camera off, denied, no face, not started),
+     * dragging on the 3D view moves the viewpoint and it springs back on release (src/app/PeekDrag.ts).
+     */
+    dragPeek: bool(true),
     deviceId: str('', 256, 'live', true),
     resolution: en('480p', ['360p', '480p', '720p'] as const),
     inferenceHz: num(18, 5, 30, 1, 'live', 'Hz'),

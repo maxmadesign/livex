@@ -284,6 +284,8 @@ export const settingsJa: Record<string, string> = {
   'sec.camera.inference': 'トラッキングエンジン',
   'set.camera.enabled': 'ヘッドトラッキング',
   'set.camera.enabled.hint': '視点があなたの目を追いかけ、画面が窓のように見えます。映像はこの端末の中だけで処理され、録画されることはありません。',
+  'set.camera.dragPeek': 'ドラッグでのぞく',
+  'set.camera.dragPeek.hint': 'カメラが追従していないときは、3D の画面（操作ボタンではない所）をドラッグすると筐体の中を見回せます。指を離すと元に戻り、クレーンが動くことはありません。',
   'set.camera.deviceId': 'カメラ',
   'set.camera.resolution': 'カメラ解像度',
   'set.camera.resolution.o.360p': '360p',

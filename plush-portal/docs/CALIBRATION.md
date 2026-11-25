@@ -76,6 +76,19 @@ central face becomes the player. No identity features are computed or stored.
 eases back to the reference viewpoint (`returnMs`). When a face is found again the
 view cross-fades onto it (`reacquireMs`). There is never a jump.
 
+**Drag-to-peek (no face).** While no live sample drives the view (`ViewpointController`
+mode neutral, hold or returning — camera off, denied, no face, not started), the
+tracker asks its drag source (`FaceTracker.setDragSource`, installed by
+`src/app/PeekDrag.ts`) once per rendered frame for an offset and adds it to the
+viewpoint; the status then reports the view source **`drag`** ("Dragging to peek (not
+the camera)"). Live tracking and the test viewpoint always win: a face that appears
+mid-drag is cross-faded in starting from the dragged view, and the drag is dropped
+until the finger lifts. The offset is limited to 85 % of `view.maxOffset` and
+springs back to zero on release (details in
+[DISPLAYS.md](DISPLAYS.md#depth-the-arcade-row-the-glass-and-drag-to-peek)).
+`camera.dragPeek` (*Camera & Parallax → Drag to peek*, on by default) turns it off.
+With the null tracker (tracking module failed to load) drag-to-peek is not available.
+
 ---
 
 ## 3. Countdown calibration (baseline)

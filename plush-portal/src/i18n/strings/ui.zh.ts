@@ -209,6 +209,8 @@ export const uiZh: Record<string, string> = {
   'perf.na': '不可用',
   'perf.auto': '自动',
 
+  'peek.hint': '拖动画面，窥看机器里面',
+
   'common.close': '关闭',
   'common.cancel': '取消',
   'common.apply': '应用',

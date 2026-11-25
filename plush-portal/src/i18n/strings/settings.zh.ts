@@ -284,6 +284,8 @@ export const settingsZh: Record<string, string> = {
   'sec.camera.inference': '追踪引擎',
   'set.camera.enabled': '头部追踪',
   'set.camera.enabled.hint': '画面会跟随你的眼睛，让屏幕像一扇窗。视频只在本机处理，绝不录制。',
+  'set.camera.dragPeek': '拖动窥视',
+  'set.camera.dragPeek.hint': '摄像头没有跟随你时，在 3D 画面上（不是在控件上）拖动即可环顾机器内部。松手后视角会弹回，且绝不会移动爪子。',
   'set.camera.deviceId': '摄像头',
   'set.camera.resolution': '摄像头分辨率',
   'set.camera.resolution.o.360p': '360p',

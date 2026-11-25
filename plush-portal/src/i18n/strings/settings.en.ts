@@ -290,6 +290,8 @@ export const settingsEn: Record<string, string> = {
   'sec.camera.inference': 'Tracking engine',
   'set.camera.enabled': 'Head tracking',
   'set.camera.enabled.hint': 'The view follows your eyes so the screen behaves like a window. Video is processed on this device only and is never recorded.',
+  'set.camera.dragPeek': 'Drag to peek',
+  'set.camera.dragPeek.hint': 'When the camera is not following you, drag on the 3D view (not on the controls) to look around inside the machine. It springs back when you let go and never moves the claw.',
   'set.camera.deviceId': 'Camera',
   'set.camera.resolution': 'Camera resolution',
   'set.camera.resolution.o.360p': '360p',

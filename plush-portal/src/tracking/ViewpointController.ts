@@ -8,6 +8,8 @@
  *   reacquire → a sample arrived while not tracking (or the measurement
  *               jumped): cross-fade from the current output to the live value
  *   test      → manual test viewpoint (never reported as tracking)
+ *   drag      → drag-to-peek: an offset added to the neutral / hold / returning viewpoint while
+ *               no live sample drives the view (src/app/PeekDrag.ts); a live sample wins
  *
  * The output is continuous across every transition. Pure: all times are
  * passed in (milliseconds, same clock for samples and render frames).
@@ -81,6 +83,10 @@ export class ViewpointController {
   private blendDurationMs = 1;
 
   private test: Vec3 | null = null;
+
+  /** Drag-to-peek offset (window space, metres) and whether one is set. */
+  private readonly drag: Vec3 = [0, 0, 0];
+  private dragOn = false;
 
   constructor(config?: ViewpointConfig) {
     if (config) this.configure(config);
@@ -177,6 +183,21 @@ export class ViewpointController {
     }
   }
 
+  /**
+   * Drag-to-peek offset from the current viewpoint (window space, metres), or null for none. It is
+   * added only while nothing live drives the view (neutral, hold, returning) and then reported as
+   * the 'drag' source; live tracking and the test viewpoint ignore it.
+   */
+  setDrag(offset: Readonly<Vec3> | null): void {
+    if (!offset) {
+      this.dragOn = false;
+      this.drag[0] = this.drag[1] = this.drag[2] = 0;
+      return;
+    }
+    this.dragOn = true;
+    copy(this.drag, offset);
+  }
+
   /** Writes the viewpoint for the render frame at `nowMs` to `out`. */
   sample(nowMs: number, out: Vec3): ViewSource {
     if (!this.hasOutput) {
@@ -265,6 +286,12 @@ export class ViewpointController {
       }
     }
     copy(out, this.out);
+    if (this.dragOn && source !== 'tracking' && source !== 'reacquire') {
+      out[0] += this.drag[0];
+      out[1] += this.drag[1];
+      out[2] += this.drag[2];
+      return 'drag';
+    }
     return source;
   }
 
@@ -272,6 +299,7 @@ export class ViewpointController {
   reset(): void {
     this.mode = 'neutral';
     this.test = null;
+    this.setDrag(null);
     this.hasOutput = false;
     this.velocity[0] = this.velocity[1] = this.velocity[2] = 0;
     copy(this.out, this.neutral);
@@ -285,6 +313,12 @@ export class ViewpointController {
 
   private beginBlend(nowMs: number, target: Readonly<Vec3>): void {
     copy(this.blendFrom, this.out);
+    // A face found while the view is dragged: blend from where the dragged view is, not from under it.
+    if (this.dragOn && !this.isLive && !this.test) {
+      this.blendFrom[0] += this.drag[0];
+      this.blendFrom[1] += this.drag[1];
+      this.blendFrom[2] += this.drag[2];
+    }
     this.blendStartMs = nowMs;
     const d = Math.hypot(target[0] - this.out[0], target[1] - this.out[1], target[2] - this.out[2]);
     const scale = Math.min(1, Math.max(0.15, d / FULL_BLEND_DISTANCE));

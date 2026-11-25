@@ -288,7 +288,8 @@ export type ViewSource =
   | 'hold' // short loss: last stable value
   | 'returning' // long loss: easing back to neutral
   | 'reacquire' // blending back onto a fresh estimate
-  | 'test'; // manual test sliders (never reported as camera tracking)
+  | 'test' // manual test sliders (never reported as camera tracking)
+  | 'drag'; // drag-to-peek on the 3D view while no camera drives it (src/app/PeekDrag.ts)
 
 /**
  * Countdown calibration (TrackerPort.startCalibration): a countdown, then the player's current

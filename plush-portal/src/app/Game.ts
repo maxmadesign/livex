@@ -31,6 +31,7 @@ import { themeOf } from '../themes/themes';
 import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
+import { attachPeekDrag } from './PeekDrag';
 import type { GameStore, PerfSnapshot } from './gameStore';
 
 export interface PhysicalWindow {
@@ -254,6 +255,7 @@ export class Game {
 
       this.offs.push(settings.subscribe(() => this.onSettingsChanged()));
       this.offs.push(this.deps.tracker.subscribe((status) => this.onTrackerStatus(status)));
+      this.offs.push(attachPeekDrag({ canvas, tracker: this.deps.tracker, settings, ui, hud: () => this.hud, reducedMotion: () => this.effects.reducedMotion }));
       this.offs.push(this.deps.audio.subscribe((status) => ui.setState({ audio: status })));
       this.offs.push(this.deps.guide.subscribe((line, status) => ui.setState({ guideLine: line, guideStatus: status })));
       window.addEventListener('resize', this.onResize);
@@ -1565,7 +1567,7 @@ export class Game {
       source = 'neutral';
     }
     // A slow idle drift shows off the depth of the cabinet while nobody is tracked or playing.
-    if (source === 'neutral' && this.core.machine.phase === 'ATTRACT' && !this.effects.reducedMotion) {
+    if ((source === 'neutral' || source === 'drag') && this.core.machine.phase === 'ATTRACT' && !this.effects.reducedMotion) {
       const k = this.layout.physWidth;
       _eye[0] += Math.sin(this.time * 0.33) * 0.07 * k;
       _eye[1] += Math.sin(this.time * 0.21 + 1) * 0.03 * k;

@@ -272,6 +272,7 @@ Tracking (shared by all presets):
 | Setting | Path | Default | Range / options | Applies |
 | --- | --- | --- | --- | --- |
 | Head tracking | `camera.enabled` | on | on / off | live |
+| Drag to peek | `camera.dragPeek` | on | on / off (drag on the 3D view to look around while no face is tracked; [DISPLAYS.md](DISPLAYS.md#depth-the-arcade-row-the-glass-and-drag-to-peek)) | live |
 | Camera | `camera.deviceId` | *(empty)* | text ≤ 256 (never exported) | live |
 | Follow smoothing | `camera.smoothMs` | 70 | 0 … 400 (step 5) ms | live |
 | Jitter filter cutoff | `camera.filterMinCutoff` | 1.4 | 0.2 … 6 (step 0.1) Hz | live |

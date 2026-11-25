@@ -6,16 +6,12 @@ import {
   CylinderGeometry,
   ExtrudeGeometry,
   Group,
-  Matrix4,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   Shape,
   SphereGeometry,
   TorusGeometry,
-  Vector3,
-  Euler,
-  Quaternion,
   type Material,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -24,100 +20,15 @@ import { makeRng } from '../core/math';
 import type { WindowLayout } from '../perspective/windowGeometry';
 import { BIN, CHUTE, FIELD } from '../physics/fieldSpec';
 import type { ThemeDef } from '../themes/themes';
+import { addCeiling, buildArcadeRow, pileSlots, ROW, shadeStrip, type DisplaySlot } from './arcadeRow';
 import { LED_BEZEL, LED_WALL } from './brandScene';
-import { axisUV, boxUV, fanBladeShape, fanFrameShape, TESSELLATION } from './decor';
+import { CabinetBuilder as Builder, worldUV, type UvRule } from './builder';
+import { boxUV, fanBladeShape, fanFrameShape, TESSELLATION } from './decor';
 import type { BrandWall } from './ledWall';
 import { UV_DENSITY, type CabinetMaterials, type DetailLevel } from './materials';
 import { decalUv, makeBackdropTexture, type DecalId } from './textures';
 
-/** Where a decorative (non-interactive) display toy sits in a side bay. */
-export interface DisplaySlot {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-}
-
-const _m = new Matrix4();
-const _q = new Quaternion();
-const _e = new Euler();
-const _s = new Vector3(1, 1, 1);
-const _v = new Vector3();
-
-type UvRule = { mode: 'box' | 'axis'; density: number };
-interface AddOptions {
-  receive?: boolean;
-  cast?: boolean;
-  /** Keep the geometry's own UVs even if the material has a projection rule. */
-  keepUv?: boolean;
-}
-
-/**
- * Collects geometry per material and merges it, so the whole cabinet is a handful of draw calls.
- * Parts are bucketed by material *and* shadow flags: under variance shadow maps (High / Ultra)
- * three.js draws every shadow *receiver* into the shadow map, so a receiving riser must not turn
- * the ceiling and the frame (same lacquer) into receivers that shade the whole play field.
- */
-class Builder {
-  private readonly buckets = new Map<string, { material: Material; geometries: BufferGeometry[]; receive: boolean; cast: boolean }>();
-
-  constructor(private readonly uvRules: Map<Material, UvRule>) {}
-
-  /** Places a geometry in world space and applies the material's UV projection. */
-  prepare(material: Material, geometry: BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, keepUv = false): BufferGeometry {
-    _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s);
-    const g = geometry.index ? geometry.toNonIndexed() : geometry;
-    g.applyMatrix4(_m);
-    // Merging needs identical attribute sets.
-    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
-    const rule = keepUv ? undefined : this.uvRules.get(material);
-    if (rule?.mode === 'box') boxUV(g, rule.density);
-    else if (rule?.mode === 'axis') {
-      // Brush along the part's longest extent.
-      g.computeBoundingBox();
-      const size = g.boundingBox!.getSize(_v);
-      axisUV(g, size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.z ? 'y' : 'z', rule.density);
-    }
-    if (g !== geometry) geometry.dispose();
-    return g;
-  }
-
-  add(material: Material, geometry: BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, opts: AddOptions = {}): void {
-    const g = this.prepare(material, geometry, x, y, z, rx, ry, rz, opts.keepUv);
-    const receive = !!opts.receive, cast = !!opts.cast;
-    const key = `${material.uuid}|${receive ? 'r' : ''}${cast ? 'c' : ''}`;
-    let bucket = this.buckets.get(key);
-    if (!bucket) this.buckets.set(key, (bucket = { material, geometries: [], receive, cast }));
-    bucket.geometries.push(g);
-  }
-
-  build(group: Group, renderOrder: Map<Material, number>): void {
-    for (const { material, ...bucket } of this.buckets.values()) {
-      const merged = mergeGeometries(bucket.geometries, false);
-      for (const g of bucket.geometries) g.dispose();
-      if (!merged) continue;
-      const mesh = new Mesh(merged, material);
-      mesh.receiveShadow = bucket.receive;
-      mesh.castShadow = bucket.cast;
-      mesh.renderOrder = renderOrder.get(material) ?? 0;
-      mesh.matrixAutoUpdate = false;
-      group.add(mesh);
-    }
-  }
-}
-
-/** Planar UVs from world-space positions so patterns keep a constant physical size. */
-function worldUV(g: BufferGeometry, plane: 'xy' | 'xz' | 'zy', tilesPerMetre: number): BufferGeometry {
-  const pos = g.getAttribute('position');
-  const uv = g.getAttribute('uv');
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    if (plane === 'xy') uv.setXY(i, x * tilesPerMetre, y * tilesPerMetre);
-    else if (plane === 'xz') uv.setXY(i, x * tilesPerMetre, -z * tilesPerMetre);
-    else uv.setXY(i, -z * tilesPerMetre, y * tilesPerMetre);
-  }
-  return g;
-}
+export type { DisplaySlot } from './arcadeRow';
 
 function flowerShape(r: number, petals = 5): Shape {
   const s = new Shape();
@@ -175,9 +86,10 @@ function moonShape(r: number): Shape {
 
 /**
  * The whole static cabinet for one window layout and theme: front frame, glass
- * box, back board, ceiling light, gantry rails, chute, lower cabinet with the
- * prize shaft and (in landscape) the display bays left and right. Tessellation and
- * the amount of small detail follow the materials' detail level (texture tier).
+ * box, back board, ceiling lights, gantry rails, chute, lower cabinet with the
+ * prize shaft, and the arcade row around it (pillars and two neighbouring machines,
+ * src/scene/arcadeRow.ts). Tessellation and the amount of small detail follow the
+ * materials' detail level (texture tier).
  */
 export class Cabinet {
   readonly group = new Group();
@@ -197,10 +109,10 @@ export class Cabinet {
   }
 
   /** Rounded box with the tier's bevel tessellation. */
-  private box(w: number, h: number, d: number, r = 0): BufferGeometry {
+  private box(w: number, h: number, d: number, r = 0, segments: number = TESSELLATION.bevel[this.detail]): BufferGeometry {
     if (r <= 0) return new BoxGeometry(w, h, d);
     const radius = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
-    return radius > 1e-4 ? new RoundedBoxGeometry(w, h, d, TESSELLATION.bevel[this.detail], radius) : new BoxGeometry(w, h, d);
+    return radius > 1e-4 ? new RoundedBoxGeometry(w, h, d, segments, radius) : new BoxGeometry(w, h, d);
   }
 
   private get radial(): number {
@@ -260,16 +172,20 @@ export class Cabinet {
       }
 
     /* ------------------------------------------------------------ back wall */
-    b.add(M.backboard, worldUV(this.box(W + 0.2, T - B + 0.3, 0.04), 'xy', 1.6), 0, (T + B) / 2, -D - 0.02, 0, 0, 0, { receive: true });
+    // Our machine's own back wall; the neighbours beyond the pillars have theirs (src/scene/arcadeRow.ts).
+    b.add(M.backboard, worldUV(this.box(2 * HW + 0.12, T - B + 0.3, 0.04), 'xy', 1.6), 0, (T + B) / 2, -D - 0.02, 0, 0, 0, { receive: true });
 
     /* -------------------------------------------------------------- ceiling */
-    const ceilW = W + 0.2;
-    b.add(M.enamel, this.box(ceilW, 0.04, D + 0.06, 0.006), 0, CEIL + 0.02, -D / 2);
-    b.add(M.diffuser, this.box(0.74, 0.008, 0.5), 0, CEIL - 0.004, -D * 0.5);
-    b.add(M.chrome, this.box(0.78, 0.012, 0.014, 0.004), 0, CEIL - 0.006, -D * 0.5 + 0.257);
-    b.add(M.chrome, this.box(0.78, 0.012, 0.014, 0.004), 0, CEIL - 0.006, -D * 0.5 - 0.257);
-    b.add(M.chrome, this.box(0.014, 0.012, 0.52, 0.004), -0.383, CEIL - 0.006, -D * 0.5);
-    b.add(M.chrome, this.box(0.014, 0.012, 0.52, 0.004), 0.383, CEIL - 0.006, -D * 0.5);
+    // One lacquered ceiling over the whole row, so a low eye looking up past the window's top edge
+    // finds a roof over the neighbours too.
+    const ceilW = Math.max(W + 0.2, 2 * (ROW.glassX + ROW.fieldWidth + 0.2));
+    b.add(M.enamel, this.box(ceilW, 0.04, ROW.frontZ - ROW.backZ + 0.1, 0.006), 0, CEIL + 0.02, (ROW.frontZ + ROW.backZ) / 2);
+    // Diffuser, light tubes and the brackets that hang the gantry rails from the ceiling.
+    // The row's parts (and the ceiling furniture, mostly above the window) are many small boxes seen
+    // through haze or at a glance: one bevel segment keeps their rounded edges at a fraction of the
+    // triangles (about 110 per box instead of 590 on Medium).
+    const rowCtx = { layout: L, detail: this.detail, radial: Math.min(this.radial, 16), box: (w: number, h: number, d: number, r = 0) => this.box(w, h, d, r, 1) };
+    addCeiling(b, M, rowCtx, 0, 0, -D);
 
     /* ---------------------------------------------------- play floor (mat) */
     b.add(M.mat, worldUV(this.box(HW - CHUTE.xMax, FT, D), 'xz', 2.6), (CHUTE.xMax + HW) / 2, -FT / 2, -D / 2, 0, 0, 0, { receive: true });
@@ -278,6 +194,14 @@ export class Cabinet {
     b.add(M.chrome, this.box(HW - CHUTE.xMax + 0.004, 0.014, 0.012, 0.004), (CHUTE.xMax + HW) / 2, 0.004, -0.008);
     b.add(M.accent, this.box(2 * HW, FT - 0.012, 0.01, 0.003), 0, -FT / 2 - 0.004, -0.007);
     b.add(M.leds[0]!, this.box(HW - CHUTE.xMax - 0.04, 0.006, 0.004), (CHUTE.xMax + HW) / 2, -0.012, -0.0015);
+
+    /* ---------------------------------------- baked depth cues in the corners */
+    // Medium has no ambient occlusion: darken the inside corners a little so the box reads deep.
+    shadeStrip(b, M, 0, 0.0012, -D + 0.001, 2 * HW, 0.14, 'floor');
+    shadeStrip(b, M, 0, 0, -D + 0.0015, 2 * HW, 0.18, 'wallUp');
+    shadeStrip(b, M, 0, CEIL, -D + 0.0015, 2 * HW, 0.14, 'wallDown');
+    shadeStrip(b, M, -HW, CEIL / 2, -D + 0.002, CEIL, 0.12, 'wallLeft');
+    shadeStrip(b, M, HW, CEIL / 2, -D + 0.002, CEIL, 0.12, 'wallRight');
 
     /* ------------------------------------------------------------ glass box */
     const glassH = CEIL;
@@ -313,6 +237,9 @@ export class Cabinet {
     // Dark collar through the floor slab.
     b.add(M.dark, this.box(0.004, FT, CHUTE.zMax - CHUTE.zMin), CHUTE.xMax - 0.002, -FT / 2, (CHUTE.zMin + CHUTE.zMax) / 2);
     b.add(M.dark, this.box(CHUTE.xMax - CHUTE.xMin, FT, 0.004), (CHUTE.xMin + CHUTE.xMax) / 2, -FT / 2, CHUTE.zMin + 0.002);
+    // A light lip just inside the prize hole, seen when the eye is high enough to look down into it.
+    b.add(M.leds[0]!, this.box(0.003, 0.009, CHUTE.zMax - CHUTE.zMin - 0.01), CHUTE.xMax - 0.0055, -0.011, (CHUTE.zMin + CHUTE.zMax) / 2);
+    b.add(M.leds[0]!, this.box(CHUTE.xMax - CHUTE.xMin - 0.01, 0.009, 0.003), (CHUTE.xMin + CHUTE.xMax) / 2, -0.011, CHUTE.zMin + 0.0055);
     // "PRIZE" sign on the guard wall.
     b.add(M.sign, new PlaneGeometry(0.16, 0.05), (CHUTE.xMin + CHUTE.xMax) / 2, ch * 0.56, CHUTE.zMin + 0.001);
 
@@ -333,10 +260,12 @@ export class Cabinet {
       if (y > -FT - 0.05) break;
       b.add(M.leds[i % M.leds.length]!, this.box(BIN.xMax - BIN.xMin - 0.1, 0.008, 0.004), (BIN.xMin + BIN.xMax) / 2, y, BIN.zMin + 0.002);
     }
+    // The shaft darkens just under the floor slab (baked occlusion).
+    shadeStrip(b, M, (BIN.xMin + BIN.xMax) / 2, -FT, BIN.zMin + 0.0015, BIN.xMax - BIN.xMin, 0.16, 'wallDown');
     // "PRIZE" arrow printed high on the back of the shaft.
     if (lowH > 0.22) this.decal(b, 'arrow', 0.075, (BIN.xMin + BIN.xMax) / 2, -FT - 0.07, BIN.zMin + 0.0015);
-    // Body panel to the right of the shaft (and under the side bays in landscape).
-    const panelL = BIN.xMax + 0.02, panelR = half - F + 0.01;
+    // Body panel to the right of the shaft, up to the pillar (the neighbours have their own).
+    const panelL = BIN.xMax + 0.02, panelR = Math.min(half - F + 0.01, ROW.postInner + 0.004);
     b.add(M.fascia, worldUV(this.box(panelR - panelL, lowH, 0.02), 'xy', 2.2), (panelL + panelR) / 2, lowMid, -0.055, 0, 0, 0, { receive: true });
     const pcx = (panelL + Math.min(panelR, HW)) / 2;
     const badgeR = Math.min(0.11, lowH * 0.3, (Math.min(panelR, HW) - panelL) * 0.36);
@@ -369,41 +298,24 @@ export class Cabinet {
       }
       if (cw >= 0.07) this.decal(b, 'caution', cw, cx, cy, -0.0443);
     }
-    if (landscape) {
-      const leftR = BIN.xMin - 0.02, leftL = -half + F - 0.01;
-      b.add(M.fascia, worldUV(this.box(leftR - leftL, lowH, 0.02), 'xy', 2.2), (leftL + leftR) / 2, lowMid, -0.055, 0, 0, 0, { receive: true });
-      if (leftR - leftL > 0.14 && lowH > 0.2) this.decal(b, 'win', Math.min(0.15, (leftR - leftL) * 0.7), (leftL + leftR) / 2, lowMid + lowH * 0.12, -0.0443);
-    } else if (panelW > 0.3 && lowH > 0.4) this.decal(b, 'win', 0.11, panelL + 0.08, -FT - 0.09, -0.0443);
+    if (panelW > 0.3 && lowH > 0.4) this.decal(b, 'win', 0.11, panelL + 0.08, -FT - 0.09, -0.0443);
 
-    /* ------------------------------------------------------------ side bays */
-    if (landscape) {
-      for (const sx of [-1, 1]) {
-        const x0 = HW + 0.012, x1 = half - F;
-        const cx = (sx * (x0 + x1)) / 2, bw = x1 - x0;
-        b.add(M.bayMat, worldUV(this.box(bw, FT, D), 'xz', 2.6), cx, -FT / 2, -D / 2, 0, 0, 0, { receive: true });
-        b.add(M.enamel, this.box(0.02, T - B, D, 0.004), sx * (x1 + 0.01), (T + B) / 2, -D / 2);
-        b.add(M.accent, this.box(bw, FT - 0.012, 0.01, 0.003), cx, -FT / 2 - 0.004, -0.007);
-        // Two-step riser for display toys.
-        b.add(M.enamel, this.box(bw - 0.03, 0.13, 0.3, 0.012), cx, 0.065, -D + 0.16, 0, 0, 0, { receive: true });
-        b.add(M.enamel, this.box(bw - 0.03, 0.27, 0.15, 0.012), cx, 0.135, -D + 0.085, 0, 0, 0, { receive: true });
-        b.add(M.leds[1 % M.leds.length]!, this.box(bw - 0.07, 0.006, 0.004), cx, 0.122, -D + 0.312);
-        b.add(M.leds[2 % M.leds.length]!, this.box(bw - 0.07, 0.006, 0.004), cx, 0.262, -D + 0.162);
-        const cols = Math.max(1, Math.floor((bw - 0.06) / 0.24));
-        for (let c = 0; c < cols; c++) {
-          const px = sx * (x0 + ((c + 0.5) / cols) * bw);
-          const lean = -sx * 0.18;
-          this.displaySlots.push({ x: px, y: 0, z: -0.25 - (c % 2) * 0.06, yaw: lean + (rng() - 0.5) * 0.3 });
-          this.displaySlots.push({ x: px, y: 0.13, z: -D + 0.2, yaw: lean + (rng() - 0.5) * 0.3 });
-        }
-      }
-    }
+    /* ------------------------------------- the arcade row beside our machine */
+    // Pillars and the two neighbouring machines (landscape: where the display bays used to be;
+    // portrait: just outside the window, seen through the side glass). Their plush piles are the
+    // display slots that ToyVisuals fills.
+    buildArcadeRow(b, M, rowCtx);
+    this.displaySlots.push(...pileSlots(landscape, this.detail));
 
     /* ------------------------------------------------------- wall ornaments */
-    const reach = landscape ? half - F - 0.05 : HW - 0.06;
+    // Wall decor stays on our own back wall (the neighbours carry their own print).
+    const reach = HW - 0.06;
     if (this.theme.cabinet.pattern === 'circuit') this.buildCircuitDecor(b, rng, reach);
     else this.buildOrnaments(b, rng, reach);
 
     const order = new Map<Material, number>([
+      [M.shade, 1],
+      [M.veil, 9],
       [M.glass, 10],
       [M.acrylic, 11],
       [M.sign, 12],
@@ -411,6 +323,11 @@ export class Cabinet {
       [M.decal, 3],
     ]);
     b.build(this.group, order);
+    // Unlit overlays (haze, corner shading) must not occlude in the ambient-occlusion pass.
+    this.group.traverse((o) => {
+      const material = (o as Mesh).material;
+      if (material === M.veil || material === M.shade) o.userData.skipAO = true;
+    });
 
     // Out-of-focus arcade backdrop seen through the side glass (portrait) and in reflections.
     const d = this.detail;

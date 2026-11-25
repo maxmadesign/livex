@@ -209,6 +209,8 @@ export const uiJa: Record<string, string> = {
   'perf.na': '取得できません',
   'perf.auto': '自動',
 
+  'peek.hint': 'ドラッグして中をのぞいてみよう',
+
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
   'common.apply': '適用',
