@@ -44,7 +44,7 @@ import { CONTACT_RANGE, ContactShadows } from './contactShadows';
 import { buildStudioScene, captureSize, environmentBlur, studioEnvironmentSize } from './environment';
 import { FrontGlass } from './glass';
 import { setMaxAnisotropy } from './textures';
-import { VIEWER_ENV_SCALE, VIEWER_FILL_SCALE, ViewerLight } from './viewerLight';
+import { CasterWatch, VIEWER_ENV_SCALE, VIEWER_FILL_SCALE, ViewerLight } from './viewerLight';
 
 /** What is really being rendered right now (may differ from the selected preset). */
 export interface EffectiveGraphics {
@@ -134,6 +134,8 @@ export class Stage {
   private readonly frontGlass = new FrontGlass();
   /** A small light at the player's eye (src/scene/viewerLight.ts). */
   readonly viewer = new ViewerLight(SHADOW_PASS_LAYER);
+  /** Whether a caster of the viewer light moved since its map was last drawn. */
+  private readonly casters = new CasterWatch();
   private readonly contact: ContactShadows;
   private contactFrame = 0;
   /** Camera of the shadow pre-pass: sees only `SHADOW_PASS_LAYER`. */
@@ -611,7 +613,14 @@ export class Stage {
     this.useShadowGeometry(true);
     try {
       // The viewer light's map is redrawn only when the eye or a caster (toy, claw) moved.
-      this.viewer.needsShadow(this.poseSignature());
+      if (this.viewer.light.castShadow) {
+        this.casters.begin();
+        for (const root of this.contactRoots) {
+          root.updateMatrixWorld();
+          root.traverse(this.watchCaster);
+        }
+        if (this.viewer.needsShadow(this.casters.signature())) this.casters.keep();
+      }
       this.renderShadows();
       const contact = CONTACT_SHADOWS[this.graphics.shadows];
       if (contact.size > 0 && this.contact.mesh.visible && ++this.contactFrame >= contact.every) {
@@ -713,25 +722,13 @@ export class Stage {
   }
 
   /**
-   * A number that changes when a shadow caster of the viewer light moved: the poses of the toys and
-   * the claw, rounded to half a millimetre (and 1/2000 of rotation), so the tiny settling motions of
-   * resting toys do not redraw its map every frame. Soft-body denting is left out: its effect on a
-   * shadow cast from the front is far below a texel.
+   * Hands the viewer light's casters (the toys' and the claw's shadow-casting meshes) to CasterWatch,
+   * which compares their poses with those its map was last drawn with. Soft-body denting is left out:
+   * its effect on a shadow cast from the front is far below a texel.
    */
-  private poseSignature(): number {
-    let signature = 0;
-    let k = 1;
-    for (const root of this.contactRoots) {
-      root.updateMatrixWorld();
-      root.traverse((o) => {
-        if (!(o as Mesh).isMesh || !o.visible || !o.castShadow) return;
-        const e = o.matrixWorld.elements;
-        for (let i = 0; i < 16; i++) signature += Math.round(e[i]! * 2000) * (k + i * 0.618);
-        k += 1.37;
-      });
-    }
-    return signature;
-  }
+  private readonly watchCaster = (o: Object3D): void => {
+    if ((o as Mesh).isMesh && o.visible && o.castShadow) this.casters.add(o.matrixWorld);
+  };
 
   /**
    * Compiles every shader used by the scene now, so the first grab does not hitch. Materials are

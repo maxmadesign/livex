@@ -1,4 +1,4 @@
-import { Color, SpotLight, Vector3 } from 'three';
+import { Color, SpotLight, Vector3, type Matrix4 } from 'three';
 import { FIELD } from '../physics/fieldSpec';
 import type { GraphicsSettings } from '../settings/spec';
 import type { ThemeDef } from '../themes/themes';
@@ -48,6 +48,15 @@ export const VIEWER_ENV_SCALE = 0.8;
  */
 export const VIEWER_DECAY = 1;
 
+/**
+ * Layer of meshes that cast only the viewer light's shadow: the shadow stand-ins of the sculpted
+ * plaques on the back wall (CabinetBuilder, `cast: 'viewer'`). The viewer light's shadow camera sees
+ * this layer; the key light's shadow camera and every camera that draws the picture do not, so a
+ * stand-in is never drawn on screen, and the steep key light does not throw long streaks under the
+ * plaques. Its map is drawn only when the eye or a toy moved, so the plaques cost nothing on a still frame.
+ */
+export const VIEWER_CASTER_LAYER = 30;
+
 /** Shadow map per shadow quality: none on Off / Low (Safe), 1024 PCF on Medium, 2048 soft on High. */
 export const VIEWER_SHADOW: Record<GraphicsSettings['shadows'], { size: number; radius: number; blurSamples: number }> = {
   off: { size: 0, radius: 0, blurSamples: 0 },
@@ -71,6 +80,55 @@ export function viewerCone(distance: number): { angle: number; penumbra: number 
   const angle = Math.min(1.25, Math.atan(VIEWER_EDGE / d));
   const inner = Math.min(angle * 0.95, Math.atan(VIEWER_CORE / d));
   return { angle, penumbra: Math.min(1, Math.max(0, 1 - inner / angle)) };
+}
+
+/**
+ * How far a shadow caster must have moved since the viewer light's map was last drawn before it is
+ * drawn again: half a millimetre, or 1/2000 in any rotation (and scale) term of its world matrix.
+ */
+export const CASTER_TOLERANCE = 0.0005;
+
+/**
+ * Tells the viewer light when one of its shadow casters (toys, the claw) moved. Each frame the
+ * casters' world matrices are compared with those of the frame the map was last drawn with — not
+ * with the previous frame and not rounded — so a slow creep still redraws it once it adds up to the
+ * tolerance, while the sub-millimetre jitter of resting toys and of the claw hanging still never
+ * does (rounded poses redrew it whenever such jitter crossed a rounding step).
+ *
+ * Only the toys and the claw are watched. Purely decorative animation (case fans, bobbing chips, the
+ * LED wall, the plaques' stand-ins) is static or casts no shadow, so it never redraws the map.
+ */
+export class CasterWatch {
+  private kept: number[] = [];
+  private now: number[] = [];
+  private version = 0;
+
+  /** Starts this frame's list of casters. */
+  begin(): void {
+    this.now.length = 0;
+  }
+
+  /** Adds one caster (its world matrix; casters must come in the same order every frame). */
+  add(matrixWorld: Matrix4): void {
+    const e = matrixWorld.elements;
+    this.now.push(e[0]!, e[1]!, e[2]!, e[4]!, e[5]!, e[6]!, e[8]!, e[9]!, e[10]!, e[12]!, e[13]!, e[14]!);
+  }
+
+  /** A number that changes whenever a caster moved by more than the tolerance (or one came or went). */
+  signature(): number {
+    const now = this.now, kept = this.kept;
+    let moved = now.length !== kept.length;
+    for (let i = 0; !moved && i < now.length; i++) moved = Math.abs(now[i]! - kept[i]!) > CASTER_TOLERANCE;
+    if (moved) this.version++;
+    return this.version;
+  }
+
+  /** The map is being drawn with this frame's casters: later frames are compared with them. */
+  keep(): void {
+    const kept = this.kept;
+    this.kept = this.now;
+    this.now = kept;
+  }
 }
 
 export class ViewerLight {
@@ -99,6 +157,7 @@ export class ViewerLight {
     // A lit cabinet never has pitch-black shadows; this light is a modest fill.
     shadow.intensity = 0.95;
     shadow.camera.layers.enable(shadowLayer);
+    shadow.camera.layers.enable(VIEWER_CASTER_LAYER);
     this.light = light;
     this.setEye(0, 0.5, 2);
   }
@@ -165,8 +224,8 @@ export class ViewerLight {
 
   /**
    * Called once per frame before the shadow pass with a number that changes whenever a shadow caster
-   * moved (toys, claw). Marks the shadow map for an update when that number or the eye changed, and
-   * returns whether it will be drawn.
+   * moved (toys, claw; see CasterWatch). Marks the shadow map for an update when that number or the
+   * eye changed, and returns whether it will be drawn.
    */
   needsShadow(sceneSignature: number): boolean {
     if (!this.enabled || !this.light.castShadow) return false;

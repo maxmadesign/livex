@@ -1,7 +1,22 @@
-import { Vector3 } from 'three';
+import { BoxGeometry, Group, Matrix4, Mesh, MeshStandardMaterial, Object3D, OrthographicCamera, Quaternion, Vector3, type Material } from 'three';
 import { describe, expect, it } from 'vitest';
+import { CabinetBuilder } from '../../../src/scene/builder';
 import { THEMES } from '../../../src/themes/themes';
-import { VIEWER_CORE, VIEWER_EDGE, VIEWER_INTENSITY, VIEWER_LEAD, VIEWER_LIFT, VIEWER_SHADOW, VIEWER_TARGET, ViewerLight, viewerCone, viewerLightColor } from '../../../src/scene/viewerLight';
+import {
+  CASTER_TOLERANCE,
+  CasterWatch,
+  VIEWER_CASTER_LAYER,
+  VIEWER_CORE,
+  VIEWER_EDGE,
+  VIEWER_INTENSITY,
+  VIEWER_LEAD,
+  VIEWER_LIFT,
+  VIEWER_SHADOW,
+  VIEWER_TARGET,
+  ViewerLight,
+  viewerCone,
+  viewerLightColor,
+} from '../../../src/scene/viewerLight';
 
 const target = new Vector3(...VIEWER_TARGET);
 
@@ -164,5 +179,113 @@ describe('viewer light', () => {
     expect(v.light.shadow.camera.layers.isEnabled(31)).toBe(true);
     expect(v.light.shadow.camera.layers.isEnabled(0)).toBe(true);
     expect(v.light.shadow.autoUpdate).toBe(false);
+  });
+
+  it('alone sees the viewer-only casters: not the key light, not a camera that draws the picture', () => {
+    const v = new ViewerLight(31);
+    const standIn = new Object3D();
+    standIn.layers.set(VIEWER_CASTER_LAYER);
+    // three.js tests an object against the shadow camera's layers in the shadow pass.
+    expect(standIn.layers.test(v.light.shadow.camera.layers)).toBe(true);
+    const keyShadowCamera = new OrthographicCamera();
+    keyShadowCamera.layers.enable(31);
+    expect(standIn.layers.test(keyShadowCamera.layers)).toBe(false);
+    expect(standIn.layers.test(new OrthographicCamera().layers)).toBe(false);
+    // ... and the pre-pass camera (lights only) does not draw it either.
+    const prePass = new OrthographicCamera();
+    prePass.layers.set(31);
+    expect(standIn.layers.test(prePass.layers)).toBe(false);
+  });
+});
+
+describe('viewer light: moved casters (CasterWatch)', () => {
+  const pose = (x: number, y = 0.05, z = -0.3, turn = 0) => new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn), new Vector3(1, 1, 1));
+  const frame = (watch: CasterWatch, poses: Matrix4[]) => {
+    watch.begin();
+    for (const m of poses) watch.add(m);
+    return watch.signature();
+  };
+
+  it('keeps its signature while the casters rest, and changes it when one moves past the tolerance', () => {
+    const w = new CasterWatch();
+    const first = frame(w, [pose(0.1), pose(-0.2)]);
+    w.keep();
+    expect(frame(w, [pose(0.1), pose(-0.2)])).toBe(first);
+    expect(frame(w, [pose(0.1 + CASTER_TOLERANCE * 0.8), pose(-0.2)])).toBe(first);
+    const moved = frame(w, [pose(0.1 + CASTER_TOLERANCE * 1.5), pose(-0.2)]);
+    expect(moved).not.toBe(first);
+    // A turn counts as well (1/2000 in a rotation term).
+    w.keep();
+    expect(frame(w, [pose(0.1 + CASTER_TOLERANCE * 1.5, 0.05, -0.3, 0.002), pose(-0.2)])).not.toBe(moved);
+  });
+
+  it('ignores jitter that crosses a rounding step back and forth (the claw hanging still)', () => {
+    const w = new CasterWatch();
+    // Half a millimetre is exactly where poses rounded to 1/2000 flip from one step to the next.
+    const edge = 0.00025;
+    const base = frame(w, [pose(edge - 1e-7)]);
+    w.keep();
+    for (let i = 0; i < 20; i++) expect(frame(w, [pose(edge + (i % 2 === 0 ? 1e-7 : -1e-7))])).toBe(base);
+  });
+
+  it('adds up a slow creep and redraws once it reaches the tolerance, then measures from the new map', () => {
+    const w = new CasterWatch();
+    let signature = frame(w, [pose(0)]);
+    w.keep();
+    let changes = 0;
+    // 0.1 mm per frame for 30 frames: 3 mm in all.
+    for (let i = 1; i <= 30; i++) {
+      const next = frame(w, [pose(i * 0.0001)]);
+      if (next !== signature) {
+        changes++;
+        w.keep(); // the map is drawn with this frame's poses
+      }
+      signature = next;
+    }
+    expect(changes).toBeGreaterThanOrEqual(5);
+    expect(changes).toBeLessThanOrEqual(6);
+  });
+
+  it('counts a caster that appears or disappears as a change', () => {
+    const w = new CasterWatch();
+    const one = frame(w, [pose(0)]);
+    w.keep();
+    const two = frame(w, [pose(0), pose(0.2)]);
+    expect(two).not.toBe(one);
+    w.keep();
+    expect(frame(w, [pose(0)])).not.toBe(two);
+  });
+});
+
+describe('cabinet builder: viewer-only casters', () => {
+  it("draws 'viewer' parts as usual without casting, and adds one stand-in that only the viewer light's shadow sees", () => {
+    const plaqueA = new MeshStandardMaterial();
+    const plaqueB = new MeshStandardMaterial();
+    const b = new CabinetBuilder(new Map<Material, { mode: 'box'; density: number }>());
+    b.add(plaqueA, new BoxGeometry(0.05, 0.05, 0.014), 0.1, 0.5, -0.5, 0, 0, 0, { cast: 'viewer' });
+    b.add(plaqueB, new BoxGeometry(0.05, 0.05, 0.014), -0.1, 0.6, -0.5, 0, 0, 0.3, { cast: 'viewer' });
+    // A plain part of the same lacquer as a plaque: the plaque merges into its mesh as before.
+    b.add(plaqueA, new BoxGeometry(0.4, 0.02, 0.02), 0, 0.2, -0.5);
+    const group = new Group();
+    b.build(group, new Map());
+    const meshes = group.children as Mesh[];
+    // Lacquer A (plain part + plaque), lacquer B (plaque), and one stand-in for both plaques.
+    expect(meshes).toHaveLength(3);
+    const standIns = meshes.filter((m) => m.name === 'viewer-caster');
+    expect(standIns).toHaveLength(1);
+    const standIn = standIns[0]!;
+    const drawn = meshes.filter((m) => m !== standIn);
+    expect(drawn.map((m) => m.material).sort((x, y) => (x === plaqueA ? -1 : y === plaqueA ? 1 : 0))).toEqual([plaqueA, plaqueB]);
+    for (const m of drawn) {
+      expect(m.castShadow).toBe(false);
+      expect(m.layers.isEnabled(0)).toBe(true);
+    }
+    // Both plaques (36 corners each, unindexed), nothing of the plain part.
+    expect(standIn.geometry.getAttribute('position').count).toBe(72);
+    expect(standIn.castShadow).toBe(true);
+    expect(standIn.layers.isEnabled(0)).toBe(false);
+    expect(standIn.layers.isEnabled(VIEWER_CASTER_LAYER)).toBe(true);
+    // Nothing else casts.
+    expect(meshes.filter((m) => m.castShadow)).toEqual([standIn]);
   });
 });

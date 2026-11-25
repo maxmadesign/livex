@@ -75,7 +75,7 @@ grip rules, number of toys, HUD layout and HUD resolution. See
 | Decor particles | Particle update on the CPU and their draw. |
 | Effects (celebrations, light show) | 2 draw calls and one shared shader program per render target, no textures; about 260 KB of GPU buffers and 0.65 MB of CPU pools. Particle scale per tier 0.26 / 1 / 2.08 / 3.94 (× 0.4 with reduced motion). Drawn only in the main view, never in reflection captures or override passes (figures from the effects review). |
 | Frame-rate target 30 | Skips frames to hold 30 fps; the simulation is unaffected. |
-| Viewer light | One more light in every lit shader (a spot light: one cone test and one shadow lookup per fragment). Its shadow map is a depth pass over the shadow casters (toys with their coarse shadow mesh, the claw) at 1024² (Medium) or 2048² VSM (High, which also draws every receiver), done in the same pre-pass as the key light's, and only on frames where the eye or a caster moved (`Stage.poseSignature`): a resting machine viewed from a still eye redraws nothing. |
+| Viewer light | One more light in every lit shader (a spot light: one cone test and one shadow lookup per fragment). Its shadow map is a depth pass over the shadow casters (toys with their coarse shadow mesh, the claw, one stand-in for the back-wall plaques) at 1024² (Medium) or 2048² VSM (High, which also draws every receiver), done in the same pre-pass as the key light's, and only on frames where the eye or a caster moved (`CasterWatch` in `viewerLight.ts`): a resting machine viewed from a still eye redraws nothing. |
 | Head tracking | Face inference runs in a worker when possible, at *Tracking rate* (default 18 Hz) and *Camera resolution* (default 480p). It competes for CPU and, with the GPU delegate, for GPU time. |
 
 ## Internal resolution
@@ -135,8 +135,17 @@ distance (decay 1, normalised there: 1.1, against the key light's 2.4–3.1). Wh
 unshadowed fill is lowered (sky / ground light × 0.6, studio environment × 0.8) so the scene keeps its
 brightness instead of washing out. Shadow per tier: none on *Shadows* Off / Low; 1024² PCF on Medium;
 2048² VSM, wider blur on High and Ultra. The map is drawn in the key light's pre-pass with the toys'
-coarse shadow meshes, and only when the eye or a caster moved: the toys' and the claw's poses are
-compared, rounded to half a millimetre, so resting toys do not redraw it. The Safe preset turns the
+coarse shadow meshes, and only when the eye or a caster moved (`CasterWatch`): the toys' and the
+claw's world matrices are compared with those of the frame the map was last drawn with, and a caster
+counts as moved past half a millimetre (or 1/2000 in a rotation term). Compared that way — not frame
+to frame, not rounded — a slow creep still redraws it once it adds up, while the sub-millimetre jitter
+of resting toys and of the claw hanging still never does (rounded poses redrew it whenever such jitter
+crossed a rounding step: 1–2 frames in 16 with a still eye). Purely decorative animation (case fans,
+bobbing chips, the LED wall) is not watched and casts no shadow. The sculpted plaques on the back wall
+cast this light's shadow only (a soft offset shadow on the wall that slides as the eye moves): a
+stand-in of all plaques on `VIEWER_CASTER_LAYER`, which only the viewer light's shadow camera sees, so
+the picture and the key light's map (whose steep light would draw long streaks under every plaque) are
+unchanged, and the plaques cost one draw call in the frames that redraw the map. The Safe preset turns the
 light off (it costs every lit fragment on a phone); stored settings without the key take it from
 their preset. With reduced motion it still follows the eye (the eye itself is what reduced motion
 calms). Presentation only: no collider, nothing the simulation reads.

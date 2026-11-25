@@ -1,6 +1,7 @@
 import { Euler, Group, Matrix4, Mesh, Quaternion, Vector3, type BufferGeometry, type Material } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { axisUV, boxUV } from './decor';
+import { VIEWER_CASTER_LAYER } from './viewerLight';
 
 const _m = new Matrix4();
 const _q = new Quaternion();
@@ -13,7 +14,12 @@ export type UvRule = { mode: 'box' | 'axis'; density: number };
 
 export interface AddOptions {
   receive?: boolean;
-  cast?: boolean;
+  /**
+   * Casts shadows. 'viewer': only the viewer light's — the part is drawn as usual (merged with the
+   * other non-casting parts of its material), and a copy goes into one stand-in mesh per face side
+   * that casts on VIEWER_CASTER_LAYER (src/scene/viewerLight.ts) and is never drawn on screen.
+   */
+  cast?: boolean | 'viewer';
   /** Keep the geometry's own UVs even if the material has a projection rule. */
   keepUv?: boolean;
 }
@@ -25,7 +31,7 @@ export interface AddOptions {
  * the ceiling and the frame (same lacquer) into receivers that shade the whole play field.
  */
 export class CabinetBuilder {
-  private readonly buckets = new Map<string, { material: Material; geometries: BufferGeometry[]; receive: boolean; cast: boolean }>();
+  private readonly buckets = new Map<string, { material: Material; geometries: BufferGeometry[]; receive: boolean; cast: boolean; standIn: boolean }>();
 
   constructor(private readonly uvRules: Map<Material, UvRule>) {}
 
@@ -50,11 +56,17 @@ export class CabinetBuilder {
 
   add(material: Material, geometry: BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, opts: AddOptions = {}): void {
     const g = this.prepare(material, geometry, x, y, z, rx, ry, rz, opts.keepUv);
-    const receive = !!opts.receive, cast = !!opts.cast;
-    const key = `${material.uuid}|${receive ? 'r' : ''}${cast ? 'c' : ''}`;
+    const receive = !!opts.receive, cast = opts.cast === true;
+    this.bucket(`${material.uuid}|${receive ? 'r' : ''}${cast ? 'c' : ''}`, material, receive, cast, false).push(g);
+    // The shadow pass of an opaque part without displacement reads only its material's face side: one
+    // stand-in per side serves every material.
+    if (opts.cast === 'viewer') this.bucket(`viewer|${material.side}`, material, false, true, true).push(g.clone());
+  }
+
+  private bucket(key: string, material: Material, receive: boolean, cast: boolean, standIn: boolean): BufferGeometry[] {
     let bucket = this.buckets.get(key);
-    if (!bucket) this.buckets.set(key, (bucket = { material, geometries: [], receive, cast }));
-    bucket.geometries.push(g);
+    if (!bucket) this.buckets.set(key, (bucket = { material, geometries: [], receive, cast, standIn }));
+    return bucket.geometries;
   }
 
   build(group: Group, renderOrder: Map<Material, number>): void {
@@ -67,6 +79,11 @@ export class CabinetBuilder {
       mesh.castShadow = bucket.cast;
       mesh.renderOrder = renderOrder.get(material) ?? 0;
       mesh.matrixAutoUpdate = false;
+      if (bucket.standIn) {
+        // Seen only by the viewer light's shadow camera: one draw in its shadow pass, none on screen.
+        mesh.name = 'viewer-caster';
+        mesh.layers.set(VIEWER_CASTER_LAYER);
+      }
       group.add(mesh);
     }
   }

@@ -374,7 +374,9 @@ export class Cabinet {
       else if (kind === 'storybook') geometry = this.plaque(pick < 0.4 ? starShape(r) : pick < 0.7 ? cloudShape(r * 1.2) : moonShape(r));
       else if (kind === 'waves') geometry = pick < 0.45 ? this.plaque(shellShape(r)) : pick < 0.75 ? this.plaque(starShape(r, 5, 0.58)) : dome(r * 0.6);
       else geometry = pick < 0.4 ? this.plaque(starShape(r, 4, 0.36)) : pick < 0.7 ? this.plaque(moonShape(r)) : dome(r * 0.7);
-      b.add(material, geometry, x, y, z, 0, 0, rot, { cast: false });
+      // Shadow from the viewer light only: a soft offset shadow on the wall that shifts as the eye
+      // moves (the steep key light would draw long streaks under every plaque).
+      b.add(material, geometry, x, y, z, 0, 0, rot, { cast: 'viewer' });
       if (kind === 'cosmos' && pick >= 0.7) b.add(M.leds[placed.length % M.leds.length]!, new TorusGeometry(r * 1.05, 0.004, 8, this.radial * 2), x, y, z + 0.012, 0.9, 0.3, 0);
     }
   }
