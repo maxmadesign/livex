@@ -26,7 +26,7 @@ export const machinesStrings: StringTable = {
     'machines.rush.howto': 'Every gem in the chute scores. Go for clusters.',
     'machines.rule.classic': 'Free play · every plush you drop is yours',
     'machines.rule.bridge': 'Free play · the box’s plush is the prize',
-    'machines.rule.shelf': '{tries} tries · {items} boxes win a prize',
+    'machines.rule.shelf': 'Tries: {tries} · drop {items}+ to win a prize',
     'machines.rule.rush': '{s} s score attack · top 10 board',
 
     'machines.lobby.title': 'Which machine today?',
