@@ -29,9 +29,13 @@
 
 /* Side: the usual card on the left, the QR column on the right. */
 .pp-hud .pp-result[data-arrangement="side"] { flex-direction: row; align-items: center; gap: calc(var(--u) * 36); }
+/* The QR column takes the width its content needs (the tile, or the code row under it when that is
+   wider: about 320 units in the brand sans, against the 240 of CARD.codeMinW), and the left column
+   the rest, up to its 440 units. With both fixed the row was wider than the card: centred, it spilled
+   over the card's left edge (the breakdown and the instruction) and its right edge (the countdown ring). */
 .pp-hud .pp-result[data-arrangement="side"] .pp-result-main {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 12);
-  width: calc(var(--u) * 440); min-width: 0; flex: none;
+  width: auto; max-width: calc(var(--u) * 440); min-width: 0; flex: 1 1 0;
 }
 .pp-hud .pp-result[data-arrangement="side"] .pp-subtitle { font-size: calc(var(--u) * 25 * var(--fs)); }
 
@@ -51,6 +55,9 @@
 .pp-hud .pp-result[data-arrangement="phone"] .pp-menu { justify-content: flex-start; }
 .pp-hud .pp-result[data-arrangement="phone"] .pp-breakdown { align-items: flex-start; }
 .pp-root[data-profile="mobile"] .pp-hud .pp-result[data-arrangement="phone"] > .pp-newbest { left: calc(var(--u) * 111); }
+/* The phone card takes the middle of the screen, where Momo's bubble opens towards: the bubble ran
+   under the card and was cut off mid-sentence. It waits until the card is gone (Momo stays). */
+.pp-hud:has(.pp-result[data-arrangement="phone"]) .pp-guide .pp-bubble { display: none; }
 
 /* Compact points line (phone, next to a claim code). */
 .pp-points-line {

@@ -1,19 +1,18 @@
-import { ACTIVE_BRAND, type BrandId } from '../../brand';
+import { ACTIVE_BRAND } from '../../brand';
 
 /** GPU theme copy per brand kit (see ui.en.ts). */
-const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
-  gtc: {
-    tagline: 'GTCブースのクレーンゲーム。GPUぬいぐるみをゲット',
-    welcome: '{event}へようこそ',
-    sub: '無料で遊べる · GPUぬいぐるみをゲット',
-  },
-  neutral: {
-    tagline: 'ネオングリーンのふわふわチップとグラボ',
-    welcome: '{event}へようこそ！',
-    sub: '無料で遊べる · かわいいぬいぐるみをゲット',
-  },
+type GpuKitCopy = { tagline: string; welcome: string; sub: string };
+const GTC_COPY: GpuKitCopy = {
+  tagline: 'GTCブースのクレーンゲーム。GPUぬいぐるみをゲット',
+  welcome: '{event}へようこそ',
+  sub: '無料で遊べる · GPUぬいぐるみをゲット',
 };
-const kit = GPU_KIT[ACTIVE_BRAND.id];
+const NEUTRAL_COPY: GpuKitCopy = {
+  tagline: 'ネオングリーンのふわふわチップとグラボ',
+  welcome: '{event}へようこそ！',
+  sub: '無料で遊べる · かわいいぬいぐるみをゲット',
+};
+const kit = import.meta.env.VITE_BRAND === 'neutral' || ACTIVE_BRAND.id === 'neutral' ? NEUTRAL_COPY : GTC_COPY;
 
 /** ja translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiJa: Record<string, string> = {
@@ -95,6 +94,7 @@ export const uiJa: Record<string, string> = {
   'reward.instr.prize': '読み取ってブースで景品を受け取ろう',
   'reward.instr.swag': '読み取ってグッズ割引を受け取ろう',
   'reward.instr.swag.custom': '読み取って{discount}を受け取ろう',
+  'reward.instr.demo': 'デモ専用：QRは見本のページを開くだけです',
   'reward.instr.phone.both': '受け取りページを開いて、景品かグッズ割引を選ぼう',
   'reward.instr.phone.both.custom': '受け取りページを開いて、景品か{discount}を選ぼう',
   'reward.instr.phone.prize': '受け取りページを開いて、ブースで景品を受け取ろう',

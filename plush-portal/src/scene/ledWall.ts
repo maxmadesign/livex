@@ -25,6 +25,7 @@ uniform float uBurst;
 uniform float uRing;
 uniform float uRingAmp;
 uniform float uLevel;
+uniform float uPadOn;
 uniform vec2 uSize;
 uniform vec4 uPad;
 uniform vec4 uPad2;
@@ -74,10 +75,10 @@ void main() {
   float headGlow = along >= 0.0 ? exp( -along * 260.0 ) : 0.0;
   float data = lane * onRow * packet;
   // Halo around the logo pad: light passes around the logo.
-  float halo = exp( -max( dPad, 0.0 ) * 11.0 );
+  float halo = exp( -max( dPad, 0.0 ) * 11.0 ) * uPadOn;
   // Win pulses: two crisp outlines of the pad rippling outwards, half a cycle apart.
   float ring = 0.0;
-  if ( uRingAmp > 0.0 ) {
+  if ( uRingAmp > 0.0 && uPadOn > 0.5 ) {
     for ( int k = 0; k < 2; k++ ) {
       float f = fract( uRing + 0.5 * float( k ) );
       float dr = dPad - f * 0.7;
@@ -93,8 +94,9 @@ void main() {
   lit += ring * 3.2 * uRingAmp;
   vec3 tint = mix( uGreen, uGreenLight, clamp( sweep * 0.35 + ring * 0.6 + bar * 0.3, 0.0, 1.0 ) );
   vec3 col = uBase + ( tint * lit + uWhite * headGlow * lane * onRow * 0.9 ) * uLevel * led * vignette;
-  // Plain black inside the pads (logo plus clear space).
-  col *= smoothstep( 0.0, 0.0015, min( dPad, dHost ) );
+  // Plain black inside the pads (logo plus clear space). While the event logo is lent to a screen
+  // over the field (uPadOn = 0, see lendWallLogo) its pad is lit like the rest of the wall.
+  col *= smoothstep( 0.0, 0.0015, min( mix( 1.0, dPad, uPadOn ), dHost ) );
   gl_FragColor = vec4( col, 1.0 );
   #include <colorspace_fragment>
 }
@@ -175,6 +177,28 @@ interface LogoState {
 const _pad = new Vector4();
 
 /**
+ * Screens that draw the event logo themselves in the middle of the play field (the attract call to
+ * action with its logo plate, src/ui/AttractOverlay.tsx) borrow the logo from the wall meanwhile:
+ * the wall's logo sits right behind them, and a second copy peeking out between the headline and
+ * the button (under its glow) is a logo covered by text and light. While at least one loan is open
+ * every BrandWall leaves its event logo out and lights its pad like the rest of the wall; the host
+ * mark in its corner stays. Returns the function that ends the loan.
+ */
+const logoLoans = new Set<symbol>();
+export function lendWallLogo(): () => void {
+  const loan = Symbol('wall-logo-loan');
+  logoLoans.add(loan);
+  return () => {
+    logoLoans.delete(loan);
+  };
+}
+
+/** True while a screen has borrowed the event logo from the wall. */
+export function wallLogoLent(): boolean {
+  return logoLoans.size > 0;
+}
+
+/**
  * The brand kit's dress for the cabinet's back wall: the animated LED wall material, the event
  * logo and (only when its official file exists) the host logo. Created with the theme's
  * materials; the cabinet builds the meshes and follows `onChange` to resize them once a logo's
@@ -215,6 +239,7 @@ export class BrandWall {
         uRing: { value: 0 },
         uRingAmp: { value: 0 },
         uLevel: { value: 1 },
+        uPadOn: { value: 1 },
         uSize: { value: new Vector2(width, height) },
         uPad: { value: new Vector4() },
         uPad2: { value: new Vector4() },
@@ -309,6 +334,10 @@ export class BrandWall {
     u.uRing!.value = this.ring;
     u.uRingAmp!.value = pulsing ? Math.min(1, this.burst) : 0;
     u.uLevel!.value = this.level;
+    // A screen over the field shows the event logo itself (lendWallLogo): no second copy behind it.
+    const lent = wallLogoLent();
+    u.uPadOn!.value = lent ? 0 : 1;
+    this.logo.visible = !lent;
   }
 
   private updatePads(): void {

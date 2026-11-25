@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, frames, plush, start, state } from './helpers';
+import { boot, frames, openSettings, plush, settle, start, state } from './helpers';
 
 /**
  * The GPU theme dressed by the brand kit (src/brand, src/scene/ledWall.ts): the event logo on the
@@ -129,4 +129,98 @@ test('25. GTC scene: the placeholder logo is on the LED wall in the exact brand 
   expect(greens.length).toBeGreaterThan(200);
   expect(whites).toBeGreaterThan(500);
   for (const k of [0, 1, 2] as const) expect(Math.abs(got[k]! - BRAND_GREEN[k]), `channel ${k}: ${got[k]} vs ${BRAND_GREEN[k]}`).toBeLessThanOrEqual(8);
+});
+
+/** Green pixels of an element as drawn: the brightest ones, and how far any strays from k × brand green. */
+async function domGreens(page: Page, testId: string): Promise<{ n: number; top: number[]; offLine: number }> {
+  const b = (await page.getByTestId(testId).boundingBox())!;
+  const r: Rect = { x0: b.x, y0: b.y, x1: b.x + b.width, y1: b.y + b.height };
+  const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+  const px = await pixels(page, png, r);
+  const greens: [number, number, number][] = [];
+  for (let i = 0; i < px.data.length; i += 4) {
+    const red = px.data[i]!, g = px.data[i + 1]!, bl = px.data[i + 2]!;
+    if (g > 120 && g > red * 1.35 && bl < 70) greens.push([red, g, bl]);
+  }
+  greens.sort((p, q) => q[1] - p[1]);
+  // Edge pixels are the green blended with the black plate (k × #76B900): a tint or filter leaves that line.
+  const offLine = Math.max(0, ...greens.map(([red, g, bl]) => Math.max(Math.abs(red - (g * BRAND_GREEN[0]) / BRAND_GREEN[1]), bl)));
+  return { n: greens.length, top: [...(greens[Math.floor(greens.length * 0.05)] ?? [])], offLine: Math.round(offLine) };
+}
+
+const wallLogo = (page: Page) =>
+  plush<{ visible: boolean; padOn: number }>(page, (p) => ({ visible: p.game.materials.brand.logo.visible, padOn: p.game.materials.brand.ledWall.uniforms.uPadOn.value }));
+
+const setCalibration = (page: Page, phase: 'countdown' | 'idle') =>
+  plush(
+    page,
+    (p, ph) => {
+      const ui = p.game.deps.ui;
+      ui.setState({ tracker: { ...ui.getState().tracker, calibration: { phase: ph, remaining: ph === 'idle' ? 0 : 3, detail: '' } } });
+    },
+    phase,
+  );
+
+test('25. GTC attract and win card: the call to action carries the logo as supplied, the wall lends its own meanwhile; the card holds its content', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await boot(page, { display: 'desktop', theme: 'gpu', settings: { system: { attractDemo: false } } });
+  await expect(page.getByTestId('attract-cta')).toBeVisible();
+  await expect(page.locator('[data-testid="attract-logo"][data-ready="true"]')).toBeVisible();
+  await frames(page, 3);
+
+  // The DOM logo starts on a whole pixel (a centred layout put it at fractional offsets, where the
+  // whole bitmap is resampled and every edge of the artwork blurs).
+  const at = await page.locator('[data-testid="attract-logo"] img').evaluate((img) => {
+    const r = img.getBoundingClientRect();
+    return { x: r.left, y: r.top, h: r.height };
+  });
+  console.log(`attract logo image at ${JSON.stringify(at)}`);
+  expect(Math.abs(at.x - Math.round(at.x))).toBeLessThan(0.02);
+  expect(Math.abs(at.y - Math.round(at.y))).toBeLessThan(0.02);
+  // Its fully covered pixels are exactly the brand green; the others only blend with the black plate
+  // (no tint, filter or glow on the artwork).
+  const dom = await domGreens(page, 'attract-logo');
+  console.log(`attract logo greens: ${JSON.stringify(dom)}`);
+  expect(dom.n).toBeGreaterThan(100);
+  for (const k of [0, 1, 2] as const) expect(Math.abs(dom.top[k]! - BRAND_GREEN[k]), `channel ${k}: ${dom.top[k]}`).toBeLessThanOrEqual(3);
+  expect(dom.offLine).toBeLessThanOrEqual(4);
+
+  // The wall's own logo sits right behind the call to action: it is lent to the overlay (no second
+  // logo and no black pad peeking out between the headline and the button, under its glow).
+  await expect.poll(() => wallLogo(page)).toEqual({ visible: false, padOn: 0 });
+
+  // A calibration card takes the middle of the screen: the call to action (and its logo) step aside
+  // instead of peeking out around the card.
+  await setCalibration(page, 'countdown');
+  await expect(page.getByTestId('calib-card-countdown')).toBeVisible();
+  await expect(page.getByTestId('attract-cta')).toHaveCount(0);
+  await setCalibration(page, 'idle');
+  await expect(page.getByTestId('attract-cta')).toBeVisible();
+
+  // Play: the overlay is gone and the wall shows its logo again.
+  await start(page);
+  await frames(page, 2);
+  expect(await wallLogo(page)).toEqual({ visible: true, padOn: 1 });
+
+  // The win card in the GPU theme (Settings → Rewards → preview: the same card, side arrangement on a
+  // desktop): everything inside its border. The code row under the QR is wider in the brand sans than
+  // the card model assumed, and the row of the two columns spilled over both edges of the card.
+  await openSettings(page, 'menu-settings', 'rewards');
+  await page.getByTestId('rewards-preview').click({ force: true });
+  const card = page.getByTestId('reward-preview-card');
+  await expect(card).toHaveAttribute('data-arrangement', 'side');
+  await settle(page);
+  const spill = await card.evaluate((el) => {
+    const c = el.getBoundingClientRect();
+    const out: string[] = [];
+    for (const child of el.querySelectorAll('h2, .pp-breakdown, .pp-subtitle, .pp-reward-instr, .pp-reward-tile, .pp-reward-code .code, .pp-ring, .pp-result-actions')) {
+      const r = child.getBoundingClientRect();
+      if (!r.width) continue;
+      if (r.left < c.left + 0.5 || r.right > c.right - 0.5) out.push(`${child.className}: ${Math.round(r.left)}..${Math.round(r.right)} in ${Math.round(c.left)}..${Math.round(c.right)}`);
+    }
+    return out;
+  });
+  console.log(`preview card: ${JSON.stringify(await card.boundingBox())}, outside: ${JSON.stringify(spill)}`);
+  expect(spill).toEqual([]);
 });

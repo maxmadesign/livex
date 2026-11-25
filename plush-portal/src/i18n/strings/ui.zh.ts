@@ -1,19 +1,18 @@
-import { ACTIVE_BRAND, type BrandId } from '../../brand';
+import { ACTIVE_BRAND } from '../../brand';
 
 /** GPU theme copy per brand kit (see ui.en.ts). */
-const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
-  gtc: {
-    tagline: 'GTC 展台抓娃娃机，赢取 GPU 毛绒玩偶',
-    welcome: '欢迎来到 {event}',
-    sub: '免费畅玩 · 赢取 GPU 毛绒玩偶',
-  },
-  neutral: {
-    tagline: '霓虹绿的毛绒芯片和显卡',
-    welcome: '欢迎来到 {event}！',
-    sub: '免费畅玩 · 赢取可爱毛绒玩偶',
-  },
+type GpuKitCopy = { tagline: string; welcome: string; sub: string };
+const GTC_COPY: GpuKitCopy = {
+  tagline: 'GTC 展台抓娃娃机，赢取 GPU 毛绒玩偶',
+  welcome: '欢迎来到 {event}',
+  sub: '免费畅玩 · 赢取 GPU 毛绒玩偶',
 };
-const kit = GPU_KIT[ACTIVE_BRAND.id];
+const NEUTRAL_COPY: GpuKitCopy = {
+  tagline: '霓虹绿的毛绒芯片和显卡',
+  welcome: '欢迎来到 {event}！',
+  sub: '免费畅玩 · 赢取可爱毛绒玩偶',
+};
+const kit = import.meta.env.VITE_BRAND === 'neutral' || ACTIVE_BRAND.id === 'neutral' ? NEUTRAL_COPY : GTC_COPY;
 
 /** zh translations of ui.en.ts (same keys). Missing keys fall back to English. */
 export const uiZh: Record<string, string> = {
@@ -95,6 +94,7 @@ export const uiZh: Record<string, string> = {
   'reward.instr.prize': '扫码到展位领取奖品',
   'reward.instr.swag': '扫码领取周边折扣',
   'reward.instr.swag.custom': '扫码领取{discount}',
+  'reward.instr.demo': '仅为演示：二维码只打开示例页面',
   'reward.instr.phone.both': '打开领取页面，领取奖品或周边折扣',
   'reward.instr.phone.both.custom': '打开领取页面，领取奖品或{discount}',
   'reward.instr.phone.prize': '打开领取页面，到展位领取奖品',

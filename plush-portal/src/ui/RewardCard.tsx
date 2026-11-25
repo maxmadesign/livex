@@ -209,7 +209,13 @@ function Tile({ view, size }: { view: RewardView; size: number }) {
 export function RewardInstruction({ view }: { view: RewardView }) {
   const t = useT();
   if (view.state === 'unavailable') return null;
-  const { key, params } = view.state === 'issuing' ? { key: 'reward.issuing', params: undefined } : instructionKey(view.options, view.discountText, false);
+  // A public demo copy's code is not redeemable (its label says so): the line must not promise a prize.
+  const { key, params } =
+    view.state === 'issuing'
+      ? { key: 'reward.issuing', params: undefined }
+      : view.state === 'demoBuild'
+        ? { key: 'reward.instr.demo', params: undefined }
+        : instructionKey(view.options, view.discountText, false);
   return (
     <p className="pp-reward-instr" data-testid="reward-instruction">
       {t(key, params)}
