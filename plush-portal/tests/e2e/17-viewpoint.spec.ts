@@ -46,7 +46,7 @@ const slide = (page: Page, axis: 'x' | 'y' | 'z', value: number) =>
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }, value);
 
-const HUD = ['panel', 'dpad', 'dir-left', 'dir-right', 'grab', 'logo', 'info-button', 'status'];
+const HUD = ['panel', 'dpad', 'stick', 'grab', 'logo', 'info-button', 'status'];
 const hudRects = async (page: Page) => Object.fromEntries(await Promise.all(HUD.map(async (id) => [id, await box(page, id)] as const)));
 const world = (page: Page) => plush(page, (p) => ({ hub: p.state().claw.hub as number[], claw: [p.state().claw.x, p.state().claw.z] as number[], toys: p.state().toys.map((t: any) => t.pos) as number[][], steps: p.state().steps as number }));
 

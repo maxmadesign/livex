@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { aim, box, boot, ff, fieldToys, finishRound, plush, results, state, watch, type Box } from './helpers';
+import { aim, box, boot, ff, fieldToys, finishRound, plush, results, state, stickPoint, watch, type Box } from './helpers';
 
 
 /**
@@ -28,8 +28,8 @@ test('24. phone held sideways: thumb-sized controls, a full round played with ta
   expect(layout.orientation).toBe('landscape');
   expect(layout.controls).toBeTruthy();
 
-  // Pad bottom-left, big button bottom-right; every control on screen, at least 44 px, no overlaps.
-  const ids = ['dir-left', 'dir-right', 'dir-back', 'dir-front', 'start', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
+  // Joystick bottom-left, big button bottom-right; every control on screen, at least 44 px, no overlaps.
+  const ids = ['stick', 'start', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
   const boxes: Record<string, Box> = {};
   for (const id of ids) {
     const b = await box(page, id);
@@ -52,24 +52,25 @@ test('24. phone held sideways: thumb-sized controls, a full round played with ta
   // Tap START: a player round, ready to aim.
   await tap(page, 'start');
   await expect.poll(async () => (await state(page)).phase, { timeout: 120_000 }).toMatch(/READY|AIMING/);
-  await expect(page.getByTestId('dir-right')).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.getByTestId('stick')).toHaveAttribute('aria-disabled', 'false');
   await ff(page, 1.2);
 
-  // Hold ▶ with a finger: the claw moves while the finger is down and stops when it lifts (a short hold,
-  // so the claw is still away from the side wall when the finger lifts).
-  const right = await box(page, 'dir-right');
+  // Push the joystick right with a thumb: the claw moves while the thumb holds it and stops when it
+  // lifts (a short push, so the claw is still away from the side wall when the thumb lifts).
+  const push = await stickPoint(page, 'right');
   const x0 = (await state(page)).claw.x;
   const cdp = await page.context().newCDPSession(page);
-  const point = { x: right.x + right.width / 2, y: right.y + right.height / 2 };
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.round(push.cx), y: Math.round(push.cy) }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: Math.round(push.x), y: Math.round(push.y) }] });
+  await expect(page.getByTestId('stick')).toHaveAttribute('data-gate', 'right');
   await ff(page, 0.3);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.getByTestId('dir-right')).toHaveAttribute('data-pressed', 'false');
+  await expect(page.getByTestId('stick')).toHaveAttribute('data-held', 'false');
   const x1 = (await state(page)).claw.x;
   await ff(page, 1);
   const x2 = (await state(page)).claw.x;
   const maxX = await plush<number>(page, (p) => p.claw.maxX);
-  console.log(`hold ▶ 0.3 s: claw x ${x0.toFixed(3)} → ${x1.toFixed(3)}, 1 s after lifting the finger ${x2.toFixed(3)} (wall at ${maxX.toFixed(3)})`);
+  console.log(`push ▶ 0.3 s: claw x ${x0.toFixed(3)} → ${x1.toFixed(3)}, 1 s after lifting the finger ${x2.toFixed(3)} (wall at ${maxX.toFixed(3)})`);
   expect(x1).toBeGreaterThan(x0 + 0.02);
   expect(x2, 'still short of the side wall').toBeLessThan(maxX - 0.02);
   // 0.42 m/s braked at 2.4 m/s² stops within about 4 cm.

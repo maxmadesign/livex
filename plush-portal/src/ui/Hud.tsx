@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { TrackerState } from '../core/contracts';
 import type { RoundPhase } from '../core/types';
 import type { HudLayout } from '../layout/solve';
 import { useApp, useCollection, useSettings, useT, useUi } from './context';
-import { IconAgain, IconArrow, IconCamera, IconClaw, IconHeart, IconHelp, IconInfo, IconPalette, IconPlay, IconSparkle, LogoMark, Momo } from './Icons';
+import { IconAgain, IconCamera, IconClaw, IconHeart, IconHelp, IconInfo, IconPalette, IconPlay, IconSparkle, LogoMark, Momo } from './Icons';
 import { useModals } from './modals';
 import { ScoreBreakdown, ScoreLine, scoreHudRect } from './ScoreHud';
 import { WinCard, useWinCard } from './RewardCard';
@@ -14,109 +14,28 @@ import { labelEm } from '../layout/labelFit';
 import { requestImmersive } from '../layout/phone';
 import { hasCoarsePointer, type Rect } from '../layout/solve';
 import { usePhoneGuards, usePhoneSetup } from './useHudLayout';
+import { Joystick } from './Joystick';
 import { reductionLabelKey, visibleReductions } from '../app/AdaptiveQuality';
 
-type Direction = 'left' | 'right' | 'back' | 'front';
-
-/** Press-and-hold direction button: moves while held, stops on release, cancel or lost capture. */
-function DirButton({ dir, arrow, cls, disabled }: { dir: Direction; arrow: 'up' | 'down' | 'left' | 'right'; cls: string; disabled: boolean }) {
-  const app = useApp();
-  const t = useT();
-  const [pressed, setPressed] = useState(false);
-  const pointer = useRef<number | null>(null);
-  const release = () => {
-    pointer.current = null;
-    setPressed(false);
-    app.game.setDirection(dir, false);
-  };
-  const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (disabled || pointer.current !== null) return;
-    e.preventDefault();
-    pointer.current = e.pointerId;
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* capture is best effort */
-    }
-    setPressed(true);
-    app.game.setDirection(dir, true);
-  };
-  const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (pointer.current === e.pointerId) release();
-  };
-  // Releasing must also happen when the button becomes disabled or disappears mid-press.
-  useEffect(() => {
-    if (disabled && pointer.current !== null) release();
-    return () => {
-      if (pointer.current !== null) app.game.setDirection(dir, false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled]);
-  // Fallback while held: pointer capture can be refused or lost (finger slides off, system gesture,
-  // app switch), so a release of this pointer anywhere, the last finger leaving the screen, a window
-  // blur or the page being hidden also stops the claw. The claw can never keep moving on its own.
-  useEffect(() => {
-    if (!pressed) return;
-    const onPointerEnd = (e: PointerEvent) => {
-      if (pointer.current === null || e.pointerId === pointer.current) release();
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length === 0) release();
-    };
-    const onBlur = () => release();
-    const onHidden = () => {
-      if (document.visibilityState === 'hidden') release();
-    };
-    window.addEventListener('pointerup', onPointerEnd, true);
-    window.addEventListener('pointercancel', onPointerEnd, true);
-    window.addEventListener('touchend', onTouchEnd, true);
-    window.addEventListener('touchcancel', onTouchEnd, true);
-    window.addEventListener('blur', onBlur);
-    document.addEventListener('visibilitychange', onHidden);
-    return () => {
-      window.removeEventListener('pointerup', onPointerEnd, true);
-      window.removeEventListener('pointercancel', onPointerEnd, true);
-      window.removeEventListener('touchend', onTouchEnd, true);
-      window.removeEventListener('touchcancel', onTouchEnd, true);
-      window.removeEventListener('blur', onBlur);
-      document.removeEventListener('visibilitychange', onHidden);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pressed]);
-  return (
-    <button
-      type="button"
-      className={`pp-btn round ${cls}`}
-      aria-label={t(`hud.dir.${dir}`)}
-      data-testid={`dir-${dir}`}
-      data-pressed={pressed}
-      aria-disabled={disabled}
-      onPointerDown={down}
-      onPointerUp={up}
-      onPointerCancel={up}
-      onLostPointerCapture={up}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <IconArrow dir={arrow} />
-    </button>
-  );
-}
-
-function DPad({ disabled }: { disabled: boolean }) {
+/**
+ * The joystick in its well on the deck. The well keeps the old direction pad's test id ("dpad") and
+ * its slot size (three touch sizes plus two gaps, src/layout/solve.ts), so layouts are unchanged.
+ */
+function StickWell({ disabled }: { disabled: boolean }) {
   return (
     <div className="pp-dpad" data-testid="dpad">
-      <DirButton dir="back" arrow="up" cls="up" disabled={disabled} />
-      <DirButton dir="left" arrow="left" cls="left" disabled={disabled} />
-      <span className="hub" />
-      <DirButton dir="right" arrow="right" cls="right" disabled={disabled} />
-      <DirButton dir="front" arrow="down" cls="down" disabled={disabled} />
+      <Joystick disabled={disabled} />
     </div>
   );
 }
 
 const BUSY: ReadonlySet<RoundPhase> = new Set(['DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING']);
 
-/** The big context button: START in attract mode, GRAB while aiming, PLAY AGAIN after a win. */
+/**
+ * The big context button: START in attract mode, GRAB while aiming, PLAY AGAIN after a win. Drawn as
+ * an arcade push button (hud.css): the button is the fixed bezel ring, its `.cap` the plunger that
+ * sinks into it when pressed.
+ */
 function ActionButton() {
   const app = useApp();
   const t = useT();
@@ -136,8 +55,10 @@ function ActionButton() {
     const label = t('hud.start');
     return (
       <button type="button" className="pp-btn pp-grab start" data-testid="start" onClick={start} disabled={paused} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
-        <IconPlay />
-        <span>{label}</span>
+        <span className="cap">
+          <IconPlay />
+          <span>{label}</span>
+        </span>
       </button>
     );
   }
@@ -145,8 +66,10 @@ function ActionButton() {
     const label = t('hud.again');
     return (
       <button type="button" className="pp-btn pp-grab accent again" data-testid="again" onClick={() => app.game.playAgain()} disabled={paused} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
-        <IconAgain />
-        <span>{label}</span>
+        <span className="cap">
+          <IconAgain />
+          <span>{label}</span>
+        </span>
       </button>
     );
   }
@@ -154,8 +77,10 @@ function ActionButton() {
   const label = t('hud.grab');
   return (
     <button type="button" className="pp-btn pp-grab" data-testid="grab" data-busy={busy} onClick={() => app.game.grab()} disabled={paused || busy} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
-      <IconClaw />
-      <span>{label}</span>
+      <span className="cap">
+        <IconClaw />
+        <span>{label}</span>
+      </span>
     </button>
   );
 }
@@ -289,7 +214,7 @@ function PhonePanel({ layout, padDisabled }: { layout: HudLayout; padDisabled: b
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="pp-slot pad" style={rel(c.dpad)} data-testid="slot-dpad">
-          <DPad disabled={padDisabled} />
+          <StickWell disabled={padDisabled} />
         </div>
         <div className="pp-slot status" style={rel(c.status)}>
           <StatusLine />
@@ -318,14 +243,14 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
   if (layout.panelStyle === 'split') {
     return (
       <div className="pp-panel split" data-handed={layout.handed} data-testid="panel" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}>
-        <div className="pp-cluster">
-          <DPad disabled={padDisabled} />
+        <div className="pp-cluster deck stick">
+          <StickWell disabled={padDisabled} />
         </div>
-        <div className="pp-cluster" style={{ alignSelf: 'flex-end', background: 'none', boxShadow: 'none', backdropFilter: 'none', padding: 0, maxWidth: '44%' }}>
+        <div className="pp-cluster info">
           <StatusLine />
           <PanelMenu compact={false} layout={layout} />
         </div>
-        <div className="pp-cluster">
+        <div className="pp-cluster deck action">
           <ActionButton />
         </div>
       </div>
@@ -335,7 +260,7 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
     <div className="pp-panel bar" data-handed={layout.handed} data-testid="panel" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}>
       <StatusLine />
       <div className="row main">
-        <DPad disabled={padDisabled} />
+        <StickWell disabled={padDisabled} />
         <ActionButton />
       </div>
       <PanelMenu compact layout={layout} />

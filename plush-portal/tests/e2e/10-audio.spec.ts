@@ -46,7 +46,7 @@ test.describe('10. audio', () => {
     await expect.poll(async () => (await engine(page)).status, { timeout: 120_000 }).toBe('running');
     await expect.poll(async () => (await engine(page)).music, { timeout: 60_000 }).toBe('ocean');
     expect(await plush(page, (p) => p.game.attract.active), 'still in attract mode, nobody pressed anything').toBe(true);
-    // Autoplay blocked (emulated): locked at boot, a tap on the D-pad during the demo unlocks it.
+    // Autoplay blocked (emulated): locked at boot, a tap on the joystick during the demo unlocks it.
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     const blocked = await ctx.newPage();
     await blocked.addInitScript(emulateAutoplayBlock);
@@ -54,11 +54,11 @@ test.describe('10. audio', () => {
     await blocked.waitForTimeout(2500);
     expect((await engine(blocked)).status).toBe('locked');
     expect((await engine(blocked)).ctx).toBe('suspended');
-    const pad = await blocked.getByTestId('dir-right').boundingBox();
+    const pad = await blocked.getByTestId('stick').boundingBox();
     await blocked.mouse.click(pad!.x + pad!.width / 2, pad!.y + pad!.height / 2);
     await expect.poll(async () => (await engine(blocked)).status, { timeout: 120_000 }).toBe('running');
     await expect.poll(async () => (await engine(blocked)).music, { timeout: 60_000 }).toBe('ocean');
-    expect(await plush(blocked, (p) => p.game.attract.active), 'a D-pad tap does not leave attract mode').toBe(true);
+    expect(await plush(blocked, (p) => p.game.attract.active), 'a joystick tap does not leave attract mode').toBe(true);
     await ctx.close();
   });
 

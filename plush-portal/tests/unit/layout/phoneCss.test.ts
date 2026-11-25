@@ -26,8 +26,9 @@ describe('phone limits in hud.css match the solver', () => {
     expect(phones).toContain(`max-height: calc(var(--u) * (${PHONE.bubbleRow} * var(--fs) + 20))`);
   });
 
-  it('keeps the gaps the solver assumes between direction buttons and menu buttons', () => {
-    expect(phones).toContain(`.pp-panel.phone .pp-dpad { gap: calc(var(--u) * ${PHONE.dpadGap}); }`);
+  it('fills the joystick slot of the solver and keeps the gap it assumes between menu buttons', () => {
+    // The joystick takes the old direction pad's slot (3 touch sizes + 2 × PHONE.dpadGap) whole.
+    expect(phones).toContain('.pp-panel.phone .pp-dpad { width: 100%; height: 100%; }');
     expect(phones).toContain(`gap: calc(var(--u) * ${PHONE.menuGap}); }`);
   });
 

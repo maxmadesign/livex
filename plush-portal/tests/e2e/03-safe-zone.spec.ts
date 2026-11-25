@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { appliedValue, boot, box, click, closeSettings, expectInZone, openSettings, outsideZone, plush, settle, start, state, winARound } from './helpers';
+import { appliedValue, boot, box, click, closeSettings, expectInZone, openSettings, outsideZone, plush, pushStick, settle, start, state, winARound } from './helpers';
 
-const HUD = ['panel', 'dpad', 'dir-left', 'dir-right', 'dir-back', 'dir-front', 'start', 'status', 'panel-menu', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
+const HUD = ['panel', 'dpad', 'stick', 'stick-knob', 'start', 'status', 'panel-menu', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
 const TABS = ['gameplay', 'themes', 'layout', 'graphics', 'audio', 'ai', 'camera', 'system'];
 /** The top-right "i" is the one deliberate exception: a second way into Settings, outside the reach zone. */
 const ALLOW = ['info-button'];
@@ -47,7 +47,13 @@ test.describe('3. portrait86 interactive safe zone (normalised Y 0.25–0.75)', 
     expect(await outsideZone(page, ALLOW)).toEqual([]);
     await click(page, 'tutorial-ok');
     await expect(page.getByTestId('tutorial')).toHaveCount(0);
-    await zoneOf(page, ['grab', 'dpad', 'status']);
+    await zoneOf(page, ['grab', 'dpad', 'stick', 'status']);
+    // Pushed to its limits the joystick's ball stays inside the zone too.
+    for (const gate of ['back', 'front'] as const) {
+      await pushStick(page, gate);
+      await expectInZone(page, 'stick-knob');
+      await page.mouse.up();
+    }
 
     // --- settings: frame, footer buttons, tab list and every tab's visible controls
     await openSettings(page, 'menu-settings');
@@ -97,9 +103,10 @@ test.describe('3. portrait86 interactive safe zone (normalised Y 0.25–0.75)', 
     expect((info.y + info.height / 2) / 3840).toBeLessThan(0.12);
     // Touch targets are physically large enough on the big panel: at least 3% of the screen width.
     const grab = await box(page, 'start');
-    const dir = await box(page, 'dir-left');
-    console.log(`4K sizes: START ${grab.width.toFixed(0)}×${grab.height.toFixed(0)} px, direction button ${dir.width.toFixed(0)} px`);
-    expect(dir.width).toBeGreaterThan(2160 * 0.03);
+    const stick = await box(page, 'stick');
+    console.log(`4K sizes: START ${grab.width.toFixed(0)}×${grab.height.toFixed(0)} px, joystick ${stick.width.toFixed(0)} px`);
+    // The joystick takes the old pad's slot: three of the old direction buttons (each over 3 % of the width).
+    expect(stick.width).toBeGreaterThan(2160 * 0.09);
 
     await openSettings(page, 'info-button');
     const dialog = await zoneOf(page, ['settings', 'settings-close', 'settings-cancel', 'settings-apply', 'settings-tabs']);
