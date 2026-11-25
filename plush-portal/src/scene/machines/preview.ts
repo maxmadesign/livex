@@ -23,6 +23,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
+  Quaternion,
   Scene,
   SphereGeometry,
   SRGBColorSpace,
@@ -68,6 +69,8 @@ interface Part {
   color: string;
   metal?: boolean;
   glow?: boolean;
+  /** Clear acrylic (fences, the chute guard): see-through. */
+  clear?: boolean;
 }
 
 function box(w: number, h: number, d: number, x: number, y: number, z: number): BufferGeometry {
@@ -85,10 +88,10 @@ function fixtureParts(f: Fixture, colors: { metal: string; acrylic: string; deck
   }
   const [hx, hy, hz] = f.shape.half;
   const g = new BoxGeometry(2 * hx, 2 * hy, 2 * hz);
-  if (f.rot) g.applyQuaternion({ x: f.rot[0], y: f.rot[1], z: f.rot[2], w: f.rot[3] } as never);
+  if (f.rot) g.applyQuaternion(new Quaternion(f.rot[0], f.rot[1], f.rot[2], f.rot[3]));
   g.translate(f.center[0], f.center[1], f.center[2]);
   const color = f.look === 'acrylic' ? colors.acrylic : f.look === 'deck' ? colors.deck : f.look === 'ramp' ? colors.ramp : colors.metal;
-  return [{ geometry: g, color, metal: f.look === 'chrome' }];
+  return [{ geometry: g, color, metal: f.look === 'chrome', clear: f.look === 'acrylic' }];
 }
 
 /** The items a card shows: the box on the bars, a few snack stacks, a scatter of gems, a plush pile. */
@@ -158,8 +161,8 @@ export function buildMachinePreview(genre: GenreId, theme: ThemeDef): MachinePre
   // The opening, dark, a little below the floor.
   parts.push({ geometry: box(hole.xMax - hole.xMin, 0.004, hole.zMax - hole.zMin, (hole.xMin + hole.xMax) / 2, -T, (hole.zMin + hole.zMax) / 2), color: kit ? kit.palette.gray950 : '#2a2230' });
   if (field.chuteGuard) {
-    parts.push({ geometry: box(0.012, CHUTE.wallHeight, CHUTE.zMax - CHUTE.zMin, CHUTE.xMax + 0.006, CHUTE.wallHeight / 2, (CHUTE.zMin + CHUTE.zMax) / 2), color: cab.acrylicEdge });
-    parts.push({ geometry: box(CHUTE.xMax - CHUTE.xMin, CHUTE.wallHeight, 0.012, (CHUTE.xMin + CHUTE.xMax) / 2, CHUTE.wallHeight / 2, CHUTE.zMin - 0.006), color: cab.acrylicEdge });
+    parts.push({ geometry: box(0.012, CHUTE.wallHeight, CHUTE.zMax - CHUTE.zMin, CHUTE.xMax + 0.006, CHUTE.wallHeight / 2, (CHUTE.zMin + CHUTE.zMax) / 2), color: cab.acrylicEdge, clear: true });
+    parts.push({ geometry: box(CHUTE.xMax - CHUTE.xMin, CHUTE.wallHeight, 0.012, (CHUTE.xMin + CHUTE.xMax) / 2, CHUTE.wallHeight / 2, CHUTE.zMin - 0.006), color: cab.acrylicEdge, clear: true });
   }
   for (const f of field.fixtures) parts.push(...fixtureParts(f, colors));
   parts.push(...itemParts(genre, theme, field));
@@ -179,7 +182,7 @@ export function buildMachinePreview(genre: GenreId, theme: ThemeDef): MachinePre
   // One mesh per colour and finish.
   const byKey = new Map<string, { list: BufferGeometry[]; part: Part }>();
   for (const p of parts) {
-    const key = `${p.color}|${p.metal ? 1 : 0}|${p.glow ? 1 : 0}`;
+    const key = `${p.color}|${p.metal ? 1 : 0}|${p.glow ? 1 : 0}|${p.clear ? 1 : 0}`;
     const g = p.geometry.index ? p.geometry.toNonIndexed() : p.geometry;
     if (g !== p.geometry) p.geometry.dispose();
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
@@ -197,8 +200,14 @@ export function buildMachinePreview(genre: GenreId, theme: ThemeDef): MachinePre
     if (!merged) continue;
     const color = new Color(part.color);
     const material = new MeshStandardMaterial({ color, roughness: part.metal ? 0.3 : 0.7, metalness: part.metal ? 0.8 : 0, emissive: part.glow ? color.clone().multiplyScalar(0.25) : new Color(0x000000) });
+    if (part.clear) {
+      material.transparent = true;
+      material.opacity = 0.35;
+      material.depthWrite = false;
+    }
     materials.push(material);
     const mesh = new Mesh(merged, material);
+    if (part.clear) mesh.renderOrder = 1;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
     triangles += merged.getAttribute('position').count / 3;
@@ -244,9 +253,9 @@ export async function renderMachinePreviews(theme: ThemeDef, genres: readonly Ge
     const key = new DirectionalLight(0xffffff, 2.4);
     key.position.set(-0.6, 2, 1.4);
     scene.add(key, new HemisphereLight(0xffffff, 0x888888, 1.1));
-    const camera = new PerspectiveCamera(30, 1, 0.05, 10);
-    camera.position.set(0.55, 0.95, 1.55);
-    camera.lookAt(0, 0.22, -0.42);
+    const camera = new PerspectiveCamera(34, 1, 0.05, 10);
+    camera.position.set(0.3, 1.0, 1.55);
+    camera.lookAt(0, 0.2, -0.42);
     for (const genre of genres) {
       const preview = buildMachinePreview(genre, theme);
       scene.add(preview.group);

@@ -608,6 +608,56 @@ quarter second before they come to rest), and those frames redraw the map, as th
 plaques' shadow costs nothing in a frame without a redraw and 1 draw call and 5 328 triangles in a
 frame with one (Sakura, Medium); GPU Party has no plaques.
 
+### Machines (round 4B)
+
+Medium budgets of design section 5.3 (docs/design/machines.md), measured with the method of
+[Triangle budget (round 3)](#triangle-budget-round-3): production build, headless Chromium
+(SwiftShader), `?debug=1&camera=off&seed=7&display=desktop&theme=<theme>&quality=medium&machine=<id>`
+at 1280 × 720, device pixel ratio 1, automatic optimiser and attract demo off; `renderer.info` read
+after each rendered frame, with the shadow passes (key light plus viewer light) and the contact map
+wrapped; six consecutive frames per state ("–" separates the lowest and highest frame). Attract = the
+attract view (eye swaying, claw at home); ready = a player round with the claw parked over the items;
+held = a grab two and a half seconds in (claw closed, lifting or carrying). Shelf and rush are not
+offered to players yet; the measuring build made them available for the run only.
+
+| Theme, machine | Attract: frame / calls | Ready: frame / calls | Held: frame / calls | Items, main pass (calls) | Shadow passes (calls) | Contact map | Programs |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Sakura, classic | 329 995 – 401 987 / 170–192 | 247 005 – 318 999 / 139–161 | 487 485 – 559 501 / 171–193 | – (toys 71 982; held 229 534) | 77 590 (30) still eye, 160 508 (61) with the viewer-light map | 0 / 71 986 | 41 |
+| Sakura, bridge | 126 387 – 126 395 / 125 | 113 989 – 114 005 / 110 | 126 319 – 127 617 / 125–132 | 4 602 (4) | 6 996 (14) / 19 320 (29) | 0 / 1 296 (claw low) | 41 |
+| Sakura, shelf | 113 075 – 113 083 / 121 | 101 789 – 101 805 / 105 | 113 005 – 113 035 / 121 | 276 (3) | 5 884 (15) / 17 096 (31) | off (no visible floor) | 38 |
+| Sakura, rush | 118 657 – 120 199 / 131–140 | 106 115 – 106 129 / 113 | 118 587 – 120 157 / 131–140 | 1 536 (5) | 7 144 (17) / 19 616 (35) | 0 / 1 540 | 42 |
+| GPU Party, classic | 322 403 – 394 387 / 167–189 | 244 753 – 394 321 / 138–190 | 478 761 – 550 769 / 169–191 | – (toys 71 974; held 228 398) | 77 582 (30) / 155 164 (60) | 0 / 71 978 | 43 |
+| GPU Party, bridge | 118 819 – 118 827 / 122 | 111 755 – 111 767 / 109 | 118 753 – 120 051 / 123–130 | 4 602 (4) | 6 996 (14) / 13 992 (28) | 0 / 1 296 | 43 |
+| GPU Party, shelf | 105 507 – 105 515 / 118 | 99 555 – 99 567 / 104 | 105 441 – 105 471 / 119 | 276 (3) | 5 884 (15) / 11 768 (30) | off | 40 |
+| GPU Party, rush | 111 089 – 112 631 / 128–137 | 103 877 – 103 889 / 112 | 111 023 – 112 593 / 129–138 | 1 536 (5) | 7 144 (17) / 14 288 (34) | 0 / 1 540 | 43 |
+
+- **Every machine frame is under 130 k triangles**, a quarter of the design's < 470 k gate and below its
+  170–230 k estimate: the item machines have no plush pile (the neighbours' display piles stay). Draw
+  calls are about 25–70 fewer than classic in the same state (design: −8 … −15): the toys' main,
+  shadow and contact draws are gone, the items need 3–5.
+- **Where an item machine's triangles go** (bridge, held): the box 4.6 k (outer box 588 with its
+  bevels, the inside 12, the window film 2, the LOD2 plush in the window 4 000), the shadow passes
+  7–19 k, and the cabinet, the neighbours' display piles, the claw, effects and post-processing about
+  100 k (unchanged from classic). Rush: 44 pieces in 5 instanced draws (gems 30 triangles, coins 48);
+  shelf: 23 snack boxes in 3 instanced draws (12 triangles each).
+- **Contact map**: the shelf switches it off (deck, trough and gutter cover the whole floor); bridge
+  and rush redraw it only while the claw is within 20 cm of the floor (1.3–1.5 k triangles: the claw
+  and the items in reach).
+- **Shader programs**: the same count in every state of a machine (no program is built during play);
+  −3 … +1 against classic (the item materials come in, the plush and fur programs the machine does
+  not draw go).
+- **The cabinet dressing** (Cabinet built in Node, `tests/unit/scene/cabinetHarness.ts`): the bridge
+  adds 1 992 / 3 784 / 6 904 / 14 136 triangles to the cabinet on Safe / Medium / High / Ultra
+  (bars, fences, posts, flanges, the cut floor); the shelf has 300–2 200 fewer than classic (no
+  chute guard; deck, lip and gutter are plain boxes). `machineDressing.test.ts` holds Medium under
+  12 k and every tier under 40 k.
+- **Texture memory**: the print atlas (shelf) and the bridge box's print are one 1024² canvas each on
+  Medium / High (5.6 MB with mips; 1.4 MB on Safe, 22 MB at 2048² on Ultra).
+- Classic's own numbers moved since round 3 because of round 4's viewer light (its 1024² map redrawn
+  whenever the eye or a caster moves: +30 calls, +78 k triangles): a held toy on a frame that also
+  refreshes the contact map now reaches 560 k. Not changed by this workstream (the classic cabinet is
+  byte-identical); noted for the next budget review.
+
 ### Not measured
 
 - Any frame rate, frame-time distribution or GPU load on real graphics hardware

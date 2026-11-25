@@ -221,6 +221,11 @@ describe('machine previews (lobby cards, neighbouring cabinets)', () => {
         expect(preview.triangles, `${theme.id} ${genre}`).toBeGreaterThan(100);
         expect(preview.triangles, `${theme.id} ${genre}`).toBeLessThan(PREVIEW_TRIANGLE_LIMIT);
         expect(preview.group).toBeInstanceOf(Group);
+        preview.group.traverse((o) => {
+          if (!(o as Mesh).isMesh) return;
+          const pos = (o as Mesh).geometry.getAttribute('position');
+          for (let i = 0; i < pos.array.length; i++) expect(Number.isFinite(pos.array[i]!), `${theme.id} ${genre}`).toBe(true);
+        });
         let disposed = 0;
         preview.group.traverse((o) => {
           if ((o as Mesh).isMesh) (o as Mesh).geometry.addEventListener('dispose', () => disposed++);
