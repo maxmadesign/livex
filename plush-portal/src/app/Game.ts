@@ -8,7 +8,7 @@ import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
 import type { MachineId } from '../game/machines/ids';
-import { resolveMachine } from '../game/machines/registry';
+import { isMachineId, resolveMachine } from '../game/machines/registry';
 import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
@@ -1826,6 +1826,54 @@ export class Game {
       /** Runs the idle reset now (as if nobody had touched the machine for system.idleSeconds). */
       idleReset: () => this.idleReset('debug'),
       claw: CLAW,
+      /** The machine being played and its session (docs/design/machines.md, section 4.7). */
+      machine: () => {
+        const def = this.core.def;
+        return {
+          id: def.def.id,
+          genre: def.def.genre,
+          controls: def.controls,
+          presentation: def.module.presentation,
+          session: this.core.session.snapshot(),
+          rules: this.core.controller.rules?.debugState?.() ?? null,
+        };
+      },
+      /** Resolves when the switch has finished (false when it was refused). */
+      selectMachine: (id: string) => Promise.resolve(isMachineId(id) ? this.selectMachine(id) : false),
+      /** Test hooks of the machines; each call counts as input like the rest of the API. */
+      machineDebug: {
+        /** An impulse (N·s) on the bridge box, or else on the first item (tests only). */
+        nudge: (dx: number, dz: number, dy = 0): boolean => {
+          this.idle.touch();
+          const items = [...this.core.phys.toys.values()].filter((t) => t.item && !t.inBin);
+          const toy = items.find((t) => t.item!.kind === 'box') ?? items[0];
+          if (!toy) return false;
+          toy.body.applyImpulse({ x: dx, y: dy, z: dz }, true);
+          return true;
+        },
+        /** The clock of a running timed session. */
+        setSessionSeconds: (seconds: number): void => {
+          this.idle.touch();
+          this.core.session.setSecondsLeft(seconds);
+        },
+        /** "Call staff" on the field, at a round boundary only. */
+        staffReset: (): boolean => {
+          this.idle.touch();
+          if (!this.core.machine.atRoundBoundary) return false;
+          return this.core.field.staffReset?.() ?? false;
+        },
+        itemPoses: (): { id: string; look: string; pos: number[] }[] => {
+          this.idle.touch();
+          return [...this.core.phys.toys.values()].filter((t) => t.item).map((t) => ({ id: t.id, look: t.item!.look, pos: Array.from(t.pose.pos) }));
+        },
+      },
+      /** Local rankings of a machine (filled in with the machine persistence). */
+      rankings: (id?: string): { initials: string; score: number }[] => {
+        void id;
+        return [];
+      },
+      /** Today's pick (null until the daily pick exists). */
+      dailyPick: (): string | null => null,
     };
     // Automation that drives the game through this API plays the role of a player: every call
     // counts as input for the idle reset (a slow software-rendered test run must not be reset to

@@ -1758,3 +1758,61 @@ for the lead + five engineers. Unit runs can be parallel; e2e runs must be seria
   featureStrings.test.ts :12, :24-26. spec.test.ts :197-200. independence.test.ts :75-91. e2e helpers.ts :118-129.
   rounds.test.ts :186.
 - **Docs**: PERFORMANCE.md :313-330, DISPLAYS.md :36 and :224, E2E_RESULTS.md :256-257.
+
+---
+
+## Implementation notes (WS-A: scaffold and core)
+
+What was built against this design, where the code's reality made a detail come out differently, and
+why. Everything listed here is covered by the unit tests in `tests/unit/machines/`.
+
+### Order of the work
+
+1. **Golden trace first**, on the untouched tree (`tools/dev/golden-classic.ts`, `--check` compares a
+   fresh run with the committed file). The script lives in `tests/unit/machines/goldenScenario.ts` so
+   the recorder and the tests share it. Aims were found once on the untouched tree and are fixed
+   numbers: sakura seed 7 wins at (0.003, -0.402), slips at (0.2105, -0.392), is empty at
+   (-0.1, -0.13); gpu seed 3 at (-0.005, -0.406), (0.2235, -0.401), (0.36, -0.13). Between player
+   rounds the script clears the bin and restocks one toy at a time (the classic restock path); the
+   takeover interrupts the second demo round in LIFTING (resetRound from a busy phase plus
+   `resetField`). About 4,100 steps per case; the fixture is 15 kB.
+2. **Scaffold** exactly as section 2.2, with throwing stub bodies, in its own commit.
+3. **WS-A**: physics from `FieldGeometry`, then the core stack, then the tests. The golden trace stayed
+   identical after every step.
+
+### Deviations from the design
+
+| # | Design | Built | Why |
+| --- | --- | --- | --- |
+| N1 | The round trip classic → rush → classic replays the whole golden script bit for bit (2.8, item 2). | `stack.test.ts` asserts bit-identity of everything the demo pilot cannot influence: the fill hash, the body and collider counts, the three player rounds with their restocks, every phase and controller event and every pose hash up to the step at which the first demo round starts. From there it asserts that attract mode runs cleanly (two demo rounds, the takeover, 18 toys, no anomaly). | V13 is real: `DemoPilot.rate` adds `((toy.id.length * 7 + roundId * 13) % 5) * 0.06`. After a switch toy ids carry the stack prefix and round ids have moved on, so the pilot may pick another toy with identical physics. Measured: on gpu seed 3 the whole script still matched the fixture; on sakura seed 7 the second demo round picked another toy (first differing pose hash at step 3,660 of 4,118, after the first demo round). Making ids or round ids line up would need a change to `DemoPilot` (not WS-A's, and the design keeps it unchanged) or hacks in the id scheme. |
+| N2 | The other machine of the round trip is rush. | A test-only **probe genre** (`tests/unit/machines/probeGenre.ts`): the bridge layout of section 3.1 as test data (`designGeometry.ts`), one printed box on the bars, three gems, TryRules with a partial lift, in-place transport and retract-then-home, awards by the opening test of 2.5, refills at rest, a configurable session rule. | Rush's module is WS-C's. The probe exercises every seam with real physics (hole floor, capsule bars, fences, items, rules, sessions) before any genre lands; it is not a game design. |
+| N3 | `setMachine` step 9: `controller.resetRound('machine_switch', …)` after `populate`. | The fresh stack needs no reset: the claw is placed at the machine's home **before** the fill settles (only when that home differs from the classic one), and after `populate` GameCore calls `machine.abort('machine_switch', ATTRACT or READY)` directly. | `resetRound` calls `claw.reset`, which teleports the claw out of the rest pose the settle has just left it in, so classic after a switch would no longer equal a fresh boot. A fresh grip and claw have nothing to release. Listeners still see the abort and a clean READY / ATTRACT on the new machine, with a new round id unless in attract mode. |
+| N4 | The GameCore constructor builds the stack. | Also places the claw at the machine's home when it differs from the classic one (needed when the page boots on a machine other than classic). Classic: untouched. | A machine booted with `?machine=` (or a test core) would otherwise start at the classic home. |
+| N5 | RoundController's `phys`, `claw`, `grip`, `machine` become public: the controller is the `TryContext`. | The controller keeps its fields private and hands the rules an adapter object (`controller.tryContext`) whose `params` and `releasedHolding` read the controller's live values. | Same information, no change to the class's public surface. |
+| N6 | Classic code inside `else` branches verbatim. | Verbatim everywhere except the READY / AIMING input block, which now reads local copies of `inputX` / `inputZ` (so `filterInput` can map them) behind an `inputLocked` check. | On classic the copies are the same values and `inputLocked` is never set, so the arithmetic is identical (the golden trace holds it). |
+| N7 | `rules.postStep(this, phase, …)` with the phase at the start of postStep. | It receives the phase the machine is in after this step's transitions (`m.phase`, `m.phaseTime`), and is not called in ATTRACT. | One consistent view: a rule never sees a phase name together with the next phase's time. |
+| N8 | `resultExtras` "must not change roundId / demo / themeId / prizeId". | Enforced: the controller re-applies those four after merging the extras. | A rule can not forge a round's identity by mistake. |
+| N9 | `awardSessionPrize`: phases not specified. | Allowed in READY or RESULT of a player round, for any past round id up to the current one, once per round id; `toyId` is `''`. | A timed run that runs out in READY names the previous try's round id (section 2.6). |
+| N10 | `scoreItem(roundId, toyId, item)`. | `item` is `Pick<ItemSpec, 'kind' \| 'look' \| 'print' \| 'value'>`; allowed in READY … SETTLING (section 3.0), demo rounds included (the director keeps demo items off the player track). The new machine event is `item: ItemScore` (`MachineItem` plus `roundId`, `demo`). | — |
+| N11 | PlaySession details. | `end('abandoned')` returns to `idle` silently (no `over` event, no prize; the next player READY starts a new session). `over` fires only for `tries` / `time`. A grab from READY without a move also starts the clock. `prints` (what a session prize may be) defaults to the populated characters in manifest order; the app may supply an order that prefers the least-collected ones (rush, section 3.3). `setSecondsLeft()` backs `machineDebug.setSessionSeconds`. | The design left these open. |
+| N12 | New controller events `itemScored`, `axisStage`. | Payloads `{ roundId, toy, item }` and `{ roundId, stage }`. | Names from the design text, payloads chosen here. |
+| N13 | Stub genre entries `available: false` in the registry. | `pendingGenre(…)` modules in `registry.ts` carry the designed defaults, settings mapping, session rule, claw scale, presentation and award phases; `geometry`, `createRules` and `createField` throw. `resolveMachine` falls back to classic for unknown ids, unavailable machines and pending genres (`includeUnavailable` lets tests and sweeps build an unavailable machine once its module exists). `isPendingGenre`, `isPlayable`, `resolveDef`, `scaleRoundParams` are exported helpers. The harness has `machine?` and `testMachine(id)`, which throws for a pending genre instead of silently giving classic. | WS-B / WS-C replace one line each in `GENRES` (`bridge: bridgeModule`) and flip `available` when their gates pass; the contract test then covers the genre automatically (it lists pending genres as todo). |
+| N14 | `validateGeometry` rules. | Also: hole inside the bin footprint, classic floor only with an opening inside the chute, unit quaternions, positive sizes, unique fixture ids, a sane sensor. A fixture may sink up to 5 mm into the glass, back wall or floor slab. | The designed shelf gutter, rotated 9.09°, reaches x 0.5016 (1.6 mm into the right glass); static against static is harmless. |
+| N15 | Item specs. | Box and snack origins are the middle of the bottom face (like a plush toy's base), gem origins the girdle centre, coin origins the centre. Bridge box restitution 0.03 and damping 0.35 / 2.2, snacks 0.05 and 0.3 / 1.5, gems and coins friction 0.7, restitution 0.1. Item ids are `<prefix>item-<n>` from the same counter as toys; item colliders are all solid (`TOY_GROUPS`). | Genre code may spread and override any field. |
+| N16 | `Game.ts:1250 → core.setParams`. | The line is at Game.ts:~1360 now; `Game.init` also resolves `launch.machine ?? machines.home` (and logs when it falls back to classic). | Minimal glue for the core change and section 4.7. Everything else in Game.ts is WS-D's (section 6.3). |
+| N17 | The guide scaffold. | `sanitizeFacts` in `src/ai/prompt.ts` does **not** pass `facts.machine` through yet. | It is the prompt's whitelist, which WS-F owns with the machine context sentence; until then the field reaches the server schema but not the model. WS-F must add it. |
+| N18 | Debug API additions of section 4.7. | All names exist on `window.__plush`: `machine()` (real), `machineDebug.nudge / setSessionSeconds / staffReset / itemPoses` (real, on the core; each call counts as input), `selectMachine(id)` (a promise around the `Game.selectMachine` stub, false until WS-D), `rankings()` (`[]`) and `dailyPick()` (`null`) until WS-D's persistence and daily pick land. | The names are part of the frozen contract; the bodies that need WS-D's director stay stubs. |
+
+### For the next workstreams
+
+- **WS-B / WS-C**: write `bridge.ts` / `shelf.ts` / `rush.ts` (a `GenreModule` each), swap the
+  `pendingGenre(…)` entry in `GENRES`, and keep `available: false` until the gates pass. `designGeometry.ts`
+  holds the section 3 layouts as test data; `probeGenre.ts` shows a complete TryRules and MachineField.
+  Rules award through `ctx.machine.awardPrize` (prize genres) or `ctx.machine.scoreItem` and emit
+  `prizeDetected` / `itemScored` on `ctx.events`.
+- **WS-D**: `core.setMachine(resolveMachine(id, committed.machines), { assets, seed, params, field })`
+  at a boundary, after clearing the visuals and `pilot.reset()`; recreate the ClawVisual afterwards.
+  `core.session` gives `snapshot()`, `events` (`started`, `second`, `timeLow`, `over`), `newSession()`
+  and `prints`. `machine.events` gains `item`; `award` may carry `session: true`.
+- **Classic gate**: `npx vitest run tests/unit/machines` (golden, round trip, contract) on every
+  change; `npx tsx tools/dev/golden-classic.ts --check` gives the same answer from the shell.
