@@ -2089,6 +2089,8 @@ stays bit-identical (golden trace and round trip unchanged).
 
 - `tests/unit/i18n/featureStrings.test.ts`: `'machines'` in the namespace list.
 - `tests/unit/settings/spec.test.ts`: `machines.(bridge|shelf|rush).*` are never `live`.
+- `tests/unit/machines/scaffold.test.ts`: its case for the scaffold's temporary guide mapping ("until
+  the machine lines land") now checks the fallbacks of F12.
 
 ### For the integrator
 

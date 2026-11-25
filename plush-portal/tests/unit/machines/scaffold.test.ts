@@ -77,13 +77,14 @@ describe('guide contract additions', () => {
     }
   });
 
-  it('maps every machine event onto existing line keys (temporary, until the machine lines land)', () => {
+  it('maps every machine event without facts.machine onto a line pool that fits any machine', () => {
+    // The machine lines have landed (tests/unit/ai/machineLines.test.ts covers the facts.machine cases).
     const keys = (type: GuideEventType) => resolveSituation({ type, roundId: 1, themeId: 'sakura', facts: { phase: 'RESULT', demo: false, attempts: 1, wins: 0, lossStreak: 0 } }).keys;
-    expect(keys('machine_selected')).toEqual(['theme']);
-    expect(keys('machine_progress')).toEqual(['tip']);
-    expect(keys('items_scored')).toEqual(['win']);
-    expect(keys('time_low')).toEqual(['tip']);
-    expect(keys('session_over')).toEqual(['retry']);
+    expect(keys('machine_selected')).toEqual(['machine.classic']);
+    expect(keys('machine_progress')).toEqual(['retry']);
+    expect(keys('items_scored')).toEqual(['items.one']);
+    expect(keys('time_low')).toEqual(['time.low']);
+    expect(keys('session_over')).toEqual(['session.over']);
   });
 
   it('the server accepts facts.machine with numbers and enums only', () => {

@@ -129,7 +129,7 @@ export const machinesStrings: StringTable = {
     'set.machines.hidden': 'Machines in the lobby',
     'set.machines.hidden.hint': 'Untick a machine to hide it from players. The home machine is always offered.',
     'set.machines.unlock': 'Unlocking',
-    'set.machines.unlock.hint': 'Progress = later machines open after enough collected prizes (Bridge 1, Shelf 3, Rush 5).',
+    'set.machines.unlock.hint': 'By prizes = later machines open after enough collected prizes (Bridge 1, Shelf 3, Rush 5).',
     'set.machines.unlock.o.open': 'All open',
     'set.machines.unlock.o.progress': 'By prizes',
     'set.machines.dailyPick': 'Today’s pick',
