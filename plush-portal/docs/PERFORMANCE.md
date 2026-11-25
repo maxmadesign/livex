@@ -582,6 +582,32 @@ the same way on the other tiers (800 × 450): High draws the 2048² soft map (29
 triangles in a still frame, the High tier's own cost), Safe leaves the light off (118 calls); no
 console errors or shader compile errors in any of these runs.
 
+### Viewer light: still-eye redraws and the plaques' shadow (round 4 follow-up)
+
+Same method and machine as above (production build, `?debug=1&camera=off&seed=7&quality=medium`,
+device pixel ratio 1), a player round in READY with the claw at home after 8 s of game time, the eye at
+rest. "Map redraws" counts the frames of the running game loop that redrew the viewer light's map;
+draw calls and triangles are one `Stage.render` read from `renderer.info` (every pass of the frame),
+for a frame that does not and one that does redraw the map.
+
+| Case | Map redraws, still eye | Frame without a redraw | Frame with a redraw |
+| --- | --- | --- | --- |
+| GPU Party, desktop 1280 × 720, before | 2 of 16 | 136 calls, 244 711 triangles | 166 calls, 322 293 triangles |
+| GPU Party, desktop, after | 0 of 16 | 136, 244 711 | 166, 322 293 |
+| GPU Party, portrait32 1080 × 1920, before | 1 of 12 | 126, 269 558 | 156, 347 140 |
+| GPU Party, portrait32, after | 0 of 12 | 126, 269 558 | 156, 347 140 |
+| Sakura, desktop, before | 2 of 16 | 137, 246 967 | 167, 324 557 |
+| Sakura, desktop, after (plaques cast) | 0 of 16 (and 0 of 8 in a second run) | 137, 246 967 | 168, 329 885 |
+| Sakura, portrait32, after (plaques cast) | 0 of 7 | 127, 279 836 | 158, 362 754 |
+
+The redraws before came from three meshes of the claw hanging still whose world matrices changed by
+about 10⁻⁶ from frame to frame and crossed a rounding step of the old signature; no decorative mesh
+(case fans, floating chips, LED wall: all in the cabinet group, none casting) took part. In the first
+three seconds after START the GPU Party pile still settles (a GPU card and a chip rock by 1–2 mm per
+quarter second before they come to rest), and those frames redraw the map, as they should. The
+plaques' shadow costs nothing in a frame without a redraw and 1 draw call and 5 328 triangles in a
+frame with one (Sakura, Medium); GPU Party has no plaques.
+
 ### Not measured
 
 - Any frame rate, frame-time distribution or GPU load on real graphics hardware

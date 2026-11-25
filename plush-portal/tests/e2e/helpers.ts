@@ -159,9 +159,17 @@ export const results = (page: Page): Promise<any[]> => page.evaluate(() => (wind
 export const awards = (page: Page): Promise<any[]> => page.evaluate(() => (window as any).__awards);
 export const collection = (page: Page): Promise<{ counts: Record<string, number>; attempts: number; wins: number; prizeIds: string[] }> => plush(page, (p) => p.collection());
 
+/**
+ * Time allowed for one pointer click. The browser hands each pointer event to the page between two
+ * frames of the game loop, and a click takes several such turns: on a 1080 × 1920 Medium page on
+ * software GL under load a frame took 10–23 s and a forced click on START 133 s (measured), far
+ * beyond the 60 s action timeout of playwright.config.ts.
+ */
+export const CLICK_TIMEOUT = 300_000;
+
 export async function click(page: Page, testId: string): Promise<void> {
   // Animated buttons never become "stable" for Playwright; the click itself is still a real pointer click.
-  await page.getByTestId(testId).first().click({ force: true });
+  await page.getByTestId(testId).first().click({ force: true, timeout: CLICK_TIMEOUT });
 }
 
 /** Leaves attract mode through the real START button (and closes the first-run tutorial like a player would). */

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, frames, openSettings, plush, settle, start, state } from './helpers';
+import { CLICK_TIMEOUT, boot, frames, openSettings, plush, settle, start, state } from './helpers';
 
 /**
  * The GPU theme dressed by the brand kit (src/brand, src/scene/ledWall.ts): the event logo on the
@@ -207,7 +207,7 @@ test('25. GTC attract and win card: the call to action carries the logo as suppl
   // desktop): everything inside its border. The code row under the QR is wider in the brand sans than
   // the card model assumed, and the row of the two columns spilled over both edges of the card.
   await openSettings(page, 'menu-settings', 'rewards');
-  await page.getByTestId('rewards-preview').click({ force: true });
+  await page.getByTestId('rewards-preview').click({ force: true, timeout: CLICK_TIMEOUT });
   const card = page.getByTestId('reward-preview-card');
   await expect(card).toHaveAttribute('data-arrangement', 'side');
   await settle(page);
