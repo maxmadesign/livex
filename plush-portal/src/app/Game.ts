@@ -1539,7 +1539,9 @@ export class Game {
     );
     if (rebuild) {
       this.pendingRebuild = true;
-      if (this.core.machine.atRoundBoundary && this.core.machine.phase !== 'RESULT') {
+      // Not while a result is up, nor while a finished session's card (with its claim QR) is: a timed
+      // run can end in READY, and a rebuild there would wipe the card's QR at once.
+      if (this.core.machine.atRoundBoundary && this.core.machine.phase !== 'RESULT' && !this.director?.sessionOver()) {
         this.pendingRebuild = false;
         void this.applyQueuedRebuild();
       } else this.deps.ui.setState({ pendingChange: true });

@@ -24,6 +24,9 @@ const MACHINE_KEYS: LineKey[] = [
   'session.over',
   'session.reward',
   'session.rank',
+  'hint.bridge',
+  'hint.shelf',
+  'hint.rush',
 ];
 
 const bridge = (extra: Partial<NonNullable<GuideFacts['machine']>> = {}): GuideFacts['machine'] => ({ id: 'bridge', genre: 'bridge', name: 'Tippy Bridge', tries: 2, ...extra });
@@ -218,5 +221,17 @@ describe('facts.machine in the prompt', () => {
     expect(taskFor('session_over', false)).toMatch(/initials/);
     expect(taskFor('session_over', true)).toMatch(/claim QR code is on screen/);
     expect(taskFor('machine_progress', false)).toMatch(/Never predict/);
+  });
+});
+
+describe('hints on the new machines', () => {
+  it('idle, aim and asked-for tips use the machine hint pool, never plush hints', () => {
+    for (const genre of ['bridge', 'shelf', 'rush'] as const) {
+      for (const type of ['idle_hint', 'aim_help', 'user_requested_tip'] as const) {
+        expect(keysOf(event(type, { machine: { ...shelf({}), id: genre, name: genre, genre } })), `${genre}:${type}`).toEqual([`hint.${genre}`]);
+      }
+    }
+    // Classic (no facts.machine) keeps the plush hints.
+    expect(keysOf(event('aim_help', {}))).toEqual(['aim']);
   });
 });

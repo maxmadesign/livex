@@ -630,5 +630,38 @@ export const en: LangBank = {
         ['A top-ten run! Benchmarks like that deserve your initials.', 'cheer'],
       ],
     },
+    'hint.bridge': {
+      all: [
+        ['Grab near one end of the box, not the middle. Small lifts add up.', 'think'],
+        ['Watch which end sits lower, then lift the high end so it slides toward the gap.', 'think'],
+        ['Box wedged at an angle? Press Call staff and it goes back to the start.', 'calm'],
+      ],
+      gtc: [
+        ['Treat the bridge like a hands-on lab: one end at a time, then check the result.', 'think'],
+        ['Patience wins at the {event} booth. Nudge one end, then the other.', 'calm'],
+      ],
+    },
+    'hint.shelf': {
+      all: [
+        ['Aim just behind a box near the front edge, then let the claw push it over.', 'think'],
+        ['Boxes right at the edge fall with the lightest touch. Try those first.', 'think'],
+        ['Tall stacks topple easily. Aim at the top box of a high stack.', 'think'],
+      ],
+      gtc: [
+        ['Shelf strategy: pick the box closest to the edge, like choosing the fastest path.', 'think'],
+        ['At the {event} booth every box over the edge counts. Go for the front row.', 'happy'],
+      ],
+    },
+    'hint.rush': {
+      all: [
+        ['The clock starts with your first move. Aim at a tight cluster of gems.', 'think'],
+        ['Big gems are worth more. Drop the claw where several sit close together.', 'think'],
+        ['Quick grabs win the rush. No need to wait for the perfect spot.', 'cheer'],
+      ],
+      gtc: [
+        ['Think in parallel: aim where many gems sit together and scoop them in one go.', 'think'],
+        ['{event} speed-run tip: short moves, quick grabs, straight to the chute.', 'cheer'],
+      ],
+    },
   },
 };

@@ -306,3 +306,48 @@ other optional items of the critic's list were not attempted.
 
 All e2e runs used a keyless server built from this tree (`--serve-dist`, own port); software WebGL,
 no audio output, no camera, no phone and no large panel.
+
+## Round 4 (joystick, window, viewer light, machines): full run
+
+Production build, headless Chromium with software WebGL (SwiftShader), one worker, keyless API server,
+4 shared CPU cores. Commit 263086f (the machine round with all four machines offered), 2.2 h.
+
+| Spec | Result |
+| --- | --- |
+| 01-load | 2/2 |
+| 02-rounds | 4/4 |
+| 03-safe-zone | 2/2 (the MACHINES button inside the 86" band) |
+| 04-settings-dialog | 4/4 |
+| 05-input (joystick) | 4/4 |
+| 06-outcomes | 3/3 |
+| 07-settlement | 2/2 |
+| 09-themes | 5/5 (no text below 3:1 in any theme) |
+| 10-audio | 2/2 |
+| 11-settings | 3/3 |
+| 12-ai-offline | 5/5 |
+| 13-camera-denied, 13-camera-fallback | 1/1, 1/1 |
+| 14-camera-fake | 1/1 |
+| 17-viewpoint | 2/2 |
+| 18-graphics-midround | 1/1 |
+| 19-stability | 2/2 |
+| 20-screenshots | skipped by design (runs with PLUSH_SHOTS=1) |
+| 21-points | 1/1 |
+| 22-idle-attract | 1/1 |
+| 23-frame | 3/3 |
+| 24-phone | 1/1 (MACHINES in the menu row; upright: top bar) |
+| 25-gtc-dialogue, 25-gtc-scene | 2/2, 2/2 |
+| 26-rewards-client | 5/5 |
+| 27-rewards-integration (real server, QR decoded) | 7/7 |
+| 28-peek (drag-to-peek) | 3/3 |
+| 29-machines-glue (switches, settlement, no leaks) | 2/2 |
+| 30-lobby (lobby, sessions, initials, ranking) | 5/5 |
+
+Total: 81 tests, 76 passed, 5 skipped (20-screenshots), 0 failed. Specs 29 and 30 passed again on the
+later fixes (82cdb89). Under heavy load (load average 12-20), 03 at 1080 × 1920 and 25-gtc-dialogue's
+first test have timed out; both pass at normal load and in this run.
+
+Play-through on the same build (keyless, Medium): classic, Tippy Bridge, Tumble Shelf (a full 5-try
+session with its prize) and Sparkle Rush (time up, initials, rank 1) in desktop, portrait 32", simulated
+portrait 86" and phone, in sakura and the GPU theme: 0 console errors, 0 page errors, 0 failed requests;
+the GPU claim QR decoded on desktop, 32" and 86" (the phone shows the code and a claim link by design).
+Not verified: real GPUs, real phones and panels, real cameras, real phone scans of the QR.

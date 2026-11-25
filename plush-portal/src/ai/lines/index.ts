@@ -61,8 +61,11 @@ export function resolveSituation(event: GuideEvent): LineSituation {
     case 'first_play':
       return at(['first_play']);
     case 'idle_hint':
+      // The classic hints talk about plush; on another machine its own hints fit.
+      if (machineHint(f.machine)) return at([machineHint(f.machine)!]);
       return at(f.headTracking ? ['idle', 'idle.tracking'] : ['idle']);
     case 'aim_help':
+      if (machineHint(f.machine)) return at([machineHint(f.machine)!]);
       return at(['aim']);
     case 'grab_started':
       return at(['grab']);
@@ -94,6 +97,7 @@ export function resolveSituation(event: GuideEvent): LineSituation {
       if (rewardFor(event.type, f)) return at(['retry.reward']);
       return at([f.lossStreak >= 3 ? 'retry.streak' : 'retry']);
     case 'user_requested_tip':
+      if (machineHint(f.machine)) return at([machineHint(f.machine)!]);
       return at(f.headTracking ? ['tip', 'tip.tracking'] : ['tip']);
     // Machines other than classic (docs/design/machines.md, section 4.9). Without facts.machine (an
     // older client, or the switch back to classic) each event falls back to a pool that is true
@@ -137,6 +141,12 @@ export const BRIDGE_PROGRESS_GAIN = 0.05;
  * machine_progress: bridge — stuck first (the player can act on it: Call staff), then real progress,
  * else "barely moved"; shelf — a box at the edge. Anything else (no machine facts) is a light retry.
  */
+/** The hint pool of a machine other than classic, or null (classic and no machine facts use the plush hints). */
+function machineHint(machine: GuideEvent['facts']['machine']): LineKey | null {
+  const genre = machine?.genre;
+  return genre === 'bridge' || genre === 'shelf' || genre === 'rush' ? (`hint.${genre}` as LineKey) : null;
+}
+
 function progressKey(machine: GuideEvent['facts']['machine']): LineKey {
   if (machine?.genre === 'bridge') {
     if (machine.stuck) return 'bridge.stuck';

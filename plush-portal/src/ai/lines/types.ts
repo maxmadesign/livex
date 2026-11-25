@@ -52,6 +52,9 @@ export const LINE_KEYS = [
   'session.over', // session_over: the session ended (no prize, no ranking place)
   'session.reward', // session_over: the session earned a prize ({toy}); no QR wording (see index.ts)
   'session.rank', // session_over: the run made the local top 10
+  'hint.bridge', // idle_hint / aim_help / user_requested_tip on Tippy Bridge (plush hints do not fit there)
+  'hint.shelf', // the same on Tumble Shelf
+  'hint.rush', // the same on Sparkle Rush
 ] as const;
 export type LineKey = (typeof LINE_KEYS)[number];
 
