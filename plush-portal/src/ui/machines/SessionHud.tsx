@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 import type { HudLayout } from '../../layout/solve';
+import { overlaps } from '../../rewards/cardLayout';
 import { useLang, useSettings, useT, useUi } from '../context';
+import { useWinCard } from '../RewardCard';
 import { formatPoints, scoreHudRect } from '../ScoreHud';
 import { TIME_LOW_SECONDS, formatClock, progressSegments, sessionHudRect, showSessionHud } from './view';
 import './machines.css';
@@ -24,9 +26,13 @@ export function SessionHud({ layout }: { layout: HudLayout }) {
   const sessionCard = useUi((s) => s.sessionResult !== null || s.rankEntry !== null);
   const rewardItems = useSettings((s) => s.machines.shelf.rewardItems);
   const runSeconds = useSettings((s) => s.machines.rush.seconds);
+  // A bridge win raises the classic win card; where it reaches the panel (a phone held sideways) the
+  // card wins, as for the score (ScoreHud).
+  const card = useWinCard(layout);
   // The session card (or the initials entry) takes over at the end of a session.
   if (!showSessionHud(machine, phase, demo) || sessionCard) return null;
   const r = sessionHudRect(layout, scoreHudRect(layout));
+  const hidden = card ? overlaps(card.geometry, { x: r.x, y: r.y, w: r.w, h: r.h }) : false;
   const s = machine.session;
   const genre = machine.genre;
   const low = s.kind === 'timed' && s.state === 'running' && s.secondsLeft !== null && s.secondsLeft <= TIME_LOW_SECONDS;
@@ -121,6 +127,7 @@ export function SessionHud({ layout }: { layout: HudLayout }) {
       data-genre={genre}
       data-place={r.place}
       data-low={low}
+      data-hidden={hidden}
       data-over={s.state === 'over'}
       data-tries={s.tries}
       data-items={s.items}

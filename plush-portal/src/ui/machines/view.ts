@@ -96,13 +96,16 @@ export interface SessionHudRect extends Rect {
 }
 
 /**
- * Where the session HUD goes: under the score where the score sits at the top (desktop, phone, 32"),
- * on the other side of the control panel where the score sits beside it (86"), else just above the
- * score. Inside the safe zone on every preset.
+ * Where the session HUD goes: under the score where the score sits at the top (desktop, 32"), on the
+ * other side of the control panel where the score sits beside it (86"), else just above the score.
+ * A phone held sideways puts it in the column above the joystick (phoneSideRect). Inside the safe
+ * zone on every preset.
  */
 export function sessionHudRect(layout: HudLayout, score: ScoreHudRect): SessionHudRect {
   const u = layout.unit;
   const gap = 10 * u;
+  const phone = phoneSideRect(layout, score, gap);
+  if (phone) return phone;
   if (score.place === 'side') {
     const p = layout.panel;
     const w = score.w;
@@ -115,6 +118,28 @@ export function sessionHudRect(layout: HudLayout, score: ScoreHudRect): SessionH
   const x = (layout.vw - w) / 2;
   if (score.place === 'abovePanel') return { x, y: Math.max(layout.safeTop + 4, score.y - h - gap), w, h, place: 'above' };
   return { x, y: Math.min(layout.safeBottom - h, score.y + score.h + gap), w, h, place: 'below' };
+}
+
+/**
+ * A phone held sideways: the band under the score is where the claw hangs while aiming and where it
+ * carries at full lift (measured: the hub at y 74-106 of 390, under a panel at y 68-147), so the
+ * panel goes into a side column between the top bar and a control, over the neighbouring cabinet:
+ * the joystick's column, or the big button's where the guide takes the joystick's. Null when neither
+ * column has room (the panel then goes under the score as elsewhere).
+ */
+function phoneSideRect(layout: HudLayout, score: Rect, gap: number): SessionHudRect | null {
+  const c = layout.controls;
+  if (!c || layout.orientation !== 'landscape') return null;
+  const top = Math.max(layout.safeTop, layout.topBar.y + layout.topBar.h) + gap;
+  const clash = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const control of [c.dpad, c.action]) {
+    const bottom = Math.min(control.y, layout.panel.y) - gap;
+    const r: SessionHudRect = { x: control.x, y: top, w: control.w, h: bottom - top, place: 'side' };
+    if (r.h < 110 * layout.unit || r.w < 120) continue;
+    if (clash(r, score) || (!layout.guide.hidden && clash(r, layout.guide))) continue;
+    return r;
+  }
+  return null;
 }
 
 /** Five segments of the bridge's progress meter, each 0..1 filled. */

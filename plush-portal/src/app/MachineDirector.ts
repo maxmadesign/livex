@@ -966,7 +966,9 @@ export class MachineDirector {
     if (genre === 'bridge') {
       const b = bridgeState(core.phys);
       progress = b.progress;
-      plate = { key: 'machines.plate.try', params: { n: b.tries + 1 } };
+      // The try being played; while its result is up, still that try (not the next one: after a won
+      // box "TRY 3" on the win card's screen named a try that box never had).
+      plate = { key: 'machines.plate.try', params: { n: m.phase === 'RESULT' ? Math.max(1, b.tries) : b.tries + 1 } };
     } else if (snap.kind === 'tries' && snap.triesTotal !== null) {
       plate = { key: 'machines.plate.tries', params: { left: Math.max(0, snap.triesTotal - snap.tries), total: snap.triesTotal } };
     } else if (snap.kind === 'timed' && snap.secondsLeft !== null) {

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appliedValue, boot, box, click, closeSettings, expectInZone, openSettings, outsideZone, plush, pushStick, settle, start, state, winARound } from './helpers';
 
-const HUD = ['panel', 'dpad', 'stick', 'stick-knob', 'start', 'status', 'panel-menu', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
+// MACHINES (the lobby) leads the panel menu now that more than one machine is offered.
+const HUD = ['panel', 'dpad', 'stick', 'stick-knob', 'start', 'status', 'panel-menu', 'menu-machines', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
 const TABS = ['gameplay', 'themes', 'layout', 'graphics', 'audio', 'ai', 'camera', 'system'];
 /** The top-right "i" is the one deliberate exception: a second way into Settings, outside the reach zone. */
 const ALLOW = ['info-button'];
