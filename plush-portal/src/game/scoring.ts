@@ -95,6 +95,12 @@ export interface ScoreAward {
   best: number;
   /** This round lifted the best session score (never for demo rounds). */
   newBest: boolean;
+  /** Machines with items (shelf, rush): items scored in the try. Absent on classic rounds. */
+  items?: number;
+  /** Machines: extra rows of the breakdown (multi-drop, handful, today's pick). Absent on classic rounds. */
+  extras?: { key: string; points: number }[];
+  /** Machines: the today's-pick multiplier applied to this round (absent or 1 = none). */
+  dailyBonus?: number;
 }
 
 export type RoundScore = Omit<ScoreAward, 'session' | 'best' | 'newBest'>;
@@ -143,6 +149,19 @@ export function scoreRound(input: RoundScoreInput, streakBefore: number): RoundS
   };
 }
 
+/**
+ * Today's pick (docs/design/machines.md, section 4.4) on a machine that scores with scoreRound (the
+ * bridge): the round's points × `bonus`, rounded once, with the difference as a 'daily' breakdown
+ * row. A bonus of 1 or less returns the round unchanged. Classic is never today's pick.
+ */
+export function applyDailyBonus(round: RoundScore, bonus: number): RoundScore {
+  if (!(Number.isFinite(bonus) && bonus > 1)) return round;
+  const total = Math.round(round.total * bonus);
+  const extras = [...(round.extras ?? [])];
+  if (total !== round.total) extras.push({ key: 'daily', points: total - round.total });
+  return { ...round, total, extras, dailyBonus: bonus };
+}
+
 /** What is persisted (src/persistence/scores.ts). */
 export interface ScoreRecord {
   best: number;
@@ -171,13 +190,12 @@ export class ScoreKeeper {
   private best: number;
   private lifetime: number;
   private readonly settled = new Map<number, ScoreAward>();
+  private onPersist: ((record: ScoreRecord) => void) | undefined;
 
-  constructor(
-    record: ScoreRecord = { best: 0, lifetime: 0 },
-    private readonly onPersist?: (record: ScoreRecord) => void,
-  ) {
+  constructor(record: ScoreRecord = { best: 0, lifetime: 0 }, onPersist?: (record: ScoreRecord) => void) {
     this.best = record.best;
     this.lifetime = record.lifetime;
+    this.onPersist = onPersist;
   }
 
   /** Scores a finished (or physically decided) round once. Returns null when off or already settled. */
@@ -185,11 +203,38 @@ export class ScoreKeeper {
     if (!this.enabled) return null;
     if (this.settled.has(input.roundId)) return null;
     const track = input.demo ? this.demoTrack : this.player;
-    const round = scoreRound(input, track.streak);
+    return this.book(input.roundId, input.demo, scoreRound(input, track.streak));
+  }
+
+  /**
+   * Machines (docs/design/machines.md, section 2.3): books points computed elsewhere (an items try's
+   * scorer, or scoreRound with today's bonus) exactly like `settle` books its own. Same rules: once
+   * per round id, nothing when scoring is off, demo rounds on their own track and never persisted.
+   */
+  settleScored(roundId: number, demo: boolean, round: RoundScore): ScoreAward | null {
+    if (!this.enabled) return null;
+    if (this.settled.has(roundId)) return null;
+    return this.book(roundId, demo, { ...round, roundId, demo });
+  }
+
+  /**
+   * A machine switch: best and lifetime of the machine now played (each machine keeps its own record)
+   * and where they persist. The session score and combo start over; settled round ids are kept (they
+   * keep counting across machines).
+   */
+  useRecord(record: ScoreRecord, onPersist?: (record: ScoreRecord) => void): void {
+    this.best = record.best;
+    this.lifetime = record.lifetime;
+    this.onPersist = onPersist;
+    this.resetSession();
+  }
+
+  private book(roundId: number, demo: boolean, round: RoundScore): ScoreAward {
+    const track = demo ? this.demoTrack : this.player;
     track.streak = round.streak;
     track.session += round.total;
     let newBest = false;
-    if (!input.demo) {
+    if (!demo) {
       this.lifetime += round.total;
       if (track.session > this.best) {
         this.best = track.session;
@@ -198,7 +243,7 @@ export class ScoreKeeper {
       if (round.total > 0) this.onPersist?.({ best: this.best, lifetime: this.lifetime });
     }
     const award: ScoreAward = { ...round, session: track.session, best: this.best, newBest };
-    this.settled.set(input.roundId, award);
+    this.settled.set(roundId, award);
     if (this.settled.size > REMEMBERED_ROUNDS) this.settled.delete(this.settled.keys().next().value!);
     return award;
   }

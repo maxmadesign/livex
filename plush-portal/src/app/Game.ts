@@ -7,16 +7,18 @@ import { getLog, log, logError } from '../diagnostics/log';
 import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
+import { ymdOf } from '../game/machines/daily';
 import type { MachineId } from '../game/machines/ids';
 import { isMachineId, resolveMachine } from '../game/machines/registry';
 import type { RoundParams } from '../game/RoundController';
-import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
+import { ScoreKeeper, applyDailyBonus, comboMultiplier, scoreRound, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
 import { solveLayout, type HudLayout } from '../layout/solve';
 import { computeWindowLayout, eyeToWorld, handheldCameraPosition, physicalScreenSize, type WindowEnvironment, type WindowLayout } from '../perspective/windowGeometry';
 import type { CollectionStore } from '../persistence/collection';
+import { clearMachines } from '../persistence/machines';
 import { clearScores, loadScores, saveScores } from '../persistence/scores';
-import { CHUTE_CENTER, CLAW, FIXED_DT, GROUP, PRIZE_SENSOR, groups } from '../physics/fieldSpec';
+import { CLAW, FIXED_DT, GROUP, groups } from '../physics/fieldSpec';
 import { FixedStepper, RAPIER, initRapier, type ImpactEvent, type ToyBody } from '../physics/PhysicsWorld';
 import { PlushLibrary } from '../plush/PlushLibrary';
 import type { PlushAsset } from '../plush/manifest';
@@ -32,7 +34,9 @@ import type { SettingsStore } from '../settings/store';
 import { themeOf } from '../themes/themes';
 import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
-import { DemoPilot } from './DemoPilot';
+import { MachineDirector, prizeTypeOf, type DirectorHost, type ItemVisualsPort } from './MachineDirector';
+import type { Pilot } from './MachinePilot';
+import { CHARACTER_VOICES, impactSfx } from './machineSfx';
 import { attachPeekDrag } from './PeekDrag';
 import type { GameStore, MachineCardInfo, PerfSnapshot } from './gameStore';
 
@@ -101,8 +105,6 @@ const FRAME_SAMPLES = 180;
 const PRIZE_LINE_WAIT_MS = 1500;
 /** Cabinet LED energy of a win, by rarity (the existing materials.updateLeds input). */
 const TIER_LED: Record<RarityTier, number> = { common: 0.75, rare: 1, epic: 1.3, legendary: 1.7 };
-/** Where a won prize leaves the field: the prize exit, just below the floor. */
-const EXIT_POS: Vec3Like = { x: CHUTE_CENTER.x, y: PRIZE_SENSOR.yTop + 0.04, z: CHUTE_CENTER.z };
 /** Input events that count as "somebody is here" for the idle reset. */
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
 /**
@@ -128,7 +130,15 @@ export class Game {
   private effects!: Effects;
   private readonly stepper = new FixedStepper(FIXED_DT, 5);
   private readonly adaptive = new AdaptiveQuality();
-  private readonly pilot = new DemoPilot();
+  /** Which machine is played, its sessions, prizes, rankings and pilots (src/app/MachineDirector.ts). */
+  private director!: MachineDirector;
+  /**
+   * Machine items (boxes, snacks, gems, coins) are drawn by the rendering workstream's ItemVisuals
+   * (src/scene/ItemVisuals.ts); until it is created here they are simply not drawn.
+   */
+  private itemVisuals: ItemVisualsPort | null = null;
+  /** The two-step buttons of `twoStep` controls (held state). */
+  private readonly stepHeld = { 1: false, 2: false };
   private readonly pauseReasons = new Set<PauseReason>(['boot']);
   private raf = 0;
   private lastFrame = 0;
@@ -221,6 +231,11 @@ export class Game {
     return this.effects;
   }
 
+  /** The attract pilot of the current machine (DemoPilot on classic). */
+  private get pilot(): Pilot {
+    return this.director.pilot;
+  }
+
   /* ------------------------------------------------------------------ boot */
 
   private setBoot(progress: number, label: string): void {
@@ -267,6 +282,7 @@ export class Game {
         machine,
       });
       this.attract = new AttractDirector(this.core);
+      this.director = new MachineDirector(this.directorHost());
       this.bindCore();
 
       await this.loadTheme(this.themeId, (p) => this.setBoot(0.2 + 0.55 * p, 'toys'));
@@ -387,7 +403,9 @@ export class Game {
   private populate(): void {
     this.core.field.setOptions(this.fieldOptions(this.committed));
     this.core.populate(this.enabledAssets(), this.deps.launch.seed ?? undefined);
+    this.director.afterPopulate();
     this.toyVisuals.sync(this.core.phys.toys.values());
+    this.itemVisuals?.sync(this.core.phys.toys.values());
     this.restockQueue = 0;
   }
 
@@ -514,6 +532,7 @@ export class Game {
   clearDirections(): void {
     this.dir.left = this.dir.right = this.dir.back = this.dir.front = false;
     this.stick.x = this.stick.z = 0;
+    this.stepHeld[1] = this.stepHeld[2] = false;
     if (this.core) this.core.controller.clearInput();
     this.notifyInput({ x: 0, z: 0, source: 'none', cleared: true });
   }
@@ -566,8 +585,10 @@ export class Game {
     this.deps.ui.setState({ result: null, prize: null, scorePopups: [] });
     this.rewards.reset();
     this.attract.leave();
+    this.director.onStart();
     this.restockQueue = 0;
     this.toyVisuals.sync(this.core.phys.toys.values());
+    this.itemVisuals?.sync(this.core.phys.toys.values());
     this.safeFx(() => this.fx.aura(null));
     this.auraOn = false;
     // A demo round's win / jackpot show ends with the demo.
@@ -593,6 +614,11 @@ export class Game {
     if (this.paused) return;
     this.touchActivity();
     const m = this.core.machine;
+    // A tries / timed session is over: PLAY AGAIN starts a fresh session (the field back to its start).
+    if (this.director.sessionOver()) {
+      this.newSession();
+      return;
+    }
     if (m.phase !== 'RESULT') return;
     this.deps.ui.setState({ result: null, prize: null });
     // PLAY AGAIN dismisses the claim QR with the card (scan first, then play).
@@ -628,42 +654,150 @@ export class Game {
   }
 
   /* ------------------------------------------------------------- machines */
-  // Public contract of the machine framework (docs/design/machines.md, sections 2.2 and 4.11).
-  // The bodies arrive with the machine director; until then every call is a safe no-op on classic.
+  // Public contract of the machine framework (docs/design/machines.md, sections 2.2 and 4.11); the
+  // logic lives in src/app/MachineDirector.ts.
 
-  /** Switches to another machine at the next round boundary. False when refused. */
+  /**
+   * Switches to another machine behind the curtain (at once at a round boundary, otherwise after
+   * this try). From attract mode the player's round starts on it right away. False when refused
+   * (lobby off, not offered, locked).
+   */
   selectMachine(id: MachineId): boolean {
-    void id;
-    return false;
+    if (!this.director) return false;
+    this.touchActivity();
+    return this.director.select(id);
   }
 
   /** Opens the machine lobby (the MACHINES deck button). */
-  openLobby(): void {}
+  openLobby(): void {
+    const { ui, audio } = this.deps;
+    if (!this.director || !ui.getState().machine.lobby || ui.getState().modal !== null) return;
+    this.touchActivity();
+    ui.setState({ modal: 'lobby' });
+    this.setModalOpen(true);
+    audio.playSfx('ui_open');
+  }
 
   /** A machine deck action: 'staff' = "Call staff" on the bridge. False when not available. */
   machineAction(action: 'staff'): boolean {
-    void action;
-    return false;
+    if (!this.director || this.paused) return false;
+    this.touchActivity();
+    const ok = this.director.machineAction(action);
+    if (ok) this.toyVisuals.sync(this.core.phys.toys.values());
+    else this.deps.audio.playSfx('ui_error');
+    return ok;
   }
 
-  /** The two-step buttons of `twoStep` controls (button 1 = +x, button 2 = -z). */
+  /** The two-step buttons of `twoStep` controls: button 1 held moves +x, button 2 held moves -z. */
   stepInput(step: 1 | 2, pressed: boolean): void {
-    void step;
-    void pressed;
+    if (!this.director || this.deps.ui.getState().machine.controls !== 'twoStep') return;
+    if (this.paused && pressed) return;
+    if (this.core.machine.demo || this.stepHeld[step] === pressed) return;
+    this.stepHeld[step] = pressed;
+    if (pressed) {
+      this.touchActivity();
+      const phase = this.core.machine.phase;
+      if (phase === 'READY' || phase === 'AIMING') this.deps.audio.playSfx('dir_press');
+    }
+    const c = this.core.controller;
+    c.inputX = this.stepHeld[1] ? 1 : 0;
+    c.inputZ = this.stepHeld[2] ? -1 : 0;
+    this.notifyInput({ x: c.inputX, z: c.inputZ, source: c.inputX !== 0 || c.inputZ !== 0 ? 'keys' : 'none' });
   }
 
   /** PLAY AGAIN on a session card: a fresh session on the same machine. */
-  newSession(): void {}
+  newSession(): void {
+    if (!this.director || this.paused) return;
+    this.touchActivity();
+    this.clearDirections();
+    if (this.director.newSession()) this.itemVisuals?.sync(this.core.phys.toys.values());
+  }
 
   /** Initials for a ranking place. False when no entry is waiting or the initials are invalid. */
   submitInitials(initials: string): boolean {
-    void initials;
-    return false;
+    if (!this.director) return false;
+    this.touchActivity();
+    return this.director.submitInitials(initials);
   }
 
   /** The lobby cards. */
   machineCards(): MachineCardInfo[] {
-    return [];
+    return this.director ? this.director.cards() : [];
+  }
+
+  /** What the machine director needs from the game (scene, effects, rewards, settings). */
+  private directorHost(): DirectorHost {
+    const { ui } = this.deps;
+    return {
+      core: this.core,
+      ui,
+      collection: this.deps.collection,
+      scores: this.scores,
+      audio: this.deps.audio,
+      debug: this.deps.launch.debug,
+      launchMachine: this.deps.launch.machine ?? null,
+      settings: () => this.committed,
+      themeId: () => this.themeId,
+      enabledAssets: () => this.enabledAssets(),
+      roundParams: () => this.roundParams(this.committed),
+      fieldOptions: () => this.fieldOptions(this.committed),
+      seed: () => this.deps.launch.seed ?? undefined,
+      difficulty: () => this.roundDifficulty,
+      inAttract: () => this.attract.active,
+      setBusy: (busy) => {
+        ui.setState({ themeBusy: busy });
+        this.setPaused('theme', busy);
+      },
+      clearScene: () => {
+        this.safeFx(() => this.fx.aura(null));
+        this.auraOn = false;
+        this.toyVisuals.heldToy = null;
+        this.toyVisuals.focus = null;
+        this.toyVisuals.clear();
+        this.itemVisuals?.clear();
+        this.clawVisual?.dispose();
+        this.clawVisual = null;
+        this.restockQueue = 0;
+      },
+      buildScene: () => {
+        // The cabinet follows the machine's geometry and the claw visual is made for the new claw rig.
+        this.rebuildScene(false);
+        this.toyVisuals.sync(this.core.phys.toys.values());
+        this.itemVisuals?.sync(this.core.phys.toys.values());
+        this.restockQueue = 0;
+      },
+      syncVisuals: () => {
+        this.toyVisuals.sync(this.core.phys.toys.values());
+        this.itemVisuals?.sync(this.core.phys.toys.values());
+      },
+      warmUp: () => this.stage.warmUp(),
+      closeLobby: () => {
+        if (ui.getState().modal !== 'lobby') return;
+        ui.setState({ modal: null });
+        this.setModalOpen(false);
+      },
+      pressStart: () => this.pressStart(),
+      publishScore: (award) => this.publishScore(award),
+      popup: (pos, award) => {
+        const at = this.toScreen(pos);
+        if (at) this.addPopup(at, award);
+      },
+      burst: (kind, pos, tier, scale) => this.burstAt(kind, pos, tier, scale),
+      celebrate: (tier, pos) => this.safeFx(() => this.fx.celebrate(tier, pos)),
+      lightShow: (mode) => this.safeFx(() => this.fx.lightShow(mode)),
+      ledPulse: (energy) => {
+        this.celebrate = Math.max(this.celebrate, energy);
+      },
+      emitGuide: (type, result) => this.emitGuide(type, result),
+      requestReward: (roundId, typeId) => this.requestReward(roundId, typeId, false),
+      cardShown: (roundId) => this.rewards.onCardShown(roundId),
+      resetRewards: () => this.rewards.reset(),
+      toast: (key, params) => this.toast(key, params),
+      log: (level, message) => log(level, 'round', message),
+      now: () => Date.now(),
+      today: () => ymdOf(new Date()),
+      guideLanguage: () => guideLanguage(this.applied.ai, this.language()),
+    };
   }
 
   private touchActivity(): void {
@@ -696,6 +830,8 @@ export class Game {
   resetScores(): void {
     this.scores.resetAll();
     clearScores();
+    // The other machines' bests, rankings and play counts go too.
+    clearMachines();
     this.publishScore(null);
   }
 
@@ -738,6 +874,8 @@ export class Game {
     this.retryPrompted = false;
     this.restockQueue = this.core.field.missing();
     this.publishScore(null);
+    // Any machine session ends without a result; another machine than `home` switches back to it.
+    this.director.onIdleReset();
     this.idle.touch();
   }
 
@@ -796,10 +934,13 @@ export class Game {
     });
     machine.events.on('award', (award) => {
       if (award.demo) return;
-      const added = this.deps.collection.getState().addPrize(award.typeId, award.prizeId);
+      // Bridge boxes, session prizes: the machine counts towards its "prizes won here".
+      const added = this.deps.collection.getState().addPrize(award.typeId, award.prizeId, this.director.machineId);
       if (added) ui.setState({ prize: { typeId: award.typeId, isNew: added.isNew, count: added.count } });
     });
     machine.events.on('abort', (e) => log('info', 'round', `round ${e.roundId} aborted: ${e.reason}`));
+    // Item scores, two-step stages, session clocks and ends (machines other than classic).
+    this.director.bind();
     controller.events.on('recovered', (e) => log('warn', 'round', `watchdog forced ${e.phase} in round ${e.roundId}`));
     controller.events.on('clawTouch', (e) => {
       audio.playSfx('claw_touch', { volume: e.onToy ? 0.9 : 0.6 });
@@ -815,13 +956,13 @@ export class Game {
     controller.events.on('liftStarted', (e) => {
       audio.playSfx('claw_lift');
       const toy = this.core.grip.target;
-      // The character squeals as it leaves the pile (each character has its own voice).
-      if (e.holding && toy) audio.playCharacter(toy.asset.id, 'lift', this.voiceOptions(toy, 0.25));
+      // The character squeals as it leaves the pile (each character has its own voice); items do not.
+      if (e.holding && toy && !toy.item) audio.playCharacter(toy.asset.id, 'lift', this.voiceOptions(toy, 0.25));
     });
     controller.events.on('slipped', (e) => {
       audio.playSfx('slip');
-      audio.playCharacter(e.toy.asset.id, 'slip', this.voiceOptions(e.toy, 0));
-      if (this.toyPosition(e.toy, _p)) this.burstAt('slip', _p, rarityOf(e.toy.asset.id));
+      if (!e.toy.item) audio.playCharacter(e.toy.asset.id, 'slip', this.voiceOptions(e.toy, 0));
+      if (this.toyPosition(e.toy, _p)) this.burstAt('slip', _p, rarityOf(prizeTypeOf(e.toy)));
     });
     controller.events.on('prizeDetected', (e) => this.onPrizeExit(e.roundId, e.toy));
     controller.events.on('aimTick', (e) => {
@@ -855,7 +996,7 @@ export class Game {
 
   /** Render position of a toy (interpolated), falling back to its physics pose. */
   private toyPosition(toy: ToyBody, out: Vector3): Vector3 | null {
-    if (this.toyVisuals.positionOf(toy, out)) return out;
+    if (toy.item ? this.itemVisuals?.positionOf(toy, out) : this.toyVisuals.positionOf(toy, out)) return out;
     const p = toy.pose.pos;
     return out.set(p[0]!, p[1]!, p[2]!);
   }
@@ -889,28 +1030,32 @@ export class Game {
   private onPrizeExit(roundId: number, toy: ToyBody): void {
     const { audio } = this.deps;
     const demo = this.core.machine.demo;
-    const tier = rarityOf(toy.asset.id);
+    // The character won: the plush itself, or the one printed on a machine's box (the bridge).
+    const typeId = prizeTypeOf(toy);
+    const tier = rarityOf(typeId);
+    // Where the prize leaves the field: the machine's opening (classic: the chute exit, same numbers as ever).
+    const exit = this.director.exitPos();
     audio.playSfx('chute_drop');
     this.celebrate = Math.max(this.celebrate, TIER_LED[tier]);
-    const award = this.settleRound(roundId, 'won', toy.asset.id, demo);
+    const award = this.settleRound(roundId, 'won', typeId, demo);
     // Ask for the claim code now, so it is usually ready when the win card appears.
-    this.requestReward(roundId, toy.asset.id, demo);
+    this.requestReward(roundId, typeId, demo);
     const streak = award ? award.streak : 0;
     // The light show escalates with the tier: celebrate() starts the 'win' show for epic and the
     // 'jackpot' show for legendary by itself; common and rare get particles and a flash only.
     // A ×3 combo earns the jackpot show whatever the tier.
-    this.safeFx(() => this.fx.celebrate(tier, EXIT_POS));
+    this.safeFx(() => this.fx.celebrate(tier, exit));
     if (tier !== 'legendary' && award !== null && award.comboMultiplier >= 3) this.safeFx(() => this.fx.lightShow('jackpot'));
-    this.burstAt('score', EXIT_POS, tier);
-    if (streak >= 2) this.burstAt('combo', EXIT_POS, tier, Math.min(2, 0.6 + streak * 0.25));
+    this.burstAt('score', exit, tier);
+    if (streak >= 2) this.burstAt('combo', exit, tier, Math.min(2, 0.6 + streak * 0.25));
     // Tier-aware win sound (stinger, sparkle / confetti / firework, jackpot fanfare) and the
     // character's own happy voice; a streak adds the combo hit.
     audio.playWin(this.themeId, tier, demo ? { volume: 0.7 } : undefined);
-    audio.playCharacter(toy.asset.id, 'win', this.voiceOptions(toy, 0));
+    if (CHARACTER_VOICES[this.director.genre].win) audio.playCharacter(typeId, 'win', this.voiceOptions(toy, 0));
     if (streak >= 2) audio.playSfx('combo', { delay: 0.5 });
     this.winSoundRound = roundId;
     if (award) {
-      const at = this.toScreen(EXIT_POS);
+      const at = this.toScreen(exit);
       if (at) this.addPopup(at, award);
       this.publishScore(award);
     }
@@ -922,7 +1067,7 @@ export class Game {
     if (already) return null;
     const prize = this.deps.ui.getState().prize;
     const facts = this.core.grip.facts;
-    return this.scores.settle({
+    const input = {
       roundId,
       outcome,
       typeId,
@@ -930,7 +1075,11 @@ export class Game {
       firstCatch: !demo && outcome === 'won' && !!prize?.isNew && prize.typeId === typeId,
       grip: facts ? { centering: facts.centering, fingers: facts.fingers } : null,
       demo,
-    });
+    };
+    // Today's pick (never classic) multiplies the points of a machine scored like classic (the bridge).
+    const bonus = this.director.bonusFor(demo);
+    if (bonus === 1) return this.scores.settle(input);
+    return this.scores.settleScored(roundId, demo, applyDailyBonus(scoreRound(input, this.scores.totals(demo).streak), bonus));
   }
 
   /** Hands a win to the prize-claim flow (it ignores demo rounds and themes without rewards). */
@@ -989,6 +1138,8 @@ export class Game {
 
   private onResult(result: RoundResult): void {
     const { ui, audio } = this.deps;
+    // Items machines (shelf, rush) settle their tries, sessions and prizes in the director.
+    if (this.director.onResult(result)) return;
     // Slips and empty grabs are scored here; a win was already scored when the prize passed the exit.
     if (result.outcome !== 'won') {
       const award = this.settleRound(result.roundId, result.outcome, result.targetTypeId, result.demo);
@@ -1011,7 +1162,7 @@ export class Game {
       }
       // The prize lands in the bin (demo rounds show it too).
       const toy = result.targetToyId ? this.core.phys.toys.get(result.targetToyId) : undefined;
-      if (toy && this.toyPosition(toy, _p)) this.burstAt('drop', _p.setY(_p.y + 0.06), rarityOf(toy.asset.id));
+      if (toy && this.toyPosition(toy, _p)) this.burstAt('drop', _p.setY(_p.y + 0.06), rarityOf(prizeTypeOf(toy)));
     }
     // The win sound normally played when the prize passed the exit; this only covers a win the exit
     // event did not report.
@@ -1034,7 +1185,8 @@ export class Game {
     } else {
       this.lossStreak++;
       audio.playSfx('empty_grab');
-      this.emitGuide('empty_grab', result);
+      // The bridge reports its progress instead (classic: the empty grab line).
+      this.emitGuide(this.director.missEvent(result), result);
     }
   }
 
@@ -1056,6 +1208,7 @@ export class Game {
     }
     this.applyPendingLayout();
     this.toyVisuals.sync(this.core.phys.toys.values());
+    this.itemVisuals?.sync(this.core.phys.toys.values());
     if (this.applied.graphics.reflections !== 'static') this.stage.requestEnvironmentRefresh();
     this.deps.ui.setState({ pendingChange: this.pendingRebuild });
   }
@@ -1071,6 +1224,7 @@ export class Game {
         await this.loadTheme(next);
         this.core.phys.removeAllToys();
         this.toyVisuals.clear();
+        this.itemVisuals?.clear();
         this.themeId = next;
         this.themeVersion++;
         this.rewards.reset();
@@ -1104,6 +1258,7 @@ export class Game {
     const stale = this.library.assets(this.themeId).filter((a) => before.get(a.id) !== this.library.customEntry(a.id)?.fileKey);
     this.core.phys.removeAllToys();
     this.toyVisuals.clear();
+    this.itemVisuals?.clear();
     this.populate();
     if (this.cabinet) this.toyVisuals.setDisplay(this.cabinet.displaySlots, this.library.assets(this.themeId));
     if (stale.length > 0) {
@@ -1182,6 +1337,9 @@ export class Game {
     const reward = this.deps.ui.getState().reward;
     const at = { roundId: machine.roundId, demo: machine.demo, phone: this.hud.controls !== null, now: Date.now(), outcome: result?.outcome };
     if (scannableQrOnScreen(reward, at)) facts.reward = { qr: true, options: reward.options };
+    // Machines other than classic: what the guide may say about the machine (classic facts carry none).
+    const machineFacts = this.director?.facts();
+    if (machineFacts) facts.machine = machineFacts;
     return facts;
   }
 
@@ -1356,6 +1514,8 @@ export class Game {
     // Authoritative gameplay / scene values only ever come from applied settings.
     const committedDiff = diffSettings(prevCommitted, committed);
     if (committedDiff.length === 0) return;
+    // A change of the current genre's settings rebuilds the machine at the next fitting boundary.
+    this.director.onSettingsChanged(committedDiff);
     if (committedDiff.some((p) => p.startsWith('gameplay.'))) {
       this.core.setParams(this.roundParams(committed));
       this.core.phys.setToyFriction(committed.gameplay.toyFriction);
@@ -1449,6 +1609,8 @@ export class Game {
       this.updateFlow(dt);
       this.updateAudio(dt);
     }
+    // Machine switches waiting for a boundary, the initials timeout, the attract cycle.
+    this.director.update();
     if (this.pendingLayout && (this.layoutTimer -= dt) <= 0) this.applyPendingLayout();
     // Idle reset: wall clock, also while paused by a dialog. A player round that is still running counts as activity.
     // A running calibration countdown counts as activity too: somebody stands in front of the camera.
@@ -1467,6 +1629,7 @@ export class Game {
     this.toyVisuals.heldToy = grip.holding() ? grip.target : null;
     if (this.toyVisuals.heldToy) core.claw.gripCenter(_v);
     this.toyVisuals.update(alpha, paused ? 0 : dt, paused ? [] : grip.contacts, this.frameImpacts, FIXED_DT);
+    this.itemVisuals?.update(alpha, paused ? 0 : dt);
     if (this.toyVisuals.heldToy) this.updateGripLocal(this.toyVisuals.heldToy);
     this.clawVisual?.update(alpha);
     this.updateAim();
@@ -1525,13 +1688,19 @@ export class Game {
     switch (m.phase) {
       case 'READY':
       case 'AIMING':
-        if (idle > 12 && this.time - this.lastHintAt > 25) {
+        if (idle > 12 && this.time - this.lastHintAt > 25 && this.director.allowHint()) {
           this.lastHintAt = this.time;
           this.emitGuide(this.lossStreak >= 2 ? 'aim_help' : 'idle_hint');
         }
         break;
       case 'RESULT': {
         this.resultTimer += dt;
+        // Items machines: the next try follows by itself while the session goes on; the session card waits.
+        const advance = this.director.autoAdvance();
+        if (advance !== undefined) {
+          if (advance !== null && this.resultTimer > advance) this.playAgain();
+          break;
+        }
         const result = this.deps.ui.getState().result;
         if (result && result.outcome !== 'won') {
           // A miss never blocks: the next round is ready almost immediately.
@@ -1555,7 +1724,7 @@ export class Game {
     const { machine: m, grip } = this.core;
     const held = this.toyVisuals.heldToy;
     if (held && this.toyPosition(held, _p)) {
-      const tier = rarityOf(held.asset.id);
+      const tier = rarityOf(prizeTypeOf(held));
       // A successful lift: the toy really rose while held (GripMonitor's "lifted" milestone).
       if (grip.contactLevel === 'lifted' && this.liftShown !== m.roundId) {
         this.liftShown = m.roundId;
@@ -1638,6 +1807,12 @@ export class Game {
     this.lastImpactSfx = 0.09;
     const volume = Math.min(1, 0.25 + best.strength * 0.22);
     const pan = Math.max(-1, Math.min(1, best.toy.pose.pos[0]! * 1.6));
+    // Machine fixtures and items have their own mapping onto the existing sounds (src/app/machineSfx.ts).
+    const mapped = impactSfx(best.against, best.toy.item);
+    if (mapped) {
+      audio.playSfx(mapped.name, { volume: volume * mapped.volume, pan, pitch: mapped.pitch });
+      return;
+    }
     let name: SfxName = 'plush_land';
     if (best.against === 'glass') name = 'glass_tap';
     else if (best.against === 'bin') name = 'prize_out';
@@ -1796,6 +1971,7 @@ export class Game {
           if (i % 12 === 0) this.updateFlow(FIXED_DT * 12);
         }
         this.toyVisuals.sync(this.core.phys.toys.values());
+        this.itemVisuals?.sync(this.core.phys.toys.values());
       },
       /** Moves the claw above (x, z) instantly (only between rounds). */
       placeClaw: (x: number, z: number) => {
@@ -1836,10 +2012,20 @@ export class Game {
           presentation: def.module.presentation,
           session: this.core.session.snapshot(),
           rules: this.core.controller.rules?.debugState?.() ?? null,
+          director: this.director.debugState(),
+          ui: this.deps.ui.getState().machine,
         };
       },
-      /** Resolves when the switch has finished (false when it was refused). */
-      selectMachine: (id: string) => Promise.resolve(isMachineId(id) ? this.selectMachine(id) : false),
+      /**
+       * Resolves when the switch has finished (false when it was refused). `includeUnavailable`
+       * (tests) also lets machines that are not offered yet be picked (as machineDebug.allowUnavailable).
+       */
+      selectMachine: async (id: string, options?: { includeUnavailable?: boolean }): Promise<boolean> => {
+        if (!isMachineId(id)) return false;
+        if (options?.includeUnavailable) this.director.setAllowUnavailable(true);
+        if (!this.selectMachine(id)) return false;
+        return this.director.whenSwitched();
+      },
       /** Test hooks of the machines; each call counts as input like the rest of the API. */
       machineDebug: {
         /** An impulse (N·s) on the bridge box, or else on the first item (tests only). */
@@ -1866,14 +2052,21 @@ export class Game {
           this.idle.touch();
           return [...this.core.phys.toys.values()].filter((t) => t.item).map((t) => ({ id: t.id, look: t.item!.look, pos: Array.from(t.pose.pos) }));
         },
+        /** Tests: machines whose genre has landed may be selected although they are not offered yet. */
+        allowUnavailable: (on = true): void => {
+          this.idle.touch();
+          this.director.setAllowUnavailable(on);
+        },
+        /** Points booked for items tries, one entry per try (round id, items, total). */
+        settlements: () => {
+          this.idle.touch();
+          return this.director.settlements();
+        },
       },
-      /** Local rankings of a machine (filled in with the machine persistence). */
-      rankings: (id?: string): { initials: string; score: number }[] => {
-        void id;
-        return [];
-      },
-      /** Today's pick (null until the daily pick exists). */
-      dailyPick: (): string | null => null,
+      /** The local top 10 of a machine (default: the one being played). */
+      rankings: (id?: string): { initials: string; score: number; at: number; difficulty: string }[] => (id === undefined || isMachineId(id) ? this.director.rankings(id) : []),
+      /** Today's pick (null when off or when no machine but classic is offered). */
+      dailyPick: (): string | null => this.director.dailyPick(),
     };
     // Automation that drives the game through this API plays the role of a player: every call
     // counts as input for the idle reset (a slow software-rendered test run must not be reset to
@@ -1902,6 +2095,8 @@ export class Game {
     for (const type of ACTIVITY_EVENTS) window.removeEventListener(type, this.onActivity, { capture: true });
     for (const type of AUDIO_UNLOCK_EVENTS) window.removeEventListener(type, this.onAudioGesture, { capture: true });
     for (const off of this.offs) off();
+    this.director?.dispose();
+    this.itemVisuals?.dispose();
     this.toyVisuals?.dispose();
     this.effects?.dispose();
     this.clawVisual?.dispose();
