@@ -33,6 +33,3 @@ export function classicDigests(): Record<string, string> {
   }
   return out;
 }
-
-// `npx tsx tests/unit/scene/classicCabinetDigest.ts` prints the digests (to record them on an untouched tree).
-if (process.argv[1]?.endsWith('classicCabinetDigest.ts')) console.log(JSON.stringify(classicDigests(), null, 2));
