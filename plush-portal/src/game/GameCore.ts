@@ -95,6 +95,13 @@ export class GameCore {
     const def = options.machine ?? resolveMachine('classic');
     this.stack = this.build(def, 1, options.binFloorY, options.toyFriction);
     this.configureMachine(def);
+    this.placeClawAtHome(def);
+  }
+
+  /** The claw is built at the classic home; a machine with another home starts there (classic: untouched). */
+  private placeClawAtHome(def: ResolvedMachine): void {
+    const home = def.geometry.home;
+    if (home.x !== CLAW.homeX || home.z !== CLAW.homeZ) this.claw.reset(home.x, home.z);
   }
 
   /** phys → claw → grip → controller → field: the classic construction order. */
@@ -145,10 +152,8 @@ export class GameCore {
     old.phys.dispose();
     this.stack = this.build(def, old.epoch + 1, binFloorY, toyFriction);
     this.configureMachine(def);
-    // The claw is built at the classic home; a machine with another home starts there (before the
-    // fill settles, so the field comes to rest around the claw where it will be).
-    const home = def.geometry.home;
-    if (home.x !== CLAW.homeX || home.z !== CLAW.homeZ) this.claw.reset(home.x, home.z);
+    // Before the fill settles, so the field comes to rest around the claw where it will be.
+    this.placeClawAtHome(def);
     this.populate(ctx.assets, ctx.seed);
     // No controller.resetRound(): the stack is fresh (nothing to release) and a claw reset now
     // would move the claw out of the rest pose the fill just settled it into.

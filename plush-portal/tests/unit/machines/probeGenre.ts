@@ -109,6 +109,8 @@ export class ProbeRules implements TryRules {
   readonly seenPhases: RoundPhase[] = [];
   tries = 0;
   ropeAtLift = 0;
+  /** Tests may install a two-step input mapping. */
+  filterInput?: TryRules['filterInput'];
   private retracting = false;
   private settleFrom = { x: 0, z: 0 };
   private box: ToyBody | null = null;
