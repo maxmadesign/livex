@@ -54,8 +54,10 @@ function useKeyboard(): void {
         return;
       }
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') {
-        // Let Enter / Space activate a focused button instead of also grabbing.
-        if ((e.target as HTMLElement | null)?.tagName === 'BUTTON') return;
+        // Let Enter / Space activate a focused control (button, link, field) instead of also grabbing
+        // or pressing PLAY AGAIN: a focused claim link on the win card must open, not drop the code.
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.('button, a[href], [role="button"], [role="link"], input, select, textarea, summary, [contenteditable="true"]')) return;
         e.preventDefault();
         if (e.repeat) return;
         const phase = app.ui.getState().phase;

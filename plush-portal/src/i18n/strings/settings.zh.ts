@@ -397,6 +397,7 @@ export const settingsZh: Record<string, string> = {
   'rewards.status.canIssue': '这台展机可以生成领取码。',
   'rewards.status.cannotIssue': '此浏览器无法生成领取码：只有展机本身（或使用管理员令牌）才可以。',
   'rewards.status.modeOff': '领取码已关闭：结果卡不显示二维码。',
+  'rewards.lockWarn': '设置尚未锁定：展台前的任何人都能改掉领奖链接或 swag 链接。开展前请在「系统 → 锁定完整设置」里开启，并设置 PIN。',
   'rewards.refresh': '重新检查',
   'rewards.staffPage': '打开工作人员页面',
   'rewards.preview': '预览结果卡',

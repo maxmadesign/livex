@@ -58,7 +58,7 @@ const setReward = (page: Page, options: 'both' | 'prize' | 'swag') =>
     (p, o) => {
       const roundId = p.state().roundId;
       p.game.deps.ui.setState({
-        reward: { state: 'ready', roundId, code: 'TEST0000', url: 'http://127.0.0.1/c/TEST0000', reach: 'loopback', options: o, expiresAt: null, visibleUntil: Date.now() + 60_000, reason: null },
+        reward: { state: 'ready', roundId, code: 'TEST0000', url: 'http://192.0.2.2:8788/c/TEST0000', reach: 'lan', options: o, expiresAt: null, visibleUntil: Date.now() + 60_000, reason: null },
       });
       return roundId;
     },

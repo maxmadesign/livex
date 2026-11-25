@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRewardClient, failureFromResponse, randomSessionId, validIssueResponse, type IssueInput } from '../../../src/rewards/client';
+import { ISSUE_TIMEOUT_MS, createRewardClient, failureFromResponse, randomSessionId, validIssueResponse, type IssueInput } from '../../../src/rewards/client';
 import { CODE_ALPHABET, REWARD_LIMITS, type IssueResponseBody } from '../../../src/rewards/protocol';
 
 const INPUT: IssueInput = {
@@ -67,7 +67,7 @@ describe('reward client: issue', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it('gives up after the timeout (about 4 s) and reports offline', async () => {
+  it('gives up after the timeout and reports offline', async () => {
     vi.useFakeTimers();
     try {
       const fetchImpl = vi.fn(
@@ -78,7 +78,7 @@ describe('reward client: issue', () => {
       );
       const client = createRewardClient({ fetchImpl: fetchImpl as unknown as typeof fetch });
       const pending = client.issue(INPUT);
-      await vi.advanceTimersByTimeAsync(3900);
+      await vi.advanceTimersByTimeAsync(ISSUE_TIMEOUT_MS - 100);
       let settled = false;
       void pending.then(() => (settled = true));
       await vi.advanceTimersByTimeAsync(0);

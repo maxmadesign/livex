@@ -7,32 +7,14 @@
  * and the brand status says so. Nothing else has to change when the files arrive.
  */
 import type { Lang, ThemeId } from '../core/types';
+import { GTC_KIT } from './kitGtc';
+import { NVIDIA_PALETTE } from './palette';
+
+export { NVIDIA_PALETTE } from './palette';
 
 export const BRAND_IDS = ['gtc', 'neutral'] as const;
 export type BrandId = (typeof BRAND_IDS)[number];
 
-/**
- * NVIDIA core palette (web values). `green`, `black` and `white` are the brand colours; the greys
- * are neutral steps. `greenDeep` / `greenLight` are derived shades for pressed states, 3D shading
- * and emitted light only: never use them to recolour a logo.
- */
-export const NVIDIA_PALETTE = {
-  green: '#76B900',
-  black: '#000000',
-  white: '#FFFFFF',
-  gray950: '#0D0D0D',
-  gray900: '#1A1A1A',
-  gray800: '#262626',
-  gray700: '#333333',
-  gray600: '#4D4D4D',
-  gray500: '#666666',
-  gray400: '#8C8C8C',
-  gray300: '#B3B3B3',
-  gray200: '#CCCCCC',
-  gray100: '#EEEEEE',
-  greenDeep: '#5A8F00',
-  greenLight: '#A4D65E',
-} as const;
 export type BrandPalette = { readonly [K in keyof typeof NVIDIA_PALETTE]: string };
 
 export interface LogoSlot {
@@ -78,38 +60,8 @@ export interface BrandKit {
   namesAllowed: boolean;
 }
 
-const GTC_DIR = 'assets/brand/gtc';
-
 export const BRAND_KITS: Readonly<Record<BrandId, BrandKit>> = Object.freeze({
-  gtc: {
-    id: 'gtc',
-    theme: 'gpu',
-    eventName: 'GTC',
-    hostName: 'NVIDIA',
-    themeName: { en: 'NVIDIA GTC', zh: 'NVIDIA GTC', ja: 'NVIDIA GTC' },
-    palette: NVIDIA_PALETTE,
-    logo: {
-      official: [`${GTC_DIR}/gtc-logo.svg`, `${GTC_DIR}/gtc-logo.png`],
-      placeholder: `${GTC_DIR}/gtc-logo.placeholder.svg`,
-      aspect: 2.46,
-      clearSpace: 0.5,
-    },
-    hostLogo: {
-      official: [`${GTC_DIR}/nvidia-logo.svg`, `${GTC_DIR}/nvidia-logo.png`],
-      placeholder: null,
-      aspect: 3.2,
-      clearSpace: 0.5,
-    },
-    font: {
-      family: 'NVIDIA Sans',
-      files: [
-        { weight: 400, url: `${GTC_DIR}/fonts/NVIDIASans-Regular.woff2` },
-        { weight: 700, url: `${GTC_DIR}/fonts/NVIDIASans-Bold.woff2` },
-      ],
-      fallback: "'Inter Variable', 'Inter', 'Helvetica Neue', Arial, sans-serif",
-    },
-    namesAllowed: true,
-  },
+  gtc: GTC_KIT,
   /** The original "GPU Party" identity (no real event, host or logo); used for public demo builds. */
   neutral: {
     id: 'neutral',

@@ -397,6 +397,7 @@ export const settingsJa: Record<string, string> = {
   'rewards.status.canIssue': 'このキオスクはコードを発行できます。',
   'rewards.status.cannotIssue': 'このブラウザではコードを発行できません。発行できるのはキオスクのマシン本体（または管理者トークン）だけです。',
   'rewards.status.modeOff': '受け取りコードはオフです：結果カードにQRコードは出ません。',
+  'rewards.lockWarn': '設定がロックされていません。ブースの誰でも受け取りリンクやグッズのリンクを変更できます。開場前に「システム → すべての設定をロック」をPIN付きでオンにしてください。',
   'rewards.refresh': 'もう一度確認',
   'rewards.staffPage': 'スタッフページを開く',
   'rewards.preview': 'カードをプレビュー',

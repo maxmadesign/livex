@@ -2,7 +2,7 @@ import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
@@ -31,24 +31,57 @@ export default defineConfig(async ({ command, mode }) => {
   // requests a missing official logo or font (a 404 in the console). Live in dev, a snapshot in builds.
   const { BRAND_FILES_PATH, brandFilesJson } = await import('./server/brandFiles.js');
   const publicDir = path.join(root, 'public');
+  // Public demo copies (VITE_BRAND=neutral) must not carry a real event's names or marks, not even
+  // unused: the GTC kit data is swapped for a stand-in, the GTC dialogue pools are dropped from the
+  // line banks, and assets/brand/gtc/ is left out of the build and of its file listing.
+  const neutralBuild = (process.env.VITE_BRAND ?? '').trim().toLowerCase() === 'neutral';
+  const listBrandFiles = () => {
+    const json = brandFilesJson(publicDir);
+    if (!neutralBuild) return json;
+    const { files } = JSON.parse(json) as { files: string[] };
+    return JSON.stringify({ files: files.filter((f) => !f.startsWith('assets/brand/gtc/')) });
+  };
+  const neutralBundle: Plugin = {
+    name: 'plush-neutral-bundle',
+    apply: 'build',
+    // Before the TypeScript transform, which reprints the source and loses the layout matched below.
+    enforce: 'pre',
+    transform(code, id) {
+      if (!neutralBuild || !/[\\/]src[\\/]ai[\\/]lines[\\/](en|zh|ja)\.ts$/.test(id)) return null;
+      // Brand pools are written as `      gtc: [ ... ],` blocks (or on one line) inside each situation.
+      const stripped = code.replace(/^ {6}gtc: \[\n[\s\S]*?^ {6}\],\n/gm, '').replace(/^ {6}gtc: \[.*\],\n/gm, '');
+      return { code: stripped, map: null };
+    },
+    closeBundle() {
+      if (!neutralBuild) return;
+      rmSync(path.join(outDirAbs, 'assets', 'brand', 'gtc'), { recursive: true, force: true });
+    },
+  };
+  let outDirAbs = path.join(root, 'dist');
   const brandFiles: Plugin = {
     name: 'plush-brand-files',
+    configResolved(config) {
+      outDirAbs = path.resolve(config.root, config.build.outDir);
+    },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if ((req.url ?? '').split('?')[0] !== `${server.config.base}${BRAND_FILES_PATH}`) return next();
         res.setHeader('content-type', 'application/json; charset=utf-8');
         res.setHeader('cache-control', 'no-cache');
-        res.end(brandFilesJson(publicDir));
+        res.end(listBrandFiles());
       });
     },
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: BRAND_FILES_PATH, source: brandFilesJson(publicDir) });
+      this.emitFile({ type: 'asset', fileName: BRAND_FILES_PATH, source: listBrandFiles() });
     },
   };
   return {
-  plugins: [react(), brandFiles],
+  plugins: [react(), brandFiles, neutralBundle],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      ...(neutralBuild ? [{ find: /^\.\/kitGtc$/, replacement: path.join(root, 'src', 'brand', 'kitGtc.neutral.ts') }] : []),
+    ],
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

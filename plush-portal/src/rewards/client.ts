@@ -32,7 +32,7 @@ export interface RewardClientOptions {
   fetchImpl?: typeof fetch;
   /** '' = same origin (the kiosk page is served by the API server or proxied to it). */
   baseUrl?: string;
-  /** Issue timeout: the code should be ready by the time the win card shows (about 4 s). */
+  /** Issue timeout (ISSUE_TIMEOUT_MS by default). */
   issueTimeoutMs?: number;
   statusTimeoutMs?: number;
   /** Session id override (tests); by default one random id per page load. */
@@ -51,7 +51,13 @@ export interface RewardClient {
   issue(input: IssueInput): Promise<RewardResult<IssueResponseBody>>;
 }
 
-export const ISSUE_TIMEOUT_MS = 4000;
+/**
+ * The issue request may take this long. The code is usually issued in milliseconds, but the timer
+ * also runs while the kiosk's main thread is busy rendering (software GL, a weak GPU): with 4 s a
+ * code the server had stored was reported as unavailable. A late answer for a round that has moved
+ * on is ignored by the flow anyway.
+ */
+export const ISSUE_TIMEOUT_MS = 8000;
 const STATUS_TIMEOUT_MS = 6000;
 const REACHES: readonly ClaimReach[] = ['external', 'lan', 'loopback'];
 
@@ -143,6 +149,8 @@ export function createRewardClient(options: RewardClientOptions = {}): RewardCli
       try {
         data = await response.json();
       } catch {
+        // The timeout fired while the body was still arriving: the server was too slow, not wrong.
+        if (controller.signal.aborted) return { ok: false, reason: 'offline' };
         data = null;
       }
       if (!response.ok) return { ok: false, reason: failureFromResponse(response.status, data) };

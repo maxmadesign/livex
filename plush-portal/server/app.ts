@@ -218,7 +218,7 @@ export function createApp(deps: AppDeps): Hono {
   // Requests that announce a foreign origin are refused outright (CORS headers alone would still let them run)…
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('origin');
-    if (origin && !originAllowed(c, origin)) throw new ApiFailure(403, 'forbidden', 'This origin is not allowed to use the AI proxy.');
+    if (origin && !originAllowed(c, origin)) throw new ApiFailure(403, 'forbidden', 'This origin is not allowed to use this API.');
     await next();
   });
   // …and allowed cross-origin browsers get the CORS headers they need.

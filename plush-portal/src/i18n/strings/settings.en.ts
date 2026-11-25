@@ -403,6 +403,7 @@ export const settingsEn: Record<string, string> = {
   'rewards.status.canIssue': 'This kiosk can issue codes.',
   'rewards.status.cannotIssue': 'This browser cannot issue codes: only the kiosk machine itself (or an admin token) can.',
   'rewards.status.modeOff': 'Prize codes are off: win cards show no QR code.',
+  'rewards.lockWarn': 'Settings are not locked: anyone at the booth could change the claim or swag links. Turn on System → Lock full settings (with a PIN) before the doors open.',
   'rewards.refresh': 'Check again',
   'rewards.staffPage': 'Open staff page',
   'rewards.preview': 'Preview card',

@@ -157,6 +157,7 @@ export function RewardsTab() {
   const mode = useSettings((s) => s.rewards.mode);
   const claimUrl = useSettings((s) => s.rewards.claimUrl);
   const swagUrl = useSettings((s) => s.rewards.swagUrl);
+  const locked = useSettings((s) => s.system.lockSettings);
   const { status, refresh } = useRewardsStatus();
   const [preview, setPreview] = useState(false);
   const closePreview = useCallback(() => setPreview(false), []);
@@ -222,6 +223,12 @@ export function RewardsTab() {
         </p>
       ) : null}
       {mode === 'off' ? <p className="pp-note">{t('rewards.status.modeOff')}</p> : null}
+      {mode !== 'off' && !locked ? (
+        // Unlocked settings let anyone at the booth point later QR codes or the swag link elsewhere.
+        <p className="pp-note warn" role="note" data-testid="rewards-lock-warn">
+          {t('rewards.lockWarn')}
+        </p>
+      ) : null}
       <div className="pp-actions">
         <button type="button" className="pp-btn small soft" onClick={refresh} disabled={status.loading} data-testid="rewards-refresh">
           {t('rewards.refresh')}
