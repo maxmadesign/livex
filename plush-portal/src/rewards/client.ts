@@ -179,7 +179,13 @@ export function createRewardClient(options: RewardClientOptions = {}): RewardCli
         claimUrl: input.claimUrl.trim(),
         swagUrl: input.swagUrl.trim(),
       };
-      const request = call('POST', '/api/rewards/issue', body, options.issueTimeoutMs ?? ISSUE_TIMEOUT_MS, validIssueResponse);
+      const timeoutMs = options.issueTimeoutMs ?? ISSUE_TIMEOUT_MS;
+      // One retry after a timeout or a dropped connection. The server keys codes on session + round
+      // id, so the retry gets the code the first attempt may already have stored (repeated: true)
+      // and can never mint a second one; a busy kiosk (slow rendering) then still shows its code.
+      const request = call('POST', '/api/rewards/issue', body, timeoutMs, validIssueResponse).then((first) =>
+        !first.ok && first.reason === 'offline' ? call('POST', '/api/rewards/issue', body, timeoutMs, validIssueResponse) : first,
+      );
       issued.set(input.roundId, request);
       return request;
     },

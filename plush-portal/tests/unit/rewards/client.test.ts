@@ -57,14 +57,32 @@ describe('reward client: issue', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry a failed round either (a retry could mint a second code)', async () => {
+  it('retries a dropped request once, then never again for the same round', async () => {
+    // The server keys codes on session + round id, so the single retry can only get the same code.
     const fetchImpl = vi.fn(async () => {
       throw new TypeError('network down');
     });
     const client = createRewardClient({ fetchImpl: fetchImpl as unknown as typeof fetch });
     expect(await client.issue(INPUT)).toEqual({ ok: false, reason: 'offline' });
     expect(await client.issue(INPUT)).toEqual({ ok: false, reason: 'offline' });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('a retry after a timeout returns the code the server already stored', async () => {
+    const answer = { code: 'ABCD2345', url: 'http://192.0.2.2:8788/c/ABCD2345', reach: 'lan', issuedAt: new Date(0).toISOString(), expiresAt: new Date(3_600_000).toISOString(), options: 'both', repeated: true };
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls++;
+      if (calls === 1) throw new DOMException('aborted', 'AbortError');
+      return new Response(JSON.stringify(answer), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const client = createRewardClient({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const result = await client.issue(INPUT);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.body.code).toBe('ABCD2345');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const bodies = fetchImpl.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1].body);
+    expect(bodies[0]).toBe(bodies[1]);
   });
 
   it('gives up after the timeout and reports offline', async () => {
@@ -78,13 +96,15 @@ describe('reward client: issue', () => {
       );
       const client = createRewardClient({ fetchImpl: fetchImpl as unknown as typeof fetch });
       const pending = client.issue(INPUT);
-      await vi.advanceTimersByTimeAsync(ISSUE_TIMEOUT_MS - 100);
+      // The first attempt times out, the single retry times out too.
+      await vi.advanceTimersByTimeAsync(2 * ISSUE_TIMEOUT_MS - 100);
       let settled = false;
       void pending.then(() => (settled = true));
       await vi.advanceTimersByTimeAsync(0);
       expect(settled).toBe(false);
       await vi.advanceTimersByTimeAsync(200);
       expect(await pending).toEqual({ ok: false, reason: 'offline' });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
