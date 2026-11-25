@@ -566,7 +566,7 @@ export const settingsSpec = {
       seconds: num(75, 30, 120, 5, 'round', 's'),
       pieces: num(44, 24, 48, 2, 'rebuild'),
       /** Raw gem value per run that earns a prize; 0 = never. */
-      rewardValue: num(600, 0, 5000, 50, 'round'),
+      rewardValue: num(700, 0, 5000, 50, 'round'),
     },
   },
   camera: {

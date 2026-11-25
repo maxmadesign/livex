@@ -5,17 +5,19 @@
  * after the run ends, demo rounds that never make a run, the step-time budget and a clean switch
  * back to classic.
  */
+import { Vector3 } from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RoundResult } from '../../../src/core/types';
 import type { GameCore } from '../../../src/game/GameCore';
-import { RUSH_DEFAULTS, RUSH_PIECES, RushRules, rushAim, rushModule } from '../../../src/game/machines/rush';
+import { RUSH_DEFAULTS, RUSH_PIECES, RUSH_SCOOP, RushRules, rushAim, rushModule } from '../../../src/game/machines/rush';
 import { resolveMachine } from '../../../src/game/machines/registry';
 import type { ResolvedMachine, RushParams, SessionSnapshot } from '../../../src/game/machines/types';
 import type { ItemScore, PrizeAward } from '../../../src/game/RoundMachine';
 import { isFreeSpot } from '../../../src/game/ToyField';
 import { CLASSIC_FIELD, validateGeometry } from '../../../src/physics/fieldGeometry';
 import { CHUTE, CLAW, FIXED_DT } from '../../../src/physics/fieldSpec';
-import type { ToyBody } from '../../../src/physics/PhysicsWorld';
+import { ClawRig, fingerTipAt, fitScoop } from '../../../src/physics/ClawRig';
+import { PhysicsWorld, RAPIER, initRapier, type ToyBody } from '../../../src/physics/PhysicsWorld';
 import { idle, inspectWorld, makeCore, playRound, roundParams, themeAssets } from '../game/harness';
 import { counts, poseHash } from './goldenScenario';
 
@@ -100,7 +102,9 @@ describe('rush machine', () => {
     for (const seed of [11, 28, 45, 62]) {
       const c = await rush(seed);
       c.field.fill(themeAssets('sakura'), seed);
-      const seconds = c.field.settle(3);
+      // As GameCore settles a fill: the claw hangs from its cable meanwhile (left alone it would
+      // drop onto the pile, scoop first).
+      const seconds = c.field.settle(3, () => c.claw.preStep(FIXED_DT), () => c.claw.postStep(FIXED_DT));
       expect(seconds, `seed ${seed}`).toBeLessThan(3);
       expect(c.phys.maxToySpeed()).toBeLessThan(0.02);
     }
@@ -119,6 +123,83 @@ describe('rush machine', () => {
     expect(big.field.onField()).toHaveLength(48);
     const ruby = big.field.onField().find((t) => t.item?.look === 'gemRuby')!;
     expect(ruby.item!.size[0]).toBeCloseTo(2 * 0.038 * 1.2, 9);
+  });
+});
+
+describe('rush scoop', () => {
+  /** True when a ray straight down the claw's axis, from inside the cup, meets a claw part. */
+  function floorUnderAxis(c: GameCore): boolean {
+    const hub = c.claw.hub.translation();
+    const ray = new RAPIER.Ray({ x: hub.x, y: hub.y - 0.06, z: hub.z }, { x: 0, y: -1, z: 0 });
+    const hit = c.phys.world.castRay(ray, 0.3, true, undefined, undefined, undefined, undefined, (col) => c.phys.clawColliders.has(col.handle));
+    return hit !== null;
+  }
+
+  it('only the rush claw carries one; classic, bridge and shelf claws are as they were', { timeout: 60_000 }, async () => {
+    const c = await rush(7);
+    const s = c.claw.scoop!;
+    expect(s).not.toBeNull();
+    expect(s.spec).toEqual(RUSH_SCOOP);
+    expect(s.petals.map((p) => p.finger)).toEqual([0, 1, 2]);
+    // Three original colliders per finger plus the petal's wall plates and floor strips.
+    for (const f of c.claw.fingers) expect(f.colliders).toHaveLength(3 + RUSH_SCOOP.segments + RUSH_SCOOP.floorSegments);
+    expect(s.radius).toBeCloseTo(fingerTipAt(RUSH_SCOOP.closedAngle).radius, 12);
+    for (const id of ['classic', 'bridge', 'shelf'] as const) {
+      const other = await makeCore({ theme: 'sakura', seed: 7, machine: resolveMachine(id, undefined, { includeUnavailable: true }) });
+      cores.push(other);
+      expect(other.claw.scoop, id).toBeNull();
+      for (const f of other.claw.fingers) expect(f.colliders, id).toHaveLength(3);
+    }
+  });
+
+  it('fitScoop works before or after the claw is built, and only once', async () => {
+    await initRapier();
+    const before = new PhysicsWorld({ binFloorY: -0.6, toyFriction: 1 });
+    fitScoop(before, RUSH_SCOOP);
+    const a = new ClawRig(before);
+    expect(a.scoop).not.toBeNull();
+    const after = new PhysicsWorld({ binFloorY: -0.6, toyFriction: 1 });
+    const b = new ClawRig(after);
+    expect(b.scoop).toBeNull();
+    fitScoop(after, RUSH_SCOOP);
+    const colliders = after.world.colliders.len();
+    fitScoop(after, { ...RUSH_SCOOP, segments: 5 });
+    expect(after.world.colliders.len()).toBe(colliders);
+    expect(b.scoop!.spec.segments).toBe(RUSH_SCOOP.segments);
+    for (const p of [before, after]) p.dispose();
+  });
+
+  it('the fingers stop at the closed cup, the petals then close over the axis, and open clear of it', { timeout: 60_000 }, async () => {
+    const c = await rush(7);
+    expect(floorUnderAxis(c)).toBe(false);
+    c.claw.setFingers(0);
+    idle(c, 1);
+    for (const f of c.claw.fingers) expect(f.angle).toBeCloseTo(RUSH_SCOOP.closedAngle, 1);
+    const tip = new Vector3();
+    const hub = c.claw.hubPose.pos;
+    for (let i = 0; i < 3; i++) {
+      c.claw.fingerTip(i, tip);
+      expect(Math.hypot(tip.x - hub[0]!, tip.z - hub[2]!)).toBeCloseTo(c.claw.scoop!.radius, 2);
+    }
+    expect(floorUnderAxis(c)).toBe(true);
+    c.claw.setFingers(1);
+    idle(c, 1);
+    expect(floorUnderAxis(c)).toBe(false);
+  });
+
+  it('a centred grab cages more than one piece on average (the bare claw: under one)', { timeout: 180_000 }, async () => {
+    const got: number[] = [];
+    for (const seed of [11, 28]) {
+      const c = await rush(seed);
+      for (let i = 0; i < 10; i++) {
+        c.session.end('abandoned'); // single grabs, not a run
+        got.push(pilotTry(c, i).result.machine!.items.length);
+        idle(c, 0.35);
+        c.field.clearBin();
+      }
+    }
+    const mean = got.reduce((a, b) => a + b, 0) / got.length;
+    expect(mean).toBeGreaterThanOrEqual(1.2);
   });
 });
 

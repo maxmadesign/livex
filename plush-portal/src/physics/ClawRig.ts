@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from 'three';
 import { approach, clamp } from '../core/math';
 import { BodyPose, RAPIER, type PhysicsWorld } from './PhysicsWorld';
 import { CLAW, FIXED_DT, GROUP, groups } from './fieldSpec';
@@ -74,6 +74,81 @@ const _q2 = new Quaternion();
 const UP = new Vector3(0, 1, 0);
 
 /**
+ * A scoop fitted to the finger tips (Sparkle Rush, docs/design/machines.md section 2.7): every
+ * finger carries one curved petal, a wall on an arc around the claw's axis plus a floor plate
+ * reaching in towards the axis. The fingers stop closing at `closedAngle`, where the three petals
+ * meet as a cup under the hub (radius = the finger tips' distance from the axis at that angle).
+ * While the claw is open the petals stay within the bare claw's reach (about 0.10 m from the axis)
+ * and their floor plates hang lowest at their inner edges; closing slides those edges in along the
+ * floor and under what lies between the fingers. Only a machine that asks for it gets a scoop
+ * (`fitScoop`): classic, bridge and shelf never create one.
+ */
+export interface ScoopSpec {
+  /** Finger hinge angle (rad) at which the closed petals form the cup; the fingers close no further. */
+  closedAngle: number;
+  /** Half the angle (rad) of the arc each petal covers around the claw's axis (π/3 = a closed ring). */
+  halfAngle: number;
+  /** Flat wall plates per petal (an arc approximated by tangent plates). */
+  segments: number;
+  /** Floor strips per petal (radial plates fanned over the petal's arc). */
+  floorSegments: number;
+  /** Wall height above the floor plates (m). */
+  wallHeight: number;
+  /** Where the floor plates end, measured from the claw's axis in the closed pose (m). */
+  floorInner: number;
+  /** Slope of the floor plates (rad): their outer end is higher, so the closed cup is a shallow cone. */
+  floorTilt: number;
+  /** Half the thickness of a wall or floor plate (m). */
+  thickness: number;
+  /** Mass of the three petals together (kg). */
+  mass: number;
+  friction: number;
+  floorFriction: number;
+}
+
+/** One petal: the transform from the closed cup's frame (the hub's frame) into its finger body's frame. */
+export interface ScoopPetal {
+  finger: number;
+  /** The knuckle in the hub frame (the finger body's origin). */
+  knuckle: Vector3;
+  /** Hub frame (closed cup pose) → finger body frame, applied after subtracting `knuckle`. */
+  toFinger: Quaternion;
+}
+
+export interface FittedScoop {
+  spec: Readonly<ScoopSpec>;
+  /** The cup's radius in the closed pose (m): the finger tips' distance from the axis at `closedAngle`. */
+  radius: number;
+  /** Height of the floor plates' underside below the hub centre in the closed pose (m, negative). */
+  floorY: number;
+  petals: ScoopPetal[];
+}
+
+/** Distance of a finger tip from the claw's axis and its height below the hub centre at hinge angle `angle`. */
+export function fingerTipAt(angle: number): { radius: number; y: number } {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    radius: CLAW.knuckleRadius + CLAW.tip[0] * c + CLAW.tip[1] * s,
+    y: -CLAW.knuckleDrop - (CLAW.tip[1] * c - CLAW.tip[0] * s),
+  };
+}
+
+/** Claws by world, so a machine can fit an attachment to the claw that hangs in its world. */
+const RIGS = new WeakMap<PhysicsWorld, ClawRig>();
+const PENDING_SCOOP = new WeakMap<PhysicsWorld, ScoopSpec>();
+
+/**
+ * Fits a scoop to the claw of this world: now, or as soon as the claw is built. A machine calls
+ * it while its stack is built (rush: `createField`); nothing else ever does.
+ */
+export function fitScoop(phys: PhysicsWorld, spec: ScoopSpec): void {
+  const rig = RIGS.get(phys);
+  if (rig) rig.fitScoop(spec);
+  else PENDING_SCOOP.set(phys, { ...spec });
+}
+
+/**
  * The physical claw: a kinematic trolley on the gantry, a cable of variable
  * length and a dynamic hub with three hinged fingers driven by force-limited
  * motors. The hub hangs from the trolley through a one-sided spring (a rope:
@@ -121,6 +196,9 @@ export class ClawRig {
   private fingerRate = CLAW_TUNING.fingerSpeed;
   /** Seconds the fingers have been (nearly) motionless. */
   fingerStillTime = 0;
+
+  /** The scoop a machine fitted (null on every claw that was not asked for one). */
+  scoop: FittedScoop | null = null;
 
   private readonly castShape = new RAPIER.Ball(0.04);
 
@@ -190,6 +268,96 @@ export class ClawRig {
     }
     this.applyMotorSettings();
     this.reset(CLAW.homeX, CLAW.homeZ);
+    RIGS.set(phys, this);
+    const pending = PENDING_SCOOP.get(phys);
+    if (pending) {
+      PENDING_SCOOP.delete(phys);
+      this.fitScoop(pending);
+    }
+  }
+
+  /**
+   * Adds the scoop's petals to the fingers (see ScoopSpec). Each petal is `segments` wall plates on
+   * an arc of the cup's radius and `floorSegments` floor strips reaching in towards the axis, laid
+   * out in the closed pose and fixed to the finger body, so they swing open and closed with it. The petals
+   * of different fingers never collide with each other (claw parts only meet statics and toys).
+   * Once per claw; a second call is ignored.
+   */
+  fitScoop(spec: ScoopSpec): void {
+    if (this.scoop) return;
+    const s = { ...spec };
+    const tip = fingerTipAt(s.closedAngle);
+    const radius = tip.radius;
+    // The floor plates' underside is level with the bottom of the finger tip pads.
+    const floorY = tip.y - CLAW.tipRadius;
+    const n = Math.max(1, Math.round(s.segments));
+    const step = (2 * s.halfAngle) / n;
+    // Half of a petal's mass in its floor, the other half spread over its wall plates.
+    const petalMass = s.mass / 3;
+    // The walls stand on the outer end of the (tilted) floor.
+    const wallBase = floorY + (radius - s.floorInner) * Math.tan(s.floorTilt);
+    const tilt = new Quaternion();
+    const petals: ScoopPetal[] = [];
+    const basis = new Matrix4();
+    const tangent = new Vector3();
+    const dir = new Vector3();
+    const local = new Vector3();
+    const rot = new Quaternion();
+    for (const f of this.fingers) {
+      const knuckle = new Vector3(f.radial.x * CLAW.knuckleRadius, -CLAW.knuckleDrop, f.radial.z * CLAW.knuckleRadius);
+      // The closed pose is the finger turned by closedAngle about its hinge: undo that turn.
+      const toFinger = new Quaternion().setFromAxisAngle(f.axis, -s.closedAngle);
+      petals.push({ finger: f.index, knuckle, toFinger });
+      const attach = (desc: RAPIER.ColliderDesc, mass: number, friction: number) => {
+        desc.setMass(mass).setFriction(friction).setRestitution(0).setCollisionGroups(CLAW_GROUPS);
+        const collider = this.phys.world.createCollider(desc, f.body);
+        f.colliders.push(collider);
+        this.phys.clawColliders.add(collider.handle);
+      };
+      // Wall: flat plates tangent to the arc, standing on the floor.
+      for (let k = 0; k < (s.wallHeight > 0 ? n : 0); k++) {
+        const az = f.azimuth - s.halfAngle + step * (k + 0.5);
+        dir.set(Math.cos(az), 0, Math.sin(az));
+        // Plate frame: x along the arc, y up, z out from the axis (hub frame, closed pose).
+        tangent.crossVectors(dir, UP).normalize();
+        rot.setFromRotationMatrix(basis.makeBasis(tangent, UP, dir)).premultiply(toFinger);
+        const wallR = radius + s.thickness;
+        local.set(dir.x * wallR, wallBase + s.wallHeight / 2, dir.z * wallR).sub(knuckle).applyQuaternion(toFinger);
+        attach(
+          RAPIER.ColliderDesc.cuboid(radius * Math.tan(step / 2), s.wallHeight / 2, s.thickness)
+            .setTranslation(local.x, local.y, local.z)
+            .setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w }),
+          petalMass / (2 * n),
+          s.friction,
+        );
+      }
+      // Floor: radial strips from the wall in to floorInner (they overlap towards the axis).
+      const nf = Math.max(1, Math.round(s.floorSegments));
+      const floorStep = (2 * s.halfAngle) / nf;
+      for (let k = 0; k < nf; k++) {
+        const az = f.azimuth - s.halfAngle + floorStep * (k + 0.5);
+        dir.set(Math.cos(az), 0, Math.sin(az));
+        tangent.crossVectors(dir, UP).normalize();
+        // Turning about the tangent by +floorTilt lifts the outer end (dir → dir·cos + up·sin).
+        tilt.setFromAxisAngle(tangent, s.floorTilt);
+        rot.setFromRotationMatrix(basis.makeBasis(tangent, UP, dir)).premultiply(tilt).premultiply(toFinger);
+        const mid = (s.floorInner + radius) / 2;
+        const midY = floorY + s.thickness + ((radius - s.floorInner) / 2) * Math.tan(s.floorTilt);
+        local.set(dir.x * mid, midY, dir.z * mid).sub(knuckle).applyQuaternion(toFinger);
+        attach(
+          RAPIER.ColliderDesc.cuboid(radius * Math.sin(floorStep / 2), s.thickness, (radius - s.floorInner) / (2 * Math.cos(s.floorTilt)))
+            .setTranslation(local.x, local.y, local.z)
+            .setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w }),
+          petalMass / (2 * nf),
+          s.floorFriction,
+        );
+      }
+    }
+    this.scoop = { spec: s, radius, floorY, petals };
+    // From now on the fingers stop at the closed cup.
+    this.fingerGoal = Math.max(this.fingerGoal, s.closedAngle);
+    this.fingerCommand = Math.max(this.fingerCommand, s.closedAngle);
+    this.applyMotorSettings();
   }
 
   private segmentCollider(body: RAPIER.RigidBody, a: Vector3, b: Vector3, radius: number, mass: number): RAPIER.Collider {
@@ -270,7 +438,11 @@ export class ClawRig {
 
   /** open01: 1 = fully open, 0 = fully closed. `speedScale` multiplies the configured closing speed. */
   setFingers(open01: number, speedScale = 1): void {
-    this.fingerGoal = clamp(open01, 0, 1) * CLAW.openAngle;
+    if (this.scoop) {
+      // With a scoop, "closed" is the cup's angle: 0..1 spans closedAngle..openAngle.
+      const closed = this.scoop.spec.closedAngle;
+      this.fingerGoal = closed + clamp(open01, 0, 1) * (CLAW.openAngle - closed);
+    } else this.fingerGoal = clamp(open01, 0, 1) * CLAW.openAngle;
     this.fingerRate = CLAW_TUNING.fingerSpeed * this.params.closeSpeed * speedScale;
     this.fingerStillTime = 0;
   }
@@ -576,5 +748,6 @@ export class ClawRig {
     }
     this.phys.clawColliders.delete(this.hubCollider.handle);
     this.phys.world.removeRigidBody(this.hub);
+    if (RIGS.get(this.phys) === this) RIGS.delete(this.phys);
   }
 }

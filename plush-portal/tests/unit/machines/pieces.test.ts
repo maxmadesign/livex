@@ -141,10 +141,10 @@ describe('session prizes', () => {
     // No legendary character offered: the next lower tier.
     expect(rushReward({ value: 1200 }, p, prints)).toEqual({ typeId: 'sakura.monster' });
     expect(rushReward({ value: 9999 }, { rewardValue: 0 }, prints)).toBeNull();
-    // Default threshold 600 (sweep: about 29 % of Arcade runs reach it).
-    expect(rushModule.defaults.rewardValue).toBe(600);
-    expect(rushModule.sessionReward!({ ...summary([]), value: 599 }, rushModule.defaults, prints)).toBeNull();
-    expect(rushModule.sessionReward!({ ...summary([]), value: 600 }, rushModule.defaults, prints)).toEqual({ typeId: 'sakura.capybara' });
+    // Default threshold 700 (sweep with the scoop: 27 % of 48 Arcade runs reach it).
+    expect(rushModule.defaults.rewardValue).toBe(700);
+    expect(rushModule.sessionReward!({ ...summary([]), value: 699 }, rushModule.defaults, prints)).toBeNull();
+    expect(rushModule.sessionReward!({ ...summary([]), value: 700 }, rushModule.defaults, prints)).toEqual({ typeId: 'sakura.capybara' });
   });
 });
 
