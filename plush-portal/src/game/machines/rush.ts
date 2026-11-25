@@ -12,8 +12,9 @@
  * Outcomes are physical: a piece counts when it really is in the chute (section 2.5).
  */
 import type { RoundPhase } from '../../core/types';
+import { fitScoop, type ScoopSpec } from '../../physics/ClawRig';
 import { CLASSIC_FIELD } from '../../physics/fieldGeometry';
-import { CLAW, FIELD } from '../../physics/fieldSpec';
+import { CLAW, FIELD, FIXED_DT } from '../../physics/fieldSpec';
 import { coinItem, gemItem, type ItemLook, type ItemSpec } from '../../physics/items';
 import type { PhysicsWorld, ToyBody } from '../../physics/PhysicsWorld';
 import type { GameCore } from '../GameCore';
@@ -30,9 +31,12 @@ export const RUSH_DEFAULTS: RushParams = {
   seconds: 75,
   pieces: 44,
   radiusScale: 1,
-  rewardValue: 600,
+  // With the scoop a run collects more (median raw value 645 on Arcade): 700 lets 27 % of 48 pilot
+  // runs earn the prize, 600 would let 69 % (tools/dev/sweeps/rush.ts; the settings default too).
+  rewardValue: 700,
   // The design's quick claw plus a stiffer cable (less swing to wait for before a grab and at the
-  // chute): 13 tries per 75 s run instead of 11-12 (tools/dev/sweeps/rush.ts).
+  // chute): 13 tries per 75 s run instead of 11-12 without the scoop; 12 with it (median of 48 Arcade
+  // runs, range 11-13; tools/dev/sweeps/rush.ts).
   claw: { moveSpeed: 1.2, descendSpeed: 1.25, liftSpeed: 1.25, closeSpeed: 1.2, ropeSwing: 0.5 },
 };
 
@@ -65,8 +69,12 @@ export const RUSH_PIECE_RANGE = { min: 24, max: 48 } as const;
  * guard and the glass. Plain numbers so the sweep (tools/dev/sweeps/rush.ts --tune) can try others.
  */
 export const RUSH_TUNING = {
-  /** Distance between neighbouring cells of the layer (m): a gem's width plus room for a finger tip. */
-  pitch: 0.1,
+  /**
+   * Distance between neighbouring cells of the layer (m): a gem's width plus room for a finger tip.
+   * 9 cm (66 cells for 44 pieces) rather than 10 (56): with the scoop a centred grab then brings
+   * 1.34 pieces instead of 1.22 (32 seeds), neighbours lying within the closing petals' sweep.
+   */
+  pitch: 0.09,
   /** How far the pile reaches beyond the claw's axis limits (the open tips reach about 0.10 m). */
   margin: 0.04,
   /** Clearance of a piece from the glass and the chute guard (isFreeSpot radius). */
@@ -78,6 +86,27 @@ export const RUSH_TUNING = {
   topShare: 0,
   /** Placement jitter around a cell (m). */
   jitter: 0.004,
+};
+
+/**
+ * The scoop on the rush claw (ClawRig.fitScoop, design section 2.7): three curved petals on the
+ * finger tips that close into a shallow cup of about 4 cm radius under the hub. Without it a
+ * centred grab delivered 0.82-0.91 pieces: the bare tips converge under one gem and a neighbour
+ * between two fingers stays behind; with it 1.3 (docs/machines/rush.md, *Caging*). Plain numbers,
+ * like RUSH_TUNING, so the sweep can try others (`--tune scoop.closedAngle=0.12`).
+ */
+export const RUSH_SCOOP: ScoopSpec = {
+  closedAngle: 0.1,
+  halfAngle: 1.0,
+  segments: 2,
+  floorSegments: 2,
+  wallHeight: 0.03,
+  floorInner: 0.005,
+  floorTilt: 0.2,
+  thickness: 0.0015,
+  mass: 0.12,
+  friction: 0.9,
+  floorFriction: 0.9,
 };
 
 /** "Handful": this many pieces in one try earn the bonus. */
@@ -199,20 +228,59 @@ export function pileCells(): { x: number; z: number }[] {
   return cells;
 }
 
-/** A quarter of the gems lie table-down, the rest on a pavilion facet; coins lie flat. Random yaw. */
-function restingRotation(k: RushPiece, rng: () => number): [number, number, number, number] {
+/** The slope of a gem's pavilion (culet depth / girdle radius, src/physics/items.ts gemItem). */
+const PAVILION_SLOPE = 0.86;
+/** A gem lying on a pavilion facet rests with its table tilted by this much (the facet lies flat). */
+const SIDE_TILT = Math.atan(PAVILION_SLOPE);
+
+/**
+ * A quarter of the gems lie table-down, the rest on a pavilion facet; coins lie flat. Random yaw.
+ * Every piece is placed in its resting pose at its resting height, so a fresh pile barely moves
+ * while it settles (a gem tipped further rolled back about a centimetre into its neighbours).
+ */
+function restingPose(k: RushPiece, spec: ItemSpec, rng: () => number): { rot: [number, number, number, number]; y: number } {
   const yaw = yawQuat(rng() * Math.PI * 2);
-  if (k.look === 'coin') return yaw;
-  // Table down (half a turn about x) or tipped onto the side (about 70° about x).
-  if (rng() < 0.25) return mulQuat(yaw, [1, 0, 0, 0]);
-  const tilt = (70 / 180) * Math.PI;
-  return mulQuat(yaw, [Math.sin(tilt / 2), 0, 0, Math.cos(tilt / 2)]);
+  const clear = 0.001;
+  if (k.look === 'coin') return { rot: yaw, y: spec.size[1] / 2 + clear };
+  const r = spec.footprint;
+  // Table down: half a turn about x; the girdle sits one crown height up.
+  if (rng() < 0.25) return { rot: mulQuat(yaw, [1, 0, 0, 0]), y: spec.comHeight + clear };
+  // On a pavilion facet: the girdle centre is the facet line's distance from it above the floor.
+  const y = (r * PAVILION_SLOPE) / Math.hypot(1, PAVILION_SLOPE) + clear;
+  return { rot: mulQuat(yaw, [Math.sin(SIDE_TILT / 2), 0, 0, Math.cos(SIDE_TILT / 2)]), y };
 }
+
+/** The last part of an off-screen settle (s) runs without ItemField's extra damping (RushField.settle). */
+const UNDAMPED_TAIL = 0.75;
 
 export class RushField extends ItemField {
   protected readonly refillShare = 0.5;
   /** Loose gems rock on their facets for a while; a slow rock is at rest for the eye (no stacks to lean). */
   protected override readonly settleSpeed = 0.012;
+
+  /**
+   * ItemField's off-screen settle, then, if the pile is not at rest by the last `UNDAMPED_TAIL`
+   * seconds, plain physics steps for those. Damping every step keeps a piece that is wedged (a coin
+   * pressed 6 mm into the floor under the edge of a ruby, about one fresh pile in thirty at the 9 cm
+   * pitch) from rocking free, so it shivers on until the cap; without it the solver frees it at once.
+   */
+  override settle(maxSeconds = 2.5, preStep?: () => void, postStep?: () => void): number {
+    const damped = super.settle(Math.max(FIXED_DT, maxSeconds - UNDAMPED_TAIL), preStep, postStep);
+    if (this.phys.maxToySpeed() < this.settleSpeed) return damped;
+    const maxSteps = Math.round((maxSeconds - damped) / FIXED_DT);
+    let calm = 0;
+    let ran = 0;
+    while (ran < maxSteps) {
+      preStep?.();
+      this.phys.step();
+      postStep?.();
+      ran++;
+      calm = this.phys.maxToySpeed() < this.settleSpeed ? calm + 1 : 0;
+      if (calm > 30) break;
+    }
+    this.phys.snapPoses();
+    return damped + ran * FIXED_DT;
+  }
   constructor(
     phys: PhysicsWorld,
     options: FieldOptions,
@@ -248,8 +316,9 @@ export class RushField extends ItemField {
       const top = i >= layer;
       const jx = (rng() * 2 - 1) * RUSH_TUNING.jitter;
       const jz = (rng() * 2 - 1) * RUSH_TUNING.jitter;
-      const y = top ? 0.09 + rng() * 0.02 : spec.size[1] / 2 + 0.004;
-      placed.push(this.phys.addItem(spec, this.themeId, [base.x + jx, y, base.z + jz], restingRotation(k, rng)));
+      const pose = restingPose(k, spec, rng);
+      const y = top ? 0.09 + rng() * 0.02 : pose.y;
+      placed.push(this.phys.addItem(spec, this.themeId, [base.x + jx, y, base.z + jz], pose.rot));
     }
     return placed;
   }
@@ -325,7 +394,11 @@ export const rushModule: GenreModule<'rush'> = {
   controls: () => 'joystick',
   roundParams: (base, p) => scaleClaw(base, p.claw),
   createRules: () => new RushRules(),
-  createField: (phys, options, p) => new RushField(phys, options, p),
+  createField: (phys, options, p) => {
+    // The rush claw carries the scoop (fitted while the stack is built, before the first settle).
+    fitScoop(phys, RUSH_SCOOP);
+    return new RushField(phys, options, p);
+  },
   scoreTry: (input) => scoreItemsTry(input, RUSH_SCORE),
   sessionReward: (s, p, prints) => rushReward(s, p, prints),
   aim: (core, demoRound, p) => rushAim(core, demoRound, p),

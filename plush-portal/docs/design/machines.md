@@ -2041,6 +2041,24 @@ acrylic premultiplied path too; (2) the bloom's bright pass ignores non-finite i
 pass (compiled as GLSL ES 3.00 for `isnan`) does the same before tone mapping. So a NaN can reach
 neither the bloom nor the screen; finite colours pass unchanged.
 
+## Implementation notes (WS-S: Sparkle Rush scoop)
+
+The contingency of section 2.7, built because rush missed its caging gate (C5): a scoop on the rush
+claw, the rush retune that goes with it and the scoop's look. Files: `src/physics/ClawRig.ts`
+(`ScoopSpec`, `fitScoop`, `fingerTipAt`), `src/game/machines/rush.ts` (`RUSH_SCOOP`, the pile),
+`src/scene/ClawVisual.ts` (the petals), `tools/dev/sweeps/rush.ts`,
+`tests/unit/machines/rush.test.ts`; every measured number is in `docs/machines/rush.md`. Rush stays
+`available: false` (it is not drawn yet). Classic is untouched: golden trace identical, round trip
+and contract tests green. The shelf sweep gives WS-C's numbers again (Arcade 0.85 items per try, 56 %
+of tries score, 41 % of sessions reach 5 boxes).
+
+### Gate results (Arcade, 8 seeds, 48 timed runs, `--difficulty all --perf`)
+
+1.31 pieces per centred grab (bare claw 0.82-0.91), 93 % of run tries score, 12 tries per run
+(11-13), step p95 0.93 ms, 27 % of runs reach `rewardValue` 700, no late try, nothing scored
+without a carry, no anomaly. Easy passes every gate too. Skill: 1.13 pieces per centred grab and
+21 % of runs reach 700 (both fail); the rest passes.
+
 ### Deviations from the design
 
 | # | Design | Built | Why |
@@ -2222,3 +2240,33 @@ pass with the flags flipped.
   play views of all three machines on desktop, portrait32, portrait86 simulated and phone, Sakura and
   GPU Party), `play/` (a bridge box dropped through the pit, shelf and rush grabs), `previews/` (the
   lobby-card pictures).
+
+| S1 | "A hub attachment collider (a scoop disc)" (2.7). | **Three curved petals on the finger tips** (`ClawRig.fitScoop`): each finger carries wall plates on an arc around the axis and floor strips reaching in towards it; the fingers stop closing at `closedAngle` (0.10 rad), where the petals meet as a shallow cup of 3.9 cm radius under the hub. | Nothing fixed to the hub can get under a gem lying on the floor; only the closing finger tips sweep the floor. Measured: a disc 12 cm under the hub, 6 cm radius, 1.00 per centred grab against 0.91 bare (32 grabs each). Open, each floor strip hangs lowest at its inner edge, so the claw lands on those edges; closing drives them in along the floor and under what lies between the fingers. The closed petals are the "cup under the hub". |
+| S2 | The attachment is built by WS-A's `PhysicsWorld` / `ClawRig` when a machine asks. | `fitScoop(phys, spec)` fits the scoop to the claw that hangs in `phys` (at once, or as soon as the claw is built); `rushModule.createField` calls it while GameCore builds the rush stack. `PhysicsWorld`, `FieldGeometry`, GameCore and the registry are unchanged. | No contract change: rush's geometry stays `CLASSIC_FIELD` itself (the classic dressing draws it), and no other machine reaches the call. |
+| S3 | — | With a scoop, `setFingers(open01)` spans `closedAngle … openAngle` instead of `0 … openAngle`; without one it is the old line, in its own branch. | The cup is the closed pose; closing further pushes the petals through each other. |
+| S4 | Pile on a 10 cm hex pitch; side-lying gems at 70°. | 9 cm pitch (66 cells for 44 pieces); every piece placed in its resting pose at its resting height (side-lying gems at atan 0.86 = 40.7°, the facet flat). | With the scoop the pitch sets how many neighbours lie within the closing petals: 1.34 per centred grab at 9 cm, 1.22 at 10 cm (320 grabs each). A gem placed at 70° rolled back to 40.7°, about 9 mm, into its now closer neighbours; in the resting pose a fresh pile is at rest at once. |
+| S5 | ItemField's damped off-screen settle. | `RushField.settle` ends with up to 0.75 s of undamped steps when the damped part has not brought the pile to rest. | The per-step damping kept a coin wedged 6 mm into the floor under a ruby's edge shivering until the cap (one fresh pile in 32); undamped, the solver frees it in a few steps. Putting such pieces to sleep was tried and dropped: a body forced asleep inside an awake island fell through the floor. |
+| S6 | `rewardValue` 600 (WS-C, without the scoop). | **700**: `RUSH_DEFAULTS` and the settings default `machines.rush.rewardValue`, with `scaffold.test.ts` and `pieces.test.ts`. | The scoop raises a run's haul (Arcade median raw value 645). 48 Arcade runs: 600 → 69 %, 650 → 48 %, 700 → 27 % (gate 25-35 %); the settings step is 50. |
+| S7 | — | The rush sweep plays 6 timed runs per seed (48 per preset), not 3. | The prize share's standard error over 24 runs is about 9 points, as wide as its band: the first three runs of each seed gave 21 %, all six 27 %. |
+| S8 | — | The rush unit test and the sweep settle a fresh fill as GameCore does, with the claw hanging from its cable. | `field.settle` alone let the claw drop onto the pile, scoop first. |
+| S9 | Step "about 1 ms with the pile awake". | Busy-phase p95 0.93-1.01 ms with the scoop (0.23-0.27 ms bare), under a load average of 8-10 on this 4-CPU box. | Pieces in the cup touch several plates at once (cuboid against convex hull). Two wall plates and two floor strips per petal (12 colliders) cost about a fifth less than three each, with the same caging. |
+| S10 | Claw scale as WS-C's (move ×1.2 …). | Unchanged. | Move ×1.3 did not add a try per run (12, range 11-13). |
+
+### Known behaviour (measured, not fixed)
+
+- About one centred grab in ten lands with a petal on a neighbouring piece; the cup then closes
+  above the target (0.3-1.0 pieces on those grabs). The floor tilt (a shallow cone) cut these
+  landings most; narrower petals cut them further but caught less overall.
+- In about one grab in 70-150 a piece wedges between a petal and the lower part of its finger rod
+  and rides along to the next try; that try's SETTLING then runs to its 5 s cap.
+- Skill (more cable swing, weaker grip assist) lands off target more often: 1.13 per centred grab.
+
+### For the integrator
+
+- Flip `rush` to `available: true` in `src/game/machines/registry.ts` once the pile is drawn;
+  nothing else in the genre waits.
+- `ClawVisual` draws the petals whenever `rig.scoop` is set; the visual is recreated after a machine
+  switch (section 2.4), which picks them up. They use `mats.clawCap` with a chrome bead along the rim
+  at High and Ultra.
+- Outside this workstream's files: `src/settings/spec.ts` (`machines.rush.rewardValue` 600 → 700) and
+  `tests/unit/machines/scaffold.test.ts` (the same number).

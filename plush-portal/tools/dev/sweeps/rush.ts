@@ -5,9 +5,10 @@
  * Per difficulty and seed:
  *   - centred grabs: a fresh pile, 10 grabs aimed exactly at the attract pilot's targets (no aim
  *     noise): how many pieces one well-aimed grab delivers;
- *   - timed runs: `tries` / 13 runs of `seconds` (75) on simulated time, played by the pilot's
- *     strategy with Gaussian aim noise, the app's 0.35 s auto-advance hold in RESULT and the bin
- *     cleared at every boundary like Game does; PLAY AGAIN (newSession) between runs.
+ *   - timed runs: 6 runs per 40 `tries` (48 per preset by default) of `seconds` (75) on simulated
+ *     time, played by the pilot's strategy with Gaussian aim noise, the app's 0.35 s auto-advance
+ *     hold in RESULT and the bin cleared at every boundary like Game does; PLAY AGAIN (newSession)
+ *     between runs.
  *
  * Every scored piece must have been carried (its centre of mass rose above the 20 cm chute guard
  * at some point): a piece pushed along the floor can never get in.
@@ -19,7 +20,7 @@
  */
 import { THEME_IDS, type ThemeId } from '../../../src/core/types';
 import type { GameCore } from '../../../src/game/GameCore';
-import { RUSH_DEFAULTS, RUSH_TUNING, rushAim, rushModule } from '../../../src/game/machines/rush';
+import { RUSH_DEFAULTS, RUSH_SCOOP, RUSH_TUNING, rushAim, rushModule } from '../../../src/game/machines/rush';
 import type { MachineDef, ResolvedMachine, RushParams, SessionSnapshot } from '../../../src/game/machines/types';
 import { CHUTE, CLAW } from '../../../src/physics/fieldSpec';
 import { idle, inspectWorld, makeCore, playRound, themeAssets, type Difficulty } from '../../../tests/unit/game/harness';
@@ -28,7 +29,12 @@ import type { Gate, SweepKit, SweepOptions, SweepReport } from '../item-sweep';
 /** Game's auto-advance after a try while a run has time left (design section 2.6). */
 const HOLD = 0.35;
 const CENTRED_GRABS = 10;
-const TRIES_PER_RUN_GUESS = 13;
+/**
+ * Timed runs per seed for every 40 `--tries`. Six, so 48 runs per preset: the share of runs that
+ * reach `rewardValue` has a standard error of about 9 points over 24 runs (as wide as its 25-35 %
+ * band) and about 6.5 over 48.
+ */
+const RUNS_PER_40_TRIES = 6;
 
 /** The rush machine built from its module (available or not), with parameter overrides. */
 export function rushMachine(params: Record<string, unknown>): ResolvedMachine {
@@ -49,8 +55,10 @@ function trackHeights(core: GameCore, heights: Map<string, number>): void {
 
 export async function run(o: SweepOptions, kit: SweepKit): Promise<SweepReport[]> {
   for (const [k, v] of Object.entries(o.tune)) {
-    if (!(k in RUSH_TUNING)) throw new Error(`unknown rush tuning key ${k} (have ${Object.keys(RUSH_TUNING).join(', ')})`);
-    (RUSH_TUNING as Record<string, number>)[k] = v;
+    // `scoop.<key>` tunes the claw's scoop (RUSH_SCOOP), any other key the pile (RUSH_TUNING).
+    const [table, key] = k.startsWith('scoop.') ? [RUSH_SCOOP as unknown as Record<string, number>, k.slice(6)] : [RUSH_TUNING as Record<string, number>, k];
+    if (!(key in table)) throw new Error(`unknown rush tuning key ${k} (have ${Object.keys(RUSH_TUNING).join(', ')}, ${Object.keys(RUSH_SCOOP).map((n) => `scoop.${n}`).join(', ')})`);
+    table[key] = v;
   }
   const themes = THEME_IDS.filter((t) => themeAssets(t).length > 0) as ThemeId[];
   const reports: SweepReport[] = [];
@@ -71,7 +79,7 @@ async function sweep(o: SweepOptions, kit: SweepKit, difficulty: Difficulty, the
   const settleSeconds: number[] = [];
   let lateTries = 0;
   let uncarried = 0;
-  const runsPerSeed = Math.max(1, Math.round(o.tries / TRIES_PER_RUN_GUESS));
+  const runsPerSeed = Math.max(1, Math.round((o.tries / 40) * RUNS_PER_40_TRIES));
   const t0 = performance.now();
 
   for (let si = 0; si < o.seeds.length; si++) {
@@ -82,7 +90,8 @@ async function sweep(o: SweepOptions, kit: SweepKit, difficulty: Difficulty, the
     // Centred grabs on a fresh pile.
     {
       const core = await makeCore({ theme, seed, difficulty, machine });
-      settleSeconds.push(core.field.settle(3));
+      // As GameCore settles a fill (the claw hangs from its cable meanwhile).
+      settleSeconds.push(core.settle(3));
       for (let g = 0; g < CENTRED_GRABS; g++) {
         // Single grabs, not a run: the clock is restarted each time (the pile stays as it is).
         core.session.end('abandoned');
@@ -200,7 +209,7 @@ async function sweep(o: SweepOptions, kit: SweepKit, difficulty: Difficulty, the
     rewardTiers: kit.histogram(runs.map((s) => (s.reward ? s.reward.tier : 'none') as unknown as number)),
     settleSeconds: { max: Math.max(...settleSeconds), median: kit.quantile(settleSeconds, 0.5) },
     stepMs: { p50: kit.quantile(steps, 0.5), p95, p99: kit.quantile(steps, 0.99), max: kit.quantile(steps, 1) },
-    params: { radiusScale: p.radiusScale, pieces: p.pieces, claw: p.claw, tune: { ...RUSH_TUNING } },
+    params: { radiusScale: p.radiusScale, pieces: p.pieces, claw: p.claw, tune: { ...RUSH_TUNING }, scoop: { ...RUSH_SCOOP } },
     noise: o.noise,
   };
   console.log(`\n  ${difficulty}: centred ${JSON.stringify(data.centred)} · per try ${JSON.stringify(data.perTry)} · tries per run ${JSON.stringify(data.triesPerRun)}`);

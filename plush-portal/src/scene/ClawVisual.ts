@@ -1,24 +1,26 @@
 import {
   BoxGeometry,
+  BufferGeometry,
   CapsuleGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
+  Float32BufferAttribute,
   Group,
   LatheGeometry,
   Mesh,
   Quaternion,
+  ShapeUtils,
   SphereGeometry,
   TorusGeometry,
   TubeGeometry,
   Vector2,
   Vector3,
-  type BufferGeometry,
   type Material,
   type Texture,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { ClawRig } from '../physics/ClawRig';
+import type { ClawRig, FittedScoop } from '../physics/ClawRig';
 import { CLAW, FIELD } from '../physics/fieldSpec';
 import type { BodyPose } from '../physics/PhysicsWorld';
 import { axisUV, boxUV, TESSELLATION } from './decor';
@@ -40,6 +42,67 @@ function applyPose(target: Group | Mesh, pose: BodyPose, alpha: number): void {
   _q.set(pose.prevRot[0]!, pose.prevRot[1]!, pose.prevRot[2]!, pose.prevRot[3]!);
   _q2.set(pose.rot[0]!, pose.rot[1]!, pose.rot[2]!, pose.rot[3]!);
   target.quaternion.copy(_q).slerp(_q2, alpha);
+}
+
+/**
+ * One petal of the scoop (ClawRig.fitScoop) in the hub frame of the closed cup: a thin shell
+ * revolved about the claw's axis over the petal's arc, a shallow cone of floor rising to a round
+ * wall with a rolled rim, and closed at both ends. Matches the physical plates (floor strips, wall
+ * plates) within a millimetre or two.
+ */
+function scoopPetalGeometry(scoop: FittedScoop, azimuth: number, arcSegments: number): BufferGeometry {
+  const s = scoop.spec;
+  const R = scoop.radius;
+  const t = 2 * s.thickness;
+  const slope = Math.tan(s.floorTilt);
+  const y0 = scoop.floorY;
+  const wallBase = y0 + (R - s.floorInner) * slope;
+  const top = wallBase + s.wallHeight;
+  // Closed profile (radius, height): floor underside out to the wall, up the outside, over the
+  // rolled rim, down the inside and back along the floor's top.
+  const profile: Vector2[] = [new Vector2(s.floorInner, y0), new Vector2(R + t, y0 + (R + t - s.floorInner) * slope), new Vector2(R + t, top)];
+  for (let i = 1; i < 6; i++) {
+    const a = (i / 6) * Math.PI;
+    profile.push(new Vector2(R + t / 2 + (Math.cos(a) * t) / 2, top + (Math.sin(a) * t) / 2));
+  }
+  profile.push(new Vector2(R, top), new Vector2(R, wallBase + t), new Vector2(s.floorInner, y0 + t));
+  // LatheGeometry measures its angle from +Z towards +X; the claw's azimuth from +X towards +Z.
+  const phiStart = Math.PI / 2 - azimuth - s.halfAngle;
+  const shell = new LatheGeometry([...profile, profile[0]!.clone()], arcSegments, phiStart, 2 * s.halfAngle);
+  const parts: BufferGeometry[] = [shell.toNonIndexed()];
+  shell.dispose();
+  // End caps: the profile, flat, at both ends of the arc, facing away from the petal.
+  const tris = ShapeUtils.triangulateShape(profile, []);
+  for (const [end, sign] of [[azimuth - s.halfAngle, -1], [azimuth + s.halfAngle, 1]] as const) {
+    const radial = new Vector3(Math.cos(end), 0, Math.sin(end));
+    const out = new Vector3(-Math.sin(end), 0, Math.cos(end)).multiplyScalar(sign);
+    const pos: number[] = [];
+    const nrm: number[] = [];
+    const uvs: number[] = [];
+    const at = (p: Vector2) => [radial.x * p.x, p.y, radial.z * p.x] as const;
+    for (const [a, b, c] of tris) {
+      let pa = at(profile[a]!);
+      let pb = at(profile[b]!);
+      const pc = at(profile[c]!);
+      // Wind each triangle so that its front faces `out`.
+      _a.set(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]);
+      _b.set(pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]);
+      if (_c.crossVectors(_a, _b).dot(out) < 0) [pa, pb] = [pb, pa];
+      for (const p of [pa, pb, pc]) {
+        pos.push(p[0], p[1], p[2]);
+        nrm.push(out.x, out.y, out.z);
+        uvs.push(p[0] + p[2], p[1]);
+      }
+    }
+    const cap = new BufferGeometry();
+    cap.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    cap.setAttribute('normal', new Float32BufferAttribute(nrm, 3));
+    cap.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    parts.push(cap);
+  }
+  const merged = mergeGeometries(parts, false)!;
+  for (const g of parts) g.dispose();
+  return merged;
 }
 
 /** Helix of `turns` turns (radius r, height h) along +y, as a curve for a tube. */
@@ -259,6 +322,23 @@ export class ClawVisual {
         ferrule.quaternion.setFromUnitVectors(UP, along);
         ferrule.position.copy(curve.getPoint(0.9));
         g.add(pin, ferrule);
+      }
+      const petal = rig.scoop?.petals.find((p) => p.finger === finger.index);
+      if (rig.scoop && petal) {
+        // The scoop's petal rides on this finger: built in the closed cup's frame, moved into the
+        // finger's own frame (origin at the knuckle) exactly as the physics plates are.
+        const shell = scoopPetalGeometry(rig.scoop, finger.azimuth, [8, 12, 18, 24][d]!);
+        shell.translate(-petal.knuckle.x, -petal.knuckle.y, -petal.knuckle.z).applyQuaternion(petal.toFinger);
+        g.add(mesh(shell, mats.clawCap));
+        if (fine) {
+          // A polished bead along the rim.
+          const sp = rig.scoop.spec;
+          const rimY = rig.scoop.floorY + (rig.scoop.radius - sp.floorInner) * Math.tan(sp.floorTilt) + sp.wallHeight + sp.thickness * 2;
+          const rim = new TorusGeometry(rig.scoop.radius + sp.thickness, sp.thickness * 0.9, 6, 24, 2 * sp.halfAngle);
+          rim.rotateX(Math.PI / 2).rotateY(-(finger.azimuth - sp.halfAngle)).translate(0, rimY, 0);
+          rim.translate(-petal.knuckle.x, -petal.knuckle.y, -petal.knuckle.z).applyQuaternion(petal.toFinger);
+          g.add(mesh(rim, mats.chrome, false));
+        }
       }
       this.fingers.push(g);
       this.group.add(g);
