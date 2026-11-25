@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appliedValue, boot, box, click, closeSettings, expectInZone, openSettings, outsideZone, plush, pushStick, settle, start, state, winARound } from './helpers';
 
-const HUD = ['panel', 'dpad', 'stick', 'stick-knob', 'start', 'status', 'panel-menu', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
+// MACHINES (the lobby) leads the panel menu now that more than one machine is offered.
+const HUD = ['panel', 'dpad', 'stick', 'stick-knob', 'start', 'status', 'panel-menu', 'menu-machines', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
 const TABS = ['gameplay', 'themes', 'layout', 'graphics', 'audio', 'ai', 'camera', 'system'];
 /** The top-right "i" is the one deliberate exception: a second way into Settings, outside the reach zone. */
 const ALLOW = ['info-button'];
@@ -18,6 +19,9 @@ async function zoneOf(page: Page, ids: string[]): Promise<Record<string, string>
 
 test.describe('3. portrait86 interactive safe zone (normalised Y 0.25–0.75)', () => {
   test('1080×1920: HUD, tutorial, every settings tab, theme picker, collection and win card stay inside', async ({ page }) => {
+    // Eight settings tabs, the theme picker, the collection and a win at 1080 × 1920 on software GL:
+    // 4.3-5.4 min on this shared 4-CPU box at load 9-10; at load 17-20 two runs ran past 7 min.
+    test.setTimeout(900_000);
     await page.setViewportSize({ width: 1080, height: 1920 });
     await boot(page, { display: 'portrait86', tutorial: true });
     expect((await state(page)).profile).toBe('portrait86');

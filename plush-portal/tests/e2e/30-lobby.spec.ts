@@ -10,13 +10,22 @@ import { aim, box, boot, click, expectInZone, ff, ffUntil, fieldToys, finishRoun
  * On the 86" portrait preset every control of the lobby, the HUD, the initials entry and the session
  * card stays inside the reachable band (normalised y 0.25-0.75), with Chinese labels.
  *
- * The non-classic machines are not offered to players yet (their cabinets are being dressed), so
- * the spec turns on the debug override `machineDebug.allowUnavailable(true)` first.
+ * Every machine is offered to players (registry `available: true`): the spec uses the lobby and the
+ * deck as a player does, without the debug override for machines that are not offered.
  */
 
 /** The machine the game is on once no switch is running. */
 const settled = (page: Page) => plush(page, (p) => `${p.machine().id}/${p.ui().themeBusy}`);
 const machineUi = (page: Page) => plush(page, (p) => p.ui().machine);
+/** The claw's hub on screen (CSS px): where the player looks while aiming and carrying. */
+const clawOnScreen = (page: Page) =>
+  plush(page, (p) => {
+    const cam = p.game.stage.camera;
+    const hub = p.core().claw.hubPose.pos;
+    const v = new cam.position.constructor(hub[0], hub[1], hub[2]).project(cam);
+    const b = document.querySelector('[data-testid="game-canvas"]')!.getBoundingClientRect();
+    return { x: b.left + ((v.x + 1) / 2) * b.width, y: b.top + ((1 - v.y) / 2) * b.height };
+  });
 /** Only the reach exception every spec allows: the corner "i". */
 const ALLOW = ['info-button'];
 
@@ -46,12 +55,10 @@ test.describe('30. machine lobby and session UI', () => {
     test.setTimeout(1_200_000);
     const w = watch(page);
     await boot(page, { display: 'desktop', settings: { system: { attractDemo: false }, rewards: { mode: 'all' }, machines: { shelf: { tries: 2, rewardItems: 1 } } } });
-    // While classic is the only machine offered there is no MACHINES button: the classic HUD as before.
+    // Four machines are offered, so the deck has MACHINES; classic has no session HUD.
     await frames(page, 2);
-    const offered = await plush(page, (p) => p.game.machineCards().length);
-    if (offered <= 1) await expect(page.getByTestId('menu-machines')).toHaveCount(0);
+    expect(await plush(page, (p) => p.game.machineCards().map((c: any) => c.id))).toEqual(['classic', 'bridge', 'shelf', 'rush']);
     await expect(page.getByTestId('session-hud')).toHaveCount(0);
-    await plush(page, (p) => p.machineDebug.allowUnavailable(true));
     const pick: string = await plush(page, (p) => p.dailyPick());
     expect(['bridge', 'shelf', 'rush']).toContain(pick);
 
@@ -159,7 +166,6 @@ test.describe('30. machine lobby and session UI', () => {
     await page.setViewportSize({ width: 1080, height: 1920 });
     await boot(page, { display: 'portrait86', lang: 'zh', settings: { system: { attractDemo: false, language: 'zh' } } });
     expect((await state(page)).profile).toBe('portrait86');
-    await plush(page, (p) => p.machineDebug.allowUnavailable(true));
     await plush(page, (p) => p.game.pressStart());
     expect(await ffUntil(page, ['READY', 'AIMING'], 5)).toMatch(/READY|AIMING/);
 
@@ -214,6 +220,13 @@ test.describe('30. machine lobby and session UI', () => {
     await ff(page, 3);
     const entry = page.getByTestId('initials-entry');
     await expect(entry).toBeVisible({ timeout: 60_000 });
+    // The run ended with the claw waiting in READY: the claw is locked until PLAY AGAIN, and the deck
+    // says so (GRAB down, the joystick off) instead of inviting another try under the card.
+    expect((await state(page)).phase).toBe('READY');
+    await expect(page.getByTestId('grab')).toBeDisabled();
+    await expect(page.getByTestId('stick')).toHaveAttribute('aria-disabled', 'true');
+    // Nor does Momo's idle hint ("move the claw whenever you're ready") come up under the card.
+    expect(await plush(page, (p) => p.game.director.allowHint())).toBe(false);
     // The entry times out after 30 s of wall clock; software rendering at 1080 × 1920 can take that
     // long for a few clicks, so the spec moves the deadline out (the timeout has its unit test).
     await plush(page, (p) => {
@@ -261,7 +274,7 @@ test.describe('30. machine lobby and session UI', () => {
     test.setTimeout(600_000);
     const w = watch(page);
     await boot(page, { display: 'desktop', settings: { system: { attractDemo: false }, machines: { bridge: { controls: 'twoStep' } } } });
-    expect(await plush(page, (p) => p.selectMachine('bridge', { includeUnavailable: true }))).toBe(true);
+    expect(await plush(page, (p) => p.selectMachine('bridge'))).toBe(true);
     expect(await ffUntil(page, ['READY', 'AIMING'], 5)).toMatch(/READY|AIMING/);
     // The two big buttons replace the joystick in its well; the deck has Call staff; the HUD the progress.
     await expect(page.getByTestId('two-step')).toBeVisible();
@@ -292,11 +305,84 @@ test.describe('30. machine lobby and session UI', () => {
     expect(w.consoleErrors).toEqual([]);
   });
 
+  test('phone held sideways: a Tippy Bridge win card is never covered by the session HUD', async ({ page }) => {
+    test.setTimeout(600_000);
+    const w = watch(page);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await boot(page, { display: 'mobile', quality: 'safe', settings: { system: { attractDemo: false } } });
+    expect(await plush(page, (p) => p.selectMachine('bridge'))).toBe(true);
+    expect(await ffUntil(page, ['READY', 'AIMING'], 5)).toMatch(/READY|AIMING/);
+    await expect(page.getByTestId('session-hud')).toHaveAttribute('data-hidden', 'false');
+    // The session panel stays off the claw: on a sideways phone the band under the score is where it
+    // hangs while aiming and carries at full lift, so the panel sits in the column above the joystick.
+    const panel = await box(page, 'session-hud');
+    const stick = await box(page, 'stick');
+    const score = await box(page, 'score-hud');
+    const hub = await clawOnScreen(page);
+    console.log(`phone session panel ${JSON.stringify(panel)}, claw hub ${JSON.stringify(hub)}`);
+    await expect(page.getByTestId('session-hud')).toHaveAttribute('data-place', 'side');
+    expect(hub.x < panel.x || hub.x > panel.x + panel.width || hub.y < panel.y || hub.y > panel.y + panel.height, 'the claw is not under the session panel').toBe(true);
+    expect(panel.y + panel.height, 'above the joystick').toBeLessThanOrEqual(stick.y);
+    expect(panel.x + panel.width <= score.x || panel.y >= score.y + score.height, 'clear of the score').toBe(true);
+    // docs/machines/bridge.md, "Debug impulses": walk the box off the bars, then the grab pays it.
+    const boxY = () => plush(page, (p) => p.machineDebug.itemPoses().find((i: any) => i.look === 'bridgeBox')?.pos[1] ?? -1);
+    let fell = false;
+    for (let attempt = 0; attempt < 3 && !fell; attempt++) {
+      if (attempt > 0) expect(await plush(page, (p) => p.game.machineAction('staff'))).toBe(true);
+      await plush(page, (p) => p.machineDebug.nudge(0.2, 0, 0));
+      await ff(page, 1);
+      for (let k = 0; k < 12 && (await boxY()) > 0; k++) {
+        await plush(page, (p, kk) => (kk % 2 === 0 ? p.machineDebug.nudge(0, 0, 1) : p.machineDebug.nudge(kk % 4 === 1 ? -0.2 : 0.2, 0, 0)), k);
+        await ff(page, 1);
+      }
+      fell = (await boxY()) < 0;
+    }
+    expect(fell).toBe(true);
+    const n = (await results(page)).length;
+    await click(page, 'grab');
+    expect(await finishRound(page, n)).toMatchObject({ outcome: 'won' });
+    await expect(page.getByTestId('result-win')).toBeVisible({ timeout: 60_000 });
+    await settle(page);
+    // On 390 px of height the card reaches the session panel: the card wins (as for the score).
+    const card = await box(page, 'result-win');
+    const hud = await box(page, 'session-hud');
+    const overlap = card.x < hud.x + hud.width && hud.x < card.x + card.width && card.y < hud.y + hud.height && hud.y < card.y + card.height;
+    console.log(`phone bridge win: card ${JSON.stringify(card)}, session HUD ${JSON.stringify(hud)}, overlap ${overlap}`);
+    if (overlap) await expect(page.getByTestId('session-hud')).toHaveAttribute('data-hidden', 'true');
+    // PLAY AGAIN: the next box, the panel back.
+    await click(page, 'result-again');
+    expect(await ffUntil(page, ['READY', 'AIMING'], 10)).toMatch(/READY|AIMING/);
+    await expect(page.getByTestId('session-hud')).toHaveAttribute('data-hidden', 'false');
+
+    // A Sparkle Rush run to time up: its card (or the initials entry) may cover the title row on a
+    // sideways phone, so the score gives way to it, and comes back with the next run.
+    expect(await plush(page, (p) => p.selectMachine('rush'))).toBe(true);
+    expect(await ffUntil(page, ['READY', 'AIMING'], 5)).toMatch(/READY|AIMING/);
+    await expect(page.getByTestId('score-hud')).toHaveAttribute('data-hidden', 'false');
+    // The run's clock panel, too, leaves the claw at its home in the middle in view.
+    const clock = await box(page, 'session-hud');
+    const home = await clawOnScreen(page);
+    expect(home.x < clock.x || home.x > clock.x + clock.width || home.y < clock.y || home.y > clock.y + clock.height, 'the claw is not under the clock panel').toBe(true);
+    const clockBox = await box(page, 'session-clock');
+    expect(clockBox.x + clockBox.width, 'the clock fits its panel').toBeLessThanOrEqual(clock.x + clock.width + 0.5);
+    await oneTry(page);
+    await plush(page, (p) => p.machineDebug.setSessionSeconds(0.3));
+    await ff(page, 3);
+    await expect(page.locator('[data-testid="initials-entry"], [data-testid="session-card"]').first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('score-hud')).toHaveAttribute('data-hidden', 'true');
+    if (await page.getByTestId('initials-entry').count()) await plush(page, (p) => p.game.submitInitials('ABC'));
+    await expect(page.getByTestId('session-card')).toBeVisible({ timeout: 60_000 });
+    await click(page, 'session-again');
+    await expect(page.getByTestId('session-card')).toHaveCount(0);
+    await expect(page.getByTestId('score-hud')).toHaveAttribute('data-hidden', 'false');
+    expect(w.pageErrors).toEqual([]);
+    expect(w.consoleErrors).toEqual([]);
+  });
+
   test('phone held sideways: the lobby’s targets are thumb-sized and on screen', async ({ page }) => {
     test.setTimeout(600_000);
     await page.setViewportSize({ width: 844, height: 390 });
     await boot(page, { display: 'mobile', quality: 'safe', settings: { system: { attractDemo: false } } });
-    await plush(page, (p) => p.machineDebug.allowUnavailable(true));
     await expect(page.getByTestId('menu-machines')).toBeVisible({ timeout: 60_000 });
     const deck = await box(page, 'menu-machines');
     expect(Math.min(deck.width, deck.height)).toBeGreaterThanOrEqual(43.5);
@@ -311,6 +397,24 @@ test.describe('30. machine lobby and session UI', () => {
       expect(b.x + b.width).toBeLessThanOrEqual(844.5);
       expect(b.y + b.height).toBeLessThanOrEqual(390.5);
     }
+    // ◀ from Plush Classic wraps to Sparkle Rush at the far end of the row, ▶ comes back: once the row
+    // has stopped scrolling the end card still has the focus, although it can not sit in the middle.
+    const rowAtRest = async () => {
+      let last = -1;
+      for (let i = 0; i < 60; i++) {
+        const left = await page.getByTestId('lobby-track').evaluate((el) => el.scrollLeft);
+        if (left === last) return left;
+        last = left;
+        await frames(page, 3);
+      }
+      return last;
+    };
+    await click(page, 'lobby-prev');
+    console.log(`phone lobby ◀ from classic: row at ${await rowAtRest()} px`);
+    await expect(page.getByTestId('lobby-card-rush')).toHaveAttribute('data-focused', 'true');
+    await click(page, 'lobby-next');
+    console.log(`phone lobby ▶ back: row at ${await rowAtRest()} px`);
+    await expect(page.getByTestId('lobby-card-classic')).toHaveAttribute('data-focused', 'true');
     await click(page, 'modal-close');
     await expect(page.getByTestId('lobby')).toHaveCount(0);
     // Held upright the menu row is full: MACHINES moves to the top bar; nothing leaves the screen or overlaps.

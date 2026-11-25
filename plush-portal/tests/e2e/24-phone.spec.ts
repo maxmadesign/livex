@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { aim, box, boot, ff, fieldToys, finishRound, plush, results, state, stickPoint, watch, type Box } from './helpers';
+import { aim, box, boot, ff, fieldToys, finishRound, frames, plush, results, state, stickPoint, watch, type Box } from './helpers';
 
 
 /**
@@ -29,7 +29,8 @@ test('24. phone held sideways: thumb-sized controls, a full round played with ta
   expect(layout.controls).toBeTruthy();
 
   // Joystick bottom-left, big button bottom-right; every control on screen, at least 44 px, no overlaps.
-  const ids = ['stick', 'start', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
+  // MACHINES (the lobby: more than one machine is offered) leads the menu row.
+  const ids = ['stick', 'start', 'menu-machines', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help'];
   const boxes: Record<string, Box> = {};
   for (const id of ids) {
     const b = await box(page, id);
@@ -41,6 +42,9 @@ test('24. phone held sideways: thumb-sized controls, a full round played with ta
     expect(Math.min(b.width, b.height), `${id} touch size`).toBeGreaterThanOrEqual(43.5);
   }
   for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) expect(overlaps(boxes[ids[i]!]!, boxes[ids[j]!]!), `${ids[i]} / ${ids[j]}`).toBe(false);
+  const centreY = (b: Box) => b.y + b.height / 2;
+  expect(Math.abs(centreY(boxes['menu-machines']!) - centreY(boxes['menu-settings']!)), 'MACHINES in the menu row').toBeLessThan(2);
+  expect(boxes['menu-machines']!.x, 'MACHINES leads the menu row').toBeLessThan(boxes['menu-settings']!.x);
   const pad = await box(page, 'dpad');
   expect(pad.x + pad.width / 2).toBeLessThan(844 / 2);
   expect(boxes.start!.x + boxes.start!.width / 2).toBeGreaterThan(844 / 2);
@@ -48,6 +52,30 @@ test('24. phone held sideways: thumb-sized controls, a full round played with ta
   const cta = await box(page, 'attract-cta');
   expect(overlaps(cta, pad)).toBe(false);
   expect(overlaps(cta, boxes.start!)).toBe(false);
+
+  // Held upright the menu row is solved for four buttons: MACHINES moves to the top bar, level with
+  // the corner "i", still thumb-sized, on screen and clear of every other control. (Checked before
+  // START: the first START tap asks for full screen, and a full-screen window cannot be resized.)
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => plush(page, (p) => p.game.hud.orientation), { timeout: 60_000 }).toBe('portrait');
+  await frames(page, 2);
+  const upright = ['menu-machines', 'info-button', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help', 'stick', 'start'];
+  const ub: Record<string, Box> = {};
+  for (const id of upright) {
+    const b = await box(page, id);
+    ub[id] = b;
+    expect(b.x, `upright ${id} left`).toBeGreaterThanOrEqual(0);
+    expect(b.y, `upright ${id} top`).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width, `upright ${id} right`).toBeLessThanOrEqual(390.5);
+    expect(b.y + b.height, `upright ${id} bottom`).toBeLessThanOrEqual(844.5);
+    expect(Math.min(b.width, b.height), `upright ${id} touch size`).toBeGreaterThanOrEqual(43.5);
+  }
+  for (let i = 0; i < upright.length; i++) for (let j = i + 1; j < upright.length; j++) expect(overlaps(ub[upright[i]!]!, ub[upright[j]!]!), `upright ${upright[i]} / ${upright[j]}`).toBe(false);
+  expect(Math.abs(centreY(ub['menu-machines']!) - centreY(ub['info-button']!)), 'MACHINES in the top bar').toBeLessThan(ub['info-button']!.height / 2);
+  expect(ub['menu-machines']!.y + ub['menu-machines']!.height, 'the top bar is above the menu row').toBeLessThan(ub['menu-settings']!.y);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect.poll(() => plush(page, (p) => p.game.hud.orientation), { timeout: 60_000 }).toBe('landscape');
+  await frames(page, 2);
 
   // Tap START: a player round, ready to aim.
   await tap(page, 'start');

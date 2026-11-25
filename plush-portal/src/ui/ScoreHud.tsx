@@ -226,6 +226,9 @@ export function ScoreHud({ layout }: { layout: HudLayout }) {
   // a moment before the card): popups and the score keep clear of it.
   const coming = useWinCard(layout, true);
   const showing = useWinCard(layout);
+  // A machine's session card or initials entry (src/ui/machines): on a phone held sideways cards may
+  // cover the title row (cardBounds), so the score gives way there too (the card shows the points).
+  const sessionCard = useUi((s) => s.sessionResult !== null || s.rankEntry !== null);
   const [bump, setBump] = useState(0);
   const lastSession = useRef(score.session);
   useEffect(() => {
@@ -237,7 +240,8 @@ export function ScoreHud({ layout }: { layout: HudLayout }) {
   const multiplier = score.streak >= 2 ? (score.streak >= 4 ? 3 : score.streak === 3 ? 2 : 1.5) : 1;
   const stacked = r.place === 'side';
   // On short screens the win card can reach up to the score: the card (which shows the points) wins.
-  const hidden = showing ? overlaps(showing.geometry, { x: r.x, y: r.y, w: r.w, h: r.h }) : false;
+  const underSessionCard = sessionCard && layout.controls !== null && layout.orientation === 'landscape';
+  const hidden = (showing ? overlaps(showing.geometry, { x: r.x, y: r.y, w: r.w, h: r.h }) : false) || underSessionCard;
   return (
     <>
       <div

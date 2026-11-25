@@ -10,8 +10,8 @@ import { awards, boot, click, collection, ff, ffUntil, finishRound, frames, plus
  * prize with one claim code, and classic still plays and wins after the round trip. A Tippy Bridge
  * drop takes classic's win path with the printed character.
  *
- * The machines are not offered to players yet (their cabinets are not drawn), so the spec uses the
- * debug override (`selectMachine(id, { includeUnavailable: true })`).
+ * Every machine is offered to players now (registry `available: true`), so the spec picks them as a
+ * player's lobby pick would (`Game.selectMachine` through the debug API's promise).
  *
  * PLUSH_GLUE_SHOTS=<folder> also saves screenshots there.
  */
@@ -75,12 +75,11 @@ test.describe('29. machines: app glue', () => {
     const base = await counts(page);
     const before = await collection(page);
     expect((await machine(page)).id).toBe('classic');
-    // Not offered to players yet: refused without the debug override; nothing changed.
-    expect(await plush(page, (p) => p.selectMachine('shelf'))).toBe(false);
-    expect((await machine(page)).id).toBe('classic');
+    // The shelf is offered to players (a lobby card), no debug override needed.
+    expect(await plush(page, (p) => p.game.machineCards().map((c: any) => c.id))).toContain('shelf');
 
     // From attract mode: the switch happens behind the curtain and the player's round starts on the shelf.
-    expect(await plush(page, (p) => p.selectMachine('shelf', { includeUnavailable: true }))).toBe(true);
+    expect(await plush(page, (p) => p.selectMachine('shelf'))).toBe(true);
     const m = await machine(page);
     expect(m).toMatchObject({ id: 'shelf', genre: 'shelf', presentation: 'items', session: { kind: 'tries', state: 'running', triesTotal: 3 } });
     expect(m.ui).toMatchObject({ id: 'shelf', switching: false, plate: { key: 'machines.plate.tries', params: { left: 3, total: 3 } } });
@@ -176,7 +175,7 @@ test.describe('29. machines: app glue', () => {
     const w = watch(page);
     await boot(page, { display: 'desktop', settings: { rewards: { mode: 'all' } } });
     const before = await collection(page);
-    expect(await plush(page, (p) => p.selectMachine('bridge', { includeUnavailable: true }))).toBe(true);
+    expect(await plush(page, (p) => p.selectMachine('bridge'))).toBe(true);
     expect(await machine(page)).toMatchObject({ id: 'bridge', presentation: 'prize', session: { kind: 'open', state: 'running' } });
     expect((await state(page)).phase).toBe('READY');
     // docs/machines/bridge.md, "Debug impulses": nudge the box until it has fallen (READY: no award
@@ -218,6 +217,8 @@ test.describe('29. machines: app glue', () => {
     expect(ui.last.total).toBeGreaterThan(0);
     expect(ui.reward.roundId).toBe(result.roundId);
     expect(['issuing', 'ready', 'unavailable']).toContain(ui.reward.state);
+    // While the win is up the coin plate still names the try that dropped the box (its first).
+    await expect(page.getByTestId('machine-plate')).toHaveText('TRY 1');
     await shot(page, 'bridge-win');
 
     // The idle reset ends the session and switches back to home (classic) in attract mode.

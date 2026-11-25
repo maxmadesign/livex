@@ -35,6 +35,13 @@ function StickWell({ disabled, deck }: { disabled: boolean; deck: MachineDeck })
 const BUSY: ReadonlySet<RoundPhase> = new Set(['DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING']);
 
 /**
+ * A tries / timed session (shelf, rush) has ended and the claw is locked until PLAY AGAIN or MACHINES
+ * on its card. A run that times out while the claw waits in READY stays in READY, so the phase alone
+ * would show GRAB and the joystick as live under the initials entry and the session card.
+ */
+const sessionOver = (s: { machine: { session: { state: string } } }) => s.machine.session.state === 'over';
+
+/**
  * The big context button: START in attract mode, GRAB while aiming, PLAY AGAIN after a win. Drawn as
  * an arcade push button (hud.css): the button is the fixed bezel ring, its `.cap` the plunger that
  * sinks into it when pressed.
@@ -47,6 +54,7 @@ function ActionButton() {
   const paused = useUi((s) => s.paused);
   const result = useUi((s) => s.result);
   const profile = useUi((s) => s.profile);
+  const over = useUi(sessionOver);
   const start = () => {
     // Phones: the first START tap also asks for full screen and a landscape lock (best effort).
     if (profile === 'mobile' && hasCoarsePointer()) requestImmersive();
@@ -76,7 +84,8 @@ function ActionButton() {
       </button>
     );
   }
-  const busy = BUSY.has(phase) || phase === 'RESULT';
+  // A finished tries / timed session locks the claw until PLAY AGAIN: GRAB stays down meanwhile.
+  const busy = BUSY.has(phase) || phase === 'RESULT' || over;
   const label = t('hud.grab');
   return (
     <button type="button" className="pp-btn pp-grab" data-testid="grab" data-busy={busy} onClick={() => app.game.grab()} disabled={paused || busy} onContextMenu={(e) => e.preventDefault()} style={fit(label)}>
@@ -95,9 +104,11 @@ function StatusLine({ deck }: { deck: MachineDeck }) {
   const aim = useUi((s) => s.aimSecondsLeft);
   const pending = useUi((s) => s.pendingChange);
   const restocking = useUi((s) => s.restocking);
+  const over = useUi(sessionOver);
   let text = t(`hud.status.${phase}`);
   if (demo) text = t('hud.demoHint');
   else if (phase === 'ATTRACT') text = t('hud.tapToStart');
+  else if (over) text = t('hud.status.RESULT');
   else if (restocking && (phase === 'READY' || phase === 'AIMING')) text = t('hud.restocking');
   return (
     <div className="pp-status" data-testid="status" data-phase={phase}>
@@ -260,7 +271,8 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
   const phase = useUi((s) => s.phase);
   const demo = useUi((s) => s.demo);
   const paused = useUi((s) => s.paused);
-  const padDisabled = paused || demo || !(phase === 'READY' || phase === 'AIMING');
+  const over = useUi(sessionOver);
+  const padDisabled = paused || demo || over || !(phase === 'READY' || phase === 'AIMING');
   const deck = useMachineDeck();
   const p = layout.panel;
   usePhoneSetup();

@@ -37,6 +37,14 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
   const track = useRef<HTMLDivElement>(null);
   const n = cards.length;
   const index = Math.min(focus, Math.max(0, n - 1));
+  // The row's own scroll (to the focused card) is not a swipe: until it reaches its target (or the
+  // player touches the row) its scroll events must not move the focus. They did: the first frames of
+  // the smooth scroll towards a card at either end of the row (which can never sit in the middle)
+  // handed the focus to its neighbour, so ◀ ▶ could not reach Plush Classic or Sparkle Rush, the lobby
+  // opened on the wrong card, and Enter played the neighbour.
+  const ownTarget = useRef<number | null>(null);
+  // A focus change that came from a swipe: the finger moves the row, the dialog does not scroll it.
+  const fromSwipe = useRef(false);
   // Scroll the track itself (never the page) so the focused card is in view, centred on the row.
   const scrollTo = useCallback(
     (i: number, smooth: boolean) => {
@@ -44,14 +52,19 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
       const card = el?.children[i] as HTMLElement | undefined;
       if (!el || !card) return;
       const behavior: ScrollBehavior = smooth && !reduced ? 'smooth' : 'auto';
-      if (flow === 'row') el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2, behavior });
-      else el.scrollTo({ top: card.offsetTop - (el.clientHeight - card.offsetHeight) / 2, behavior });
+      if (flow === 'row') {
+        const left = card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2;
+        const target = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, left));
+        ownTarget.current = Math.abs(el.scrollLeft - target) > 1 ? target : null;
+        el.scrollTo({ left, behavior });
+      } else el.scrollTo({ top: card.offsetTop - (el.clientHeight - card.offsetHeight) / 2, behavior });
     },
     [flow, reduced],
   );
   const first = useRef(true);
   useEffect(() => {
-    scrollTo(index, !first.current);
+    if (fromSwipe.current) fromSwipe.current = false;
+    else scrollTo(index, !first.current);
     first.current = false;
   }, [index, scrollTo]);
   const move = useCallback((step: number) => setFocus((i) => wrapIndex(i + step, n)), [n]);
@@ -92,24 +105,36 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
   // A swipe moves the row: the card nearest the middle becomes the focused one.
   const frame = useRef(0);
   const onScroll = () => {
+    const target = ownTarget.current;
+    if (target !== null) {
+      // The row's own scroll, however slow its frames: done once it is there.
+      if (track.current && Math.abs(track.current.scrollLeft - target) <= 2) ownTarget.current = null;
+      return;
+    }
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
       const el = track.current;
-      if (!el) return;
-      const mid = flow === 'row' ? el.scrollLeft + el.clientWidth / 2 : el.scrollTop + el.clientHeight / 2;
+      if (!el || flow !== 'row') return;
+      const mid = el.scrollLeft + el.clientWidth / 2;
       let best = index;
       let bestD = Infinity;
       Array.from(el.children).forEach((c, i) => {
         const card = c as HTMLElement;
-        const centre = flow === 'row' ? card.offsetLeft + card.offsetWidth / 2 : card.offsetTop + card.offsetHeight / 2;
-        const d = Math.abs(centre - mid);
+        const d = Math.abs(card.offsetLeft + card.offsetWidth / 2 - mid);
         if (d < bestD) {
           bestD = d;
           best = i;
         }
       });
-      if (best !== index && flow === 'row') setFocus(best);
+      if (best !== index) {
+        fromSwipe.current = true;
+        setFocus(best);
+      }
     });
+  };
+  // The player takes the row over (a swipe, the wheel): its scroll events are theirs again.
+  const takeOver = () => {
+    ownTarget.current = null;
   };
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
   const across = cardsAcross(layout, n);
@@ -143,7 +168,7 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
     >
       <div className="pp-lobby" data-flow={flow} style={style}>
         <p className="pp-lobby-sub">{t('machines.lobby.subtitle')}</p>
-        <div className="pp-lobby-track" ref={track} onScroll={onScroll} data-testid="lobby-track">
+        <div className="pp-lobby-track" ref={track} onScroll={onScroll} onPointerDown={takeOver} onWheel={takeOver} data-testid="lobby-track">
           {cards.map((card, i) => (
             <MachineCard key={card.id} card={card} themeId={themeId} machines={machines} focused={i === index} flow={flow} onFocus={() => setFocus(i)} onPlay={() => pick(card)} />
           ))}

@@ -571,8 +571,12 @@ export class MachineDirector {
     return this.overPending !== null || this.host.core.session.snapshot().state === 'over';
   }
 
-  /** The idle hint may speak (not while a timed run is under way). */
+  /**
+   * The idle hint may speak: not while a timed run is under way, and not once a session is over (its
+   * card or the initials entry is up and the claw is locked: "move the claw" would be wrong there).
+   */
   allowHint(): boolean {
+    if (this.sessionOver()) return false;
     const s = this.host.core.session.snapshot();
     return !(s.kind === 'timed' && s.state === 'running' && s.timerStarted);
   }
@@ -966,7 +970,9 @@ export class MachineDirector {
     if (genre === 'bridge') {
       const b = bridgeState(core.phys);
       progress = b.progress;
-      plate = { key: 'machines.plate.try', params: { n: b.tries + 1 } };
+      // The try being played; while its result is up, still that try (not the next one: after a won
+      // box "TRY 3" on the win card's screen named a try that box never had).
+      plate = { key: 'machines.plate.try', params: { n: m.phase === 'RESULT' ? Math.max(1, b.tries) : b.tries + 1 } };
     } else if (snap.kind === 'tries' && snap.triesTotal !== null) {
       plate = { key: 'machines.plate.tries', params: { left: Math.max(0, snap.triesTotal - snap.tries), total: snap.triesTotal } };
     } else if (snap.kind === 'timed' && snap.secondsLeft !== null) {
