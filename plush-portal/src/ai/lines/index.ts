@@ -95,21 +95,55 @@ export function resolveSituation(event: GuideEvent): LineSituation {
       return at([f.lossStreak >= 3 ? 'retry.streak' : 'retry']);
     case 'user_requested_tip':
       return at(f.headTracking ? ['tip', 'tip.tracking'] : ['tip']);
-    // Machine events. TEMPORARY scaffold mapping onto existing keys that already have every pool
-    // (theme, generic and the event brand pools); the machine line keys replace it (design 4.9).
+    // Machines other than classic (docs/design/machines.md, section 4.9). Without facts.machine (an
+    // older client, or the switch back to classic) each event falls back to a pool that is true
+    // whatever the machine.
     case 'machine_selected':
-      return at(['theme']);
+      return at([machineKey(f.machine?.genre)]);
     case 'machine_progress':
-      return at(['tip']);
+      return at([progressKey(f.machine)]);
     case 'items_scored':
-      return at(['win']);
+      return at([(f.machine?.items ?? 1) >= 2 ? 'items.many' : 'items.one']);
     case 'time_low':
-      return at(['tip']);
-    case 'session_over':
-      return at(['retry']);
+      return at(['time.low']);
+    case 'session_over': {
+      // A claim QR on screen is what the player has to act on (only once rewardFor allows it for
+      // this event: today it covers prize_won and retry_prompt, so session lines never talk about a QR).
+      const reward = rewardFor(event.type, f);
+      if (reward) return at([REWARD_KEYS[reward.options] ?? 'win.reward']);
+      if (f.machine?.rank != null) return at(['session.rank']);
+      return at([f.toy ? 'session.reward' : 'session.over']);
+    }
     default:
       return at(['tip']);
   }
+}
+
+const MACHINE_KEYS: Record<string, LineKey> = {
+  bridge: 'machine.bridge',
+  shelf: 'machine.shelf',
+  rush: 'machine.rush',
+};
+
+/** machine_selected: the genre's welcome; classic (whose facts carry no machine) and unknown genres get the classic one. */
+function machineKey(genre: string | undefined): LineKey {
+  return (genre && MACHINE_KEYS[genre]) || 'machine.classic';
+}
+
+/** The bridge moved its box at least this much (0..1 progress) for "it moved!" wording. */
+export const BRIDGE_PROGRESS_GAIN = 0.05;
+
+/**
+ * machine_progress: bridge — stuck first (the player can act on it: Call staff), then real progress,
+ * else "barely moved"; shelf — a box at the edge. Anything else (no machine facts) is a light retry.
+ */
+function progressKey(machine: GuideEvent['facts']['machine']): LineKey {
+  if (machine?.genre === 'bridge') {
+    if (machine.stuck) return 'bridge.stuck';
+    return (machine.progressGain ?? 0) >= BRIDGE_PROGRESS_GAIN ? 'bridge.progress' : 'bridge.same';
+  }
+  if (machine?.genre === 'shelf') return 'shelf.edge';
+  return 'retry';
 }
 
 function fill(template: string, values: Record<string, string | null>): string | null {

@@ -7,6 +7,7 @@ import { frameStrings } from './strings/frame';
 import { fxStrings } from './strings/fx';
 import { graphicsStrings } from './strings/graphics';
 import { gpuStrings } from './strings/gpu';
+import { machinesStrings } from './strings/machines';
 import { mobileStrings } from './strings/mobile';
 import { scoreStrings } from './strings/score';
 import { settingsEn } from './strings/settings.en';
@@ -41,6 +42,7 @@ export function registerAllStrings(): void {
   registerStrings(fxStrings);
   registerStrings(graphicsStrings);
   registerStrings(frameStrings);
+  registerStrings(machinesStrings);
 }
 
 /**
@@ -56,4 +58,5 @@ export const FEATURE_STRING_TABLES: Record<string, StringTable> = {
   fx: fxStrings,
   graphics: graphicsStrings,
   frame: frameStrings,
+  machines: machinesStrings,
 };

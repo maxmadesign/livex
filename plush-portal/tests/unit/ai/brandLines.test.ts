@@ -73,8 +73,45 @@ function variants(type: GuideEventType, lang: Lang): Partial<GuideFacts>[] {
       return [{ headTracking: false }, { headTracking: true }];
     case 'retry_prompt':
       return [{ lossStreak: 0 }, { lossStreak: 4 }, { lossStreak: 0, reward: { qr: true, options: 'both' } }];
+    // Machines (docs/design/machines.md, section 4.9): without facts.machine too (a safe fallback).
+    case 'machine_selected':
+    case 'machine_progress':
+    case 'items_scored':
+    case 'time_low':
+    case 'session_over':
+      return [{}, ...machineVariants(type, toy)];
     default:
       return [{}];
+  }
+}
+
+/** facts.machine variants for the machine events: progress, stuck, items 1 / 3, rank, reward, reason. */
+function machineVariants(type: GuideEventType, toy: { typeId: string; name: string; kind: string }): Partial<GuideFacts>[] {
+  const bridge = { id: 'bridge', genre: 'bridge' as const, name: 'Tippy Bridge', tries: 3 };
+  const shelf = { id: 'shelf', genre: 'shelf' as const, name: 'Tumble Shelf', tries: 2, triesLeft: 3, sessionItems: 1, score: 120 };
+  const rush = { id: 'rush', genre: 'rush' as const, name: 'Sparkle Rush', tries: 6, secondsLeft: 9, sessionItems: 7, score: 640 };
+  switch (type) {
+    case 'machine_selected':
+      return [{ machine: bridge }, { machine: shelf }, { machine: rush }];
+    case 'machine_progress':
+      return [
+        { machine: { ...bridge, progress: 0.4, progressGain: 0.12, stuck: false } },
+        { machine: { ...bridge, progress: 0.4, progressGain: 0.01, stuck: false } },
+        { machine: { ...bridge, progress: 0.9, progressGain: 0, stuck: true } },
+        { machine: { ...shelf, items: 0 } },
+      ];
+    case 'items_scored':
+      return [{ machine: { ...shelf, items: 1 } }, { machine: { ...rush, items: 3 } }];
+    case 'time_low':
+      return [{ machine: rush }];
+    case 'session_over':
+      return [
+        { machine: { ...shelf, reason: 'tries', rank: null } },
+        { machine: { ...rush, reason: 'time', rank: 2 } },
+        { toy, machine: { ...shelf, reason: 'tries', rank: null } },
+      ];
+    default:
+      return [];
   }
 }
 

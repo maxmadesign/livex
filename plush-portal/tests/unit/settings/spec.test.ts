@@ -199,6 +199,8 @@ describe('settings spec', () => {
         expect(getFieldAt(path)!.apply, path).not.toBe('live');
       }
       if (path.startsWith('graphics.')) expect(getFieldAt(path)!.apply, path).toBe('live');
+      // Machine physics and session rules (docs/design/machines.md, section 4.6) wait for a boundary too.
+      if (/^machines\.(bridge|shelf|rush)\./.test(path)) expect(getFieldAt(path)!.apply, path).not.toBe('live');
     }
   });
 });

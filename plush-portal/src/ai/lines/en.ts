@@ -475,5 +475,160 @@ export const en: LangBank = {
         ['Move your head a little. Nearer plushies shift more, so you can judge the depth.', 'think'],
       ],
     },
+    // Machines other than classic (docs/design/machines.md, section 4.9).
+    'machine.classic': {
+      all: [
+        ['Back to the classic claw! Line up over a plush and press grab.', 'happy'],
+        ['The classic machine it is. Aim for the middle of a plush.', 'calm'],
+        ['Good old claw time! Pick a plush that sits on top of the pile.', 'happy'],
+      ],
+      gtc: [
+        ['Back at the classic {event} claw! Pick a plush and line up the grab.', 'happy'],
+        ['The booth favourite, the classic claw. Aim for the tummy and press grab when ready.', 'cheer'],
+      ],
+    },
+    'machine.bridge': {
+      all: [
+        ['Welcome to Tippy Bridge! Lift one end of the box and walk it between the bars.', 'happy'],
+        ['Tippy Bridge is about patience. Nudge one end at a time until the box drops through.', 'think'],
+        ['On the bridge, grab near one end of the box, not the middle.', 'think'],
+      ],
+      gtc: [
+        ['Tippy Bridge, {event} edition! Work one end of the box at a time, like a careful lab experiment.', 'happy'],
+        ['Booth challenge: tip the box off its bars, one patient end at a time.', 'think'],
+      ],
+    },
+    'machine.shelf': {
+      all: [
+        ['Welcome to Tumble Shelf! Push the boxes over the front edge to score.', 'happy'],
+        ['On Tumble Shelf the claw nudges boxes forward. Every box that tumbles in counts.', 'think'],
+        ['Shelf time! Aim just behind a box near the edge and give it a push.', 'happy'],
+      ],
+      gtc: [
+        ['Tumble Shelf at the {event} booth! Nudge boxes over the edge to collect points.', 'happy'],
+        ['Think of it as shipping boxes off the show floor. Push them over the edge!', 'cheer'],
+      ],
+    },
+    'machine.rush': {
+      all: [
+        ['Welcome to Sparkle Rush! Grab as many gems as you can before time runs out.', 'cheer'],
+        ['Sparkle Rush is a race against the clock. Quick grabs, quick drops!', 'cheer'],
+        ['The timer starts with your first move. Go for clusters of shiny gems.', 'think'],
+      ],
+      gtc: [
+        ['Sparkle Rush, {event} speed run! Grab gems fast, like benchmarking a fresh build.', 'cheer'],
+        ['Time to overclock! Grab as many gems as you can before the clock stops.', 'cheer'],
+      ],
+    },
+    'bridge.progress': {
+      all: [
+        ['The box moved! Keep working the same end a little more.', 'cheer'],
+        ['Nice, that try shifted the box toward the gap.', 'happy'],
+        ['Progress! The box shifted a little. Stay patient with it.', 'think'],
+      ],
+      gtc: [
+        ['Measurable progress, like a good benchmark run. The box shifted toward the gap!', 'cheer'],
+        ['Nice iteration! That try moved the box. Keep refining at the {event} bridge.', 'happy'],
+      ],
+    },
+    'bridge.same': {
+      all: [
+        ['The box barely moved that time. Try grabbing nearer the other end.', 'think'],
+        ['Hmm, not much change. Aim at an end of the box, not its middle.', 'think'],
+        ['That one did not shift it much. A different end might help.', 'calm'],
+      ],
+      gtc: [
+        ['No big change this run. Like any good lab, try a different end of the box.', 'think'],
+        ['Barely moved. Debug the approach: grab nearer one end of the box.', 'think'],
+      ],
+    },
+    'bridge.stuck': {
+      all: [
+        ['The box looks stuck. Press Call staff and it gets set back up.', 'oops'],
+        ['Wedged tight! Tap Call staff to put the box back on the bars.', 'oops'],
+        ['That box is jammed. Calling staff resets it, with no penalty.', 'calm'],
+      ],
+      gtc: [
+        ['Box jammed! Tap Call staff and the {event} crew will set it back up.', 'oops'],
+        ['Stuck like a frozen demo. Press Call staff for a quick reset.', 'oops'],
+      ],
+    },
+    'shelf.edge': {
+      all: [
+        ['Ooh, a box is right at the edge of the shelf! One more nudge?', 'think'],
+        ['That box is teetering on the edge. Push gently from behind.', 'think'],
+        ['A box is hanging over the edge! Aim just behind it next time.', 'think'],
+      ],
+      gtc: [
+        ['A box is teetering on the shelf edge, like a demo ready to go live.', 'think'],
+        ['Right at the edge! Give that box one more careful push.', 'cheer'],
+      ],
+    },
+    'items.one': {
+      all: [
+        ['Plop! Right into the opening. Nice work!', 'happy'],
+        ['It tumbled in! That counts toward your session.', 'happy'],
+        ['Nice drop! Line up the next one while you are warmed up.', 'happy'],
+      ],
+      gtc: [
+        ['Shipped! Straight off the {event} show floor and into the opening.', 'cheer'],
+        ['Nice drop! Your session score just got a little boost.', 'happy'],
+      ],
+    },
+    'items.many': {
+      all: [
+        ['Multi-drop! Several fell in at once. That was a great try!', 'cheer'],
+        ['Wow, more than one in a single try! Great push.', 'cheer'],
+        ['A whole bunch tumbled in! The session score loves that.', 'cheer'],
+      ],
+      gtc: [
+        ['Parallel processing! Several dropped in at once. Great try!', 'cheer'],
+        ['A batch job well done! More than one in a single try.', 'cheer'],
+      ],
+    },
+    'time.low': {
+      all: [
+        ['Just a few seconds left! Quick grabs near the chute.', 'cheer'],
+        ['Time is almost up! Go for the closest sparkles.', 'cheer'],
+        ['The clock is running low! One more quick grab?', 'cheer'],
+      ],
+      gtc: [
+        ['Final seconds of this run! Grab fast, like the last minutes before a keynote.', 'cheer'],
+        ['The clock is nearly out! One more quick grab for your {event} score.', 'cheer'],
+      ],
+    },
+    'session.over': {
+      all: [
+        ["That's the session! Thanks for playing. Want another round?", 'happy'],
+        ['Session complete! Check your score and play again if you like.', 'happy'],
+        ["And that's a wrap! Nice playing. Another session is one tap away.", 'happy'],
+      ],
+      gtc: [
+        ["That's a wrap on this {event} session! Thanks for playing at our booth.", 'happy'],
+        ['Session complete! Take a breather, or run it again before your next talk.', 'happy'],
+      ],
+    },
+    'session.reward': {
+      all: [
+        ['You earned a prize this session! {toy} is yours, check the card.', 'cheer'],
+        ['Great session! {toy} joins your collection.', 'cheer'],
+        ['Prize time! Your session earned {toy}. Well played!', 'cheer'],
+      ],
+      gtc: [
+        ['Great session! {toy} is your {event} booth prize.', 'cheer'],
+        ['You earned {toy} this session! A perfect souvenir from the show floor.', 'cheer'],
+      ],
+    },
+    'session.rank': {
+      all: [
+        ['A top-ten score! Enter your initials for the leaderboard.', 'cheer'],
+        ['You made the leaderboard! Pick three letters to sign your score.', 'cheer'],
+        ['High score! Your run earned a place on the leaderboard.', 'cheer'],
+      ],
+      gtc: [
+        ['Leaderboard material! Sign your {event} run with three initials.', 'cheer'],
+        ['A top-ten run! Benchmarks like that deserve your initials.', 'cheer'],
+      ],
+    },
   },
 };

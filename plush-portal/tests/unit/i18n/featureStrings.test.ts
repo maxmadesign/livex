@@ -9,7 +9,7 @@ const placeholders = (text: string) => [...text.matchAll(/\{([A-Za-z0-9_]+)\}/g)
 
 describe('feature string namespaces', () => {
   it('exist for every feature namespace added since the first round', () => {
-    expect(Object.keys(FEATURE_STRING_TABLES).sort()).toEqual(['attract', 'calibration', 'frame', 'fx', 'gpu', 'graphics', 'mobile', 'score']);
+    expect(Object.keys(FEATURE_STRING_TABLES).sort()).toEqual(['attract', 'calibration', 'frame', 'fx', 'gpu', 'graphics', 'machines', 'mobile', 'score']);
   });
 
   for (const [name, table] of Object.entries(FEATURE_STRING_TABLES)) {

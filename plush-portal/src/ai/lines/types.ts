@@ -36,6 +36,22 @@ export const LINE_KEYS = [
   'retry.reward', // retry_prompt while the claim QR of the win is still on screen: a nudge to scan it
   'tip',
   'tip.tracking',
+  // Machines other than classic (docs/design/machines.md, section 4.9). Numbers never appear in
+  // these lines: counts, scores and seconds reach only the model, through facts.machine.
+  'machine.classic', // machine_selected: back on the classic claw (also the fallback without facts.machine)
+  'machine.bridge', // machine_selected: Tippy Bridge
+  'machine.shelf', // machine_selected: Tumble Shelf
+  'machine.rush', // machine_selected: Sparkle Rush
+  'bridge.progress', // machine_progress: the try moved the box towards the gap (progressGain >= 0.05)
+  'bridge.same', // machine_progress: the try barely moved the box
+  'bridge.stuck', // machine_progress: the box is wedged; "Call staff" puts it back
+  'shelf.edge', // machine_progress: nothing scored, but a box sits right at the front edge
+  'items.one', // items_scored: one item (also the fallback without facts.machine)
+  'items.many', // items_scored: two or more items in one try
+  'time.low', // time_low: the timed run is nearly over
+  'session.over', // session_over: the session ended (no prize, no ranking place)
+  'session.reward', // session_over: the session earned a prize ({toy}); no QR wording (see index.ts)
+  'session.rank', // session_over: the run made the local top 10
 ] as const;
 export type LineKey = (typeof LINE_KEYS)[number];
 

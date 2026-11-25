@@ -116,12 +116,33 @@ const EVENT_TASKS: Record<GuideEventType, string> = {
   theme_changed: 'The cabinet theme just changed. Welcome the player to the new theme in its mood.',
   retry_prompt: 'Lightly invite another try. No pressure: watching or stopping is fine.',
   user_requested_tip: 'The player asked for a tip. Give one concrete, practical tip.',
-  machine_selected: 'The player just switched to the machine in facts.machine. Welcome them to it in one line.',
-  machine_progress: 'The try moved the prize without dropping it. Comment on the progress from facts.machine only.',
-  items_scored: 'Items dropped into the opening this try. Cheer using facts.machine.items.',
-  time_low: 'The timed run is almost over (facts.machine.secondsLeft). Urge the player on without pressure.',
-  session_over: 'The play session on this machine just ended. Sum it up from facts.machine.',
+  machine_selected:
+    'The player just switched machines. Welcome them to the machine in facts.machine (its name) with its one key tip; without facts.machine they are back on the classic claw machine.',
+  machine_progress:
+    'The try did not win but changed something. Use facts.machine only: if stuck is true, suggest the Call staff button (a free reset); on the bridge, progressGain of 0.05 or more means the box really moved, less means it barely moved (suggest working the other end); on the shelf a box sits at the front edge. Never predict that it will fall next time.',
+  items_scored: 'Items dropped into the opening this try (facts.machine.items in this try, sessionItems so far). Cheer; two or more at once is a multi-drop.',
+  time_low: 'The timed run is almost over (facts.machine.secondsLeft). Urge the player on in a friendly way, without pressure.',
+  session_over:
+    'The play session on this machine just ended (facts.machine.reason: "tries" = out of tries, "time" = time is up). Sum it up from facts.machine (sessionItems, score). If facts.machine.rank is set, congratulate them on that top-10 place and invite them to enter three initials; if facts.toy is set, the session earned that plush as a prize. Lightly invite another session.',
 };
+
+/**
+ * What the model may know about the machine being played (facts.machine.genre), so the numbers in
+ * the facts mean something. Classic has no entry: its facts carry no machine.
+ */
+const MACHINE_NOTES: Record<NonNullable<GuideFacts['machine']>['genre'], string> = {
+  bridge:
+    'Tippy Bridge: one prize box lies across two bars over a gap. The claw lifts or turns one end a little each try; the box is won when it slips down between the bars. progress (0 to 1) is how far it has worked towards the gap, progressGain what the last try added, tries the tries on this box, and stuck true means it is wedged: the Call staff button puts it back on its start position for free.',
+  shelf:
+    'Tumble Shelf: boxes and snacks stand on a shelf with a low front lip; the claw nudges or drags them over the front edge into the trough. A session has a fixed number of tries (triesLeft left); items is this try, sessionItems the session so far, score the session points, and enough boxes in one session earn a plush prize.',
+  rush:
+    'Sparkle Rush: a timed score attack on a pile of gems and coins; every piece dropped into the chute scores by its value. secondsLeft is the time left, sessionItems the pieces so far, score the run score, and the best runs enter a local top 10 with three initials (rank).',
+};
+
+export function describeMachine(machine: GuideFacts['machine']): string | null {
+  if (!machine) return null;
+  return MACHINE_NOTES[machine.genre] ?? null;
+}
 
 /** Explanations for the physics-derived slip reasons. Unknown reasons are passed through untouched. */
 const SLIP_REASON_NOTES: Record<string, string> = {
@@ -246,6 +267,53 @@ export function sanitizeFacts(facts: GuideFacts): GuideFacts {
   if (facts.reward && typeof facts.reward.qr === 'boolean' && (REWARD_OPTIONS as readonly string[]).includes(facts.reward.options)) {
     out.reward = { qr: facts.reward.qr, options: facts.reward.options };
   }
+  const machine = sanitizeMachine(facts.machine);
+  if (machine) out.machine = machine;
+  return out;
+}
+
+const MACHINE_GENRES: readonly string[] = ['bridge', 'shelf', 'rush'];
+const clampTo = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const wholeIn = (v: unknown, lo: number, hi: number): number | undefined => (finite(v) ? clampTo(Math.round(v), lo, hi) : undefined);
+
+/**
+ * facts.machine (machines other than classic): exactly the fields of the contract, clamped to the
+ * server schema's ranges (server/schemas.ts), numbers rounded. Anything else is dropped.
+ */
+export function sanitizeMachine(machine: GuideFacts['machine'] | unknown): GuideFacts['machine'] | undefined {
+  if (!machine || typeof machine !== 'object') return undefined;
+  const m = machine as Record<string, unknown>;
+  if (typeof m.genre !== 'string' || !MACHINE_GENRES.includes(m.genre)) return undefined;
+  const out: NonNullable<GuideFacts['machine']> = {
+    id: shortText(m.id, 32),
+    genre: m.genre as NonNullable<GuideFacts['machine']>['genre'],
+    name: shortText(m.name, AI_LIMITS.maxToyNameChars),
+  };
+  const tries = wholeIn(m.tries, 0, 100_000);
+  if (tries !== undefined) out.tries = tries;
+  if (m.triesLeft === null) out.triesLeft = null;
+  else {
+    const left = wholeIn(m.triesLeft, 0, 1000);
+    if (left !== undefined) out.triesLeft = left;
+  }
+  if (finite(m.progress)) out.progress = round2(clampTo(m.progress, 0, 1));
+  if (finite(m.progressGain)) out.progressGain = round2(clampTo(m.progressGain, -1, 1));
+  if (typeof m.stuck === 'boolean') out.stuck = m.stuck;
+  const items = wholeIn(m.items, 0, 500);
+  if (items !== undefined) out.items = items;
+  const sessionItems = wholeIn(m.sessionItems, 0, 5000);
+  if (sessionItems !== undefined) out.sessionItems = sessionItems;
+  const score = wholeIn(m.score, 0, 100_000_000);
+  if (score !== undefined) out.score = score;
+  const seconds = wholeIn(m.secondsLeft, 0, 600);
+  if (seconds !== undefined) out.secondsLeft = seconds;
+  if (m.rank === null) out.rank = null;
+  else {
+    const rank = wholeIn(m.rank, 1, 10);
+    if (rank !== undefined) out.rank = rank;
+  }
+  if (m.reason === null) out.reason = null;
+  else if (m.reason === 'tries' || m.reason === 'time') out.reason = m.reason;
   return out;
 }
 
@@ -299,6 +367,9 @@ export function buildLineInput(context: LineContext): string {
   if (slipNote) payload.slipReasonMeaning = slipNote;
   const rewardNote = describeReward(reward);
   if (rewardNote) payload.rewardMeaning = rewardNote;
+  // The machine context: what the game on this machine is and what its numbers mean.
+  const machineNote = describeMachine(facts.machine);
+  if (machineNote) payload.machineMeaning = machineNote;
   return JSON.stringify(payload);
 }
 
