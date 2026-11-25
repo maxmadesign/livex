@@ -1932,3 +1932,73 @@ classic is untouched (golden trace identical after every change).
   today (`ItemField.clearBin`); the try toast reads `scoreTry(...).extras`.
 - Sweeps: `npx tsx tools/dev/machine-sweep.ts --machine shelf|rush [--difficulty all] [--perf]`
   (about 45 s per preset each on this box).
+
+---
+
+## Implementation notes (WS-D: app glue)
+
+Built: `src/app/{MachineDirector,MachinePilot,machineSfx}.ts`, `src/game/machines/daily.ts`,
+`src/persistence/machines.ts`, additive changes in `src/game/scoring.ts` (`settleScored`,
+`useRecord`, `applyDailyBonus`, optional `items` / `extras` / `dailyBonus` on `ScoreAward`) and
+`src/persistence/collection.ts` (`addPrize(typeId, prizeId, machineId?)`, `machineWins`), the
+section 6.3 hook lines in `src/app/Game.ts`, the debug API of section 4.7, unit tests
+(`tests/unit/app/{machineDirector,machinePilot,daily,scoring.machines,machineSfx}.test.ts`,
+`tests/unit/persistence/machines.test.ts`) and `tests/e2e/29-machines-glue.spec.ts`. Classic stays
+bit-identical (golden trace and round trip unchanged; `scoreRound` untouched; `settle` books through
+the same arithmetic it always did).
+
+### How it fits together
+
+- **Game keeps hook lines only.** `Game` builds a `DirectorHost` (scene, effects, rewards, settings,
+  clock) and hands it to `MachineDirector`; the director subscribes once to the core's long-lived
+  emitters (`machine.events`, `controllerEvents`, `session.events`).
+- **Switch** (`select` → `switchTo`, section 4.2): refused when the lobby is off (not in debug), the
+  machine is not offered or is locked; queued while a player's claw is busy (toast
+  `machines.toast.after`); a running demo is stopped (`resetRound(…, 'ATTRACT')`) and attract mode is
+  kept; AIMING goes back to READY first. Then: rewards reset, result / prize / session card / popups
+  cleared, pilot reset, `clearScene` (aura, toy and item visuals, claw visual), `core.setMachine`,
+  `buildScene` (`rebuildScene(false)` recreates the claw visual for the new rig), the machine's own
+  score record (`useRecord`), the switch sting, `await stage.warmUp()`, `machine_selected`, and START
+  when the pick came from attract mode. `whenSwitched()` backs the debug promise.
+- **Prize machines** (classic, bridge) keep Game's win path; `prizeTypeOf(toy)` (`item.print ??
+  asset.id`) names the character in `onPrizeExit`, the drop burst, the slip burst and the aura. Items
+  never play lift / slip voices; the bridge drop plays the print's win voice.
+- **Items machines** (shelf, rush): `director.onResult` settles the try with the genre's `scoreTry`
+  (today's bonus included) through `ScoreKeeper.settleScored` once per round id, keeps `ui.result`
+  null (Hud's card stays hidden), sets `ui.machine.lastTry`, pops "+N" at the opening and picks the
+  guide line. The session card is written once the session's `over` event and the last try's
+  settlement have both happened (`over` comes before Game hears the try's result). The session
+  prize reaches the collection through the ordinary `award` event and gets exactly one claim code
+  (`requestReward(lastRoundId, typeId)` + `cardShown`).
+- **Attract**: `director.pilot` is the classic `DemoPilot` (one instance for the page) or a
+  `MachinePilot` driven by the genre's `aim`; the idle reset ends any session (the unconfirmed
+  ranking place is dropped) and switches back to `home` in attract mode; the optional attract cycle
+  moves to the next offered machine every 3 demo rounds while nothing is open.
+
+### Deviations from the design
+
+| # | Design | Built | Why |
+| --- | --- | --- | --- |
+| D1 | Tests in `tests/unit/machines/daily.test.ts` and `tests/unit/game/scoring.machines.test.ts`. | Under `tests/unit/app/` (and `tests/unit/persistence/`). | This round's ownership for WS-D is `tests/unit/app/**` and `tests/unit/persistence/**`. |
+| D2 | `machines` v1 storage. | Key `plush-portal/machines` with a `version: 1` field, sanitised like `scores` (a newer version is left alone; `addRanking` / `saveMachineRecord` refuse to overwrite it). | The `scores` pattern. |
+| D3 | Rankings per machine. | Only **timed** sessions rank (rush). Shelf sessions keep a per-machine best. | Section 3.3 defines the ranking for the score attack; a 5-try shelf session has no comparable run score. The storage shape is per machine, so a shelf ranking is one condition away. |
+| D4 | `machine_selected` after a switch. | Only for a player's pick (back to classic too, whose facts carry no `machine`); never for the idle reset back home, the attract cycle or a settings rebuild. | Nobody is there to hear it. |
+| D5 | A `rebuild` setting of the current genre re-runs `setMachine` at the next boundary. | Every `machines.<current genre>.*` change (`round` values too) rebuilds the machine with the same id at the next boundary **without a running tries / timed session** (attract mode, or at PLAY AGAIN); an open session (bridge) is rebuilt at the next round boundary (its box starts over). | The genre parameters are resolved into the stack at `setMachine`; `GameCore` has no in-place parameter swap, and `PlaySession` latches the rule of the resolved machine. |
+| D6 | `ItemVisuals` created next to `ToyVisuals`; the Cabinet gets `core.def.geometry`; the contact-shadow hole and the effects' opening follow the opening. | `Game.itemVisuals: ItemVisualsPort \| null` (interface in `MachineDirector.ts`) is synced, updated, cleared, disposed and asked for positions at every hook point, but stays `null`; `rebuildScene` still builds `new Cabinet(layout, theme, materials)`. | `src/scene/**` is the rendering workstream's; neither `ItemVisuals` nor the Cabinet's fourth argument exists in this tree. Until they land, a non-classic machine plays the right physics in a classic-looking cabinet with its items undrawn (screenshots below). |
+| D7 | `collection.addPrize` counts `machineWins[id]`. | Counted for machines other than classic only; classic's "prizes won here" = `wins` − the others. `machineWins` is only written once a non-classic machine paid out. | Older data (all classic) needs no migration, and classic-only stored data keeps its exact shape. |
+| D8 | Debug API names of section 4.7. | As designed, plus `selectMachine(id, { includeUnavailable })`, `machineDebug.allowUnavailable(on)`, `machineDebug.settlements()` and `machine().director` / `machine().ui`. | Machines are not offered yet; tests need the override and a way to count settlements. All additive. |
+| D9 | `facts.machine.name` = the localised machine name. | `MACHINE_NAMES` (en / zh / ja, section 10 #1) in `MachineDirector.ts`, in the guide's language. | The `machines` i18n namespace is the UI workstream's and is not in this tree. |
+| D10 | Today's bonus on items tries and bridge points. | Player rounds only (demo rounds ×1). The bridge applies it with `applyDailyBonus(scoreRound(…))` + `settleScored`; classic never reaches that branch (`bonusFor` is 1 on classic). | Presentation only, as designed; the demo track is a show. |
+| D11 | — | `Game.playAgain` on a finished tries / timed session runs `newSession` (Enter / Space and the classic "again" button start a fresh session instead of a locked READY). Items tries auto-advance by `AUTO_ADVANCE` (shelf 1.15 s, 2.0 s after items; rush 0.35 s); a finished session never does. | The session card (UI workstream) is not there yet; without this the claw would sit locked in READY. |
+| D12 | — | The ScoreKeeper's player session restarts with every play session (START and PLAY AGAIN), so `best` on an items machine is the best session and the card's points equal the HUD's session score. With scoring off, items tries book nothing and nothing ranks. | — |
+| D13 | Initials: a 30 s timeout saves `???`; the idle reset drops an unconfirmed entry. | As designed; the deadline is wall clock (`ui.rankEntry.deadline`), checked by `director.update()` every frame. PLAY AGAIN with a place still waiting saves it as `???`. | — |
+| D14 | Session prize prints: least-collected first. | `core.session.prints` is set by the director (enabled characters, fewest in the collection first, manifest order on ties) after every populate and at every session start. | `GameCore.populate` resets it to manifest order. |
+
+### Not done here (other workstreams)
+
+- The lobby, session HUD, try toast, session card with `InitialsEntry`, deck buttons and strings
+  (UI workstream) read `ui.machine`, `ui.sessionResult`, `ui.rankEntry` and call `Game.selectMachine
+  / openLobby / machineAction / stepInput / newSession / submitInitials / machineCards`.
+- Guide lines and `resolveSituation` for the five machine events; `sanitizeFacts` still drops
+  `facts.machine` (N17).
+- `tests/e2e/helpers.ts` `BootOptions.machine` (UI workstream); spec 29 uses the debug override.

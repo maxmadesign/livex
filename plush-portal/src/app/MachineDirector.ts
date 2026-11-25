@@ -426,7 +426,8 @@ export class MachineDirector {
       this.switching = false;
       this.refreshUi();
     }
-    if (ok && options.guide && this.current !== 'classic') host.emitGuide('machine_selected');
+    // A player's switch is announced (classic too: its facts simply carry no machine).
+    if (ok && options.guide) host.emitGuide('machine_selected');
     if (ok && options.start && host.inAttract()) host.pressStart();
     if (!this.pending) {
       const waiters = this.waiters.splice(0);
