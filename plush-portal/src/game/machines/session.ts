@@ -130,8 +130,9 @@ export class PlaySession {
     const phase = this.core.machine.phase;
     // Aiming when the time runs out: the claw drops where it is (like the aim timer); the try counts.
     if (phase === 'AIMING') this.core.controller.requestGrab();
-    // Waiting for the next try (no move since the last result): the run ends now, without a try.
-    else if (phase === 'READY') this.finish('time');
+    // Waiting for the next try, or still showing the last result (the short RESULT hold before the
+    // next READY): the run ends now, without another try.
+    else if (phase === 'READY' || phase === 'RESULT') this.finish('time');
     // Otherwise the claw is busy: the try completes and the run ends at its RESULT ("last grab counts").
   }
 

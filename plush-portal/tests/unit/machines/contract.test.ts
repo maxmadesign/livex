@@ -160,6 +160,8 @@ function tenTries(c: GameCore): { results: RoundResult[]; problems: string[] } {
     } else {
       const x = -0.3 + ((i * 0.137) % 0.6);
       const z = -0.62 + ((i * 0.211) % 0.45);
+      // A tries session (the shelf: 5) ends before ten tries: start the next one, like a new player.
+      if (c.session.snapshot().state === 'over') c.session.newSession();
       results.push(playRound(c, x, z).result);
     }
     for (const a of inspectWorld(c)) problems.push(`${a.kind}: ${a.detail}`);

@@ -1828,6 +1828,21 @@ tries plus 2 × 160 single tries, median 5.5 tries per box, one-try wins 0.6 % (
 aims), stuck 4.2 %, 0 anomalies, median step 0.044 ms; an independent seed set gave 5 / 0.6 % / 1.3 % /
 0 % / 0. Classic stays bit-identical (golden trace and round trip unchanged).
 
+## Implementation notes (WS-C: Tumble Shelf and Sparkle Rush)
+
+Built: `src/game/machines/{pieces,shelf,rush}.ts`, `tests/unit/machines/{pieces,shelf,rush}.test.ts`,
+`tools/dev/sweeps/{shelf,rush}.ts`, a minimal shared runner `tools/dev/machine-sweep.ts` (the
+bridge workstream's was not there yet; a sweep module only exports `run(options, kit)`), and
+`docs/machines/{shelf,rush}.md` with every measured number. Both machines stay `available: false`;
+classic is untouched (golden trace identical after every change).
+
+### Gate results (Arcade, 8 seeds, pilot with 2 cm aim noise)
+
+| Machine | Passes | Fails | What would fix it |
+| --- | --- | --- | --- |
+| shelf | 0.85 items per try, 56 % of tries score, stacks stable (0.16 mm in 5 s), the gutter drains (0 boxes at rest in front of the shelf), 0 anomalies | 80 % of sessions reach 3 boxes (target 30-60 %) | The gates contradict each other for 5 tries: ≥ 0.8 items per try means ≥ 4 boxes per session on average. `rewardItems` 5 → 41 % (4 → 63 %), a settings default (`spec.ts`) plus `SHELF_DEFAULTS` [PC 7]. |
+| rush | 83 % of tries score, 13 tries per 75 s run (12-15), step p95 0.27 ms, nothing scored without a carry | 0.82 pieces per centred grab (target ≥ 1.2); 67 % of runs reach `rewardValue` 450 (target 25-35 %) | Caging: the scoop attachment of section 2.7 (WS-A's files). Prize share: `rewardValue` 600 (29 %), a settings default (`spec.ts`) plus `RUSH_DEFAULTS`. |
+
 ### Deviations from the design
 
 | # | Design | Built | Why |
@@ -1867,3 +1882,53 @@ aims), stuck 4.2 %, 0 anomalies, median step 0.044 ms; an independent seed set g
 - **WS-E**: geometry from `core.def.geometry`; the fences are 0.22 m; the box is `bridgeBox`
   0.24 × 0.10 × 0.10 m with its origin at the middle of its bottom face.
 - **WS-F**: the e2e recipe above; seed 7 falls after the first upward nudge.
+
+| C1 | Shelf claw: `gripAssist` ×0.6, other ×1. | `{ gripAssist: 0, clawForce: 0.4 }`. | With the design's claw the fingers close around a whole 3-high stack and the forward transport drops all of it: 2.8 items per try, every try scores (docs/machines/shelf.md, *Tuning*). |
+| C2 | Snacks 40 / 60 / 90 g. | 60 / 90 / 135 g (×1.5). | Same reason: with the weak claw, the mass sets how often a stack comes along. Sizes, prints and shares as designed. |
+| C3 | Rush claw: move ×1.2, descend ×1.25, lift ×1.25, close ×1.2. | Plus `ropeSwing` ×0.5. | 11-12 tries per run before (gate 12-16): most of the extra time was waiting for the swing to calm before a grab and over the chute. |
+| C4 | Rush pile: one layer, "a few on top". | One layer only, hex pitch 0.10 m, ±4 mm jitter, over the reach plus 4 cm. | Pieces on top rolled off for seconds (no settle within 3 s) and a deeper pile did not cage more. |
+| C5 | "A centred grab cages 1-3 gems." | About one: 0.74-0.91 per centred grab whatever the radius (0.7-1.2), pitch, pile depth, close speed or claw force. | The closed fingers converge under the hub; a neighbour between two fingers stays behind. The design's fallback (scoop disc) is needed; rush stays unavailable. |
+| C6 | `rewardValue` 450 "set by the sweep". | Left at 450 (the settings default); the sweep measures 600 for 25-35 %. | The genre default must equal the settings default (contract test); `spec.ts` is not WS-C's file. |
+| C7 | Win test of section 2.5 for items. | Centre of mass below `awardComY`, **over the opening or already under the floor slab**, a collider touched the sensor. | A box that falls during RESULT is credited at the next READY; by then it may have bounced in the bin to outside the opening rectangle. Under the slab can only be reached through the opening. |
+| C8 | Off-screen settle as classic (calm < 2 cm/s). | Items: calm < 4 mm/s (shelf) / 12 mm/s (rush) for 0.25 s, with slow rocking damped during the settle only (as `ToyField.calmWobble`). | Stacked boxes lean into place at a few mm/s: with the classic threshold a restack could still move 7.6 mm after the settle. |
+| C9 | Shelf forward transport. | (same x, `dropZ`), speed ×0.92 holding / ×1.1 empty, `toOpening: true`. | — |
+| C10 | `MachineRoundInfo.id` is the machine id. | The genre id (`'shelf'`, `'rush'`). | `createRules(p, g)` does not receive the machine id; a variant would report its genre. The session snapshot has the real id. |
+| C11 | `scoreTry` returns a `RoundScore`. | A `RoundScore` plus `items`, `extras` (`multiDrop` / `handful` / `daily`) and `dailyBonus`; the group factor is also in `comboMultiplier` / `comboBonus`. | WS-D's planned optional fields of `RoundScore`; no edit to `scoring.ts`. |
+| C12 | Rush pilot: value / (1 + distance). | The value of the pieces within 7 cm of the target (one grab's reach) / (1 + distance), with room around it (clear of the glass and the guard). | Prefers clusters; a single far diamond still wins over a near emerald. |
+| C13 | Ranking in `src/persistence/machines.ts` (WS-D). | The data shape and pure ordering live in `rush.ts` (`RankEntry`, `RANK_SIZE`, `INITIALS_PATTERN`, `rankPosition`, `insertRank`, `runPoints`); storage, sanitising and the blocklist stay WS-D's. | The task asked for the top-10 data shape. |
+| C14 | 300 random grabs in the rush unit test. | 120 in the unit test (about 20 s); the sweep checks every grab (about 1,170 across the three presets) for a carry. | Unit run time on the shared box. |
+| C15 | — | `SHELF_TUNING` / `RUSH_TUNING`: plain numbers (snack friction, mass scale, jitter; pile pitch, margin, clearance, top share, jitter) the sweeps may override with `--tune`, like `CLAW_TUNING`. | Sweepable without new parameter fields (the `ShelfParams` / `RushParams` shapes are frozen). |
+| C16 | The genre modules import `scaleRoundParams` from the registry. | `pieces.scaleClaw` (the same arithmetic). | The registry imports the genre modules; importing it back would make the module load order matter. |
+
+### Found in shared code (not changed: outside WS-C)
+
+1. **`PlaySession` timer, RESULT hold** (`src/game/machines/session.ts`). When the clock runs out
+   during RESULT (Game's 0.35 s auto-advance on rush), `preStep` marks the run expired and returns
+   early from then on; the run only ends at the RESULT of one more full try. Seen in 3 of 24 Arcade
+   runs. Fix: in `preStep` at expiry, `else if (phase === 'READY' || phase === 'RESULT') this.finish('time')`.
+   `rush.test.ts` holds it as `it.fails` (drop `.fails` with the fix).
+2. **`contract.test.ts`** (WS-A) assumes every non-classic genre is pending and plays ten tries with
+   `playRound` only. With the shelf / rush modules in `GENRES` two cases fail: "gates the machines
+   whose genre modules have not landed" (it lists `bridge`, `shelf`, `rush` by name) and "shelf:
+   plays ten tries" (a 5-try session locks the claw at try 6; the harness needs `newSession()` when
+   the session is over, as PLAY AGAIN does). The rush cases pass. The bridge swap hits the first one
+   too. The change (two spots in that file; checked on a temporary copy: 22 passed, bridge still
+   todo):
+
+   ```ts
+   // 'gates the machines whose genre modules have not landed': iterate the pending ones only
+   for (const def of MACHINES.filter((m) => isPendingGenre(GENRES[m.genre]))) { const id = def.id; /* same checks */ }
+   // tenTries, non-classic branch, before playRound: PLAY AGAIN when a tries / timed session ended
+   if (c.session.snapshot().state === 'over') c.session.newSession();
+   ```
+
+### For the integrator
+
+- Registry: `shelf: shelfModule`, `rush: rushModule` replace the `pendingGenre(…)` entries; the
+  defaults moved into the modules (`SHELF_DEFAULTS`, `RUSH_DEFAULTS`). Both entries stay
+  `available: false`.
+- Game glue (WS-D): `core.session.prints` should be ordered least-collected first for rush
+  (`rushReward` takes the first character of the earned tier); clear the bin at every boundary as
+  today (`ItemField.clearBin`); the try toast reads `scoreTry(...).extras`.
+- Sweeps: `npx tsx tools/dev/machine-sweep.ts --machine shelf|rush [--difficulty all] [--perf]`
+  (about 45 s per preset each on this box).

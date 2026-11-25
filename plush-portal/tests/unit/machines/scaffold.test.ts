@@ -30,8 +30,8 @@ describe('machines settings group', () => {
     expect(m.hidden).toEqual([]);
     expect(m.unlock).toBe('open');
     expect(m.bridge).toEqual({ controls: 'joystick', triesPerBox: 0, gap: 0.15, boxMass: 0.4 });
-    expect(m.shelf).toEqual({ tries: 5, rewardItems: 3, lipHeight: 0.014 });
-    expect(m.rush).toEqual({ seconds: 75, pieces: 44, rewardValue: 450 });
+    expect(m.shelf).toEqual({ tries: 5, rewardItems: 5, lipHeight: 0.014 });
+    expect(m.rush).toEqual({ seconds: 75, pieces: 44, rewardValue: 600 });
   });
 
   it('sanitises stored values like every other group', () => {

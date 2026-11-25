@@ -559,14 +559,14 @@ export const settingsSpec = {
     shelf: {
       tries: num(5, 1, 20, 1, 'round'),
       /** Boxes per session that earn a prize (collection + claim code). */
-      rewardItems: num(3, 1, 30, 1, 'round'),
+      rewardItems: num(5, 1, 30, 1, 'round'),
       lipHeight: num(0.014, 0, 0.03, 0.002, 'rebuild', 'm'),
     },
     rush: {
       seconds: num(75, 30, 120, 5, 'round', 's'),
       pieces: num(44, 24, 48, 2, 'rebuild'),
       /** Raw gem value per run that earns a prize; 0 = never. */
-      rewardValue: num(450, 0, 5000, 50, 'round'),
+      rewardValue: num(600, 0, 5000, 50, 'round'),
     },
   },
   camera: {

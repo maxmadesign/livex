@@ -14,6 +14,8 @@ import type { RoundParams } from '../RoundController';
 import { bridgeModule } from './bridge';
 import { classicModule } from './classic';
 import { MACHINE_IDS, type GenreId, type MachineId } from './ids';
+import { rushModule } from './rush';
+import { shelfModule } from './shelf';
 import type { ClawScale, GenreModule, GenreParams, MachineDef, MachineSettings, ResolvedMachine, SessionRule } from './types';
 
 /** The difficulty preset's claw parameters scaled by a genre's multipliers (absent = ×1). */
@@ -77,60 +79,22 @@ function pendingGenre<G extends GenreId>(genre: G, spec: PendingSpec<G>): GenreM
   return module;
 }
 
-const ITEM_PHASES: readonly RoundPhase[] = ['READY', 'AIMING', 'DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING'];
-
-/** Defaults of section 3.2 (WS-C tunes them in shelf.ts). */
-const SHELF_DEFAULTS: GenreParams['shelf'] = {
-  shelfY: 0.16,
-  shelfFront: -0.3,
-  lipHeight: 0.014,
-  shelfFriction: 0.55,
-  rowsZ: [-0.39, -0.53],
-  columnsX: [-0.3, -0.1, 0.1, 0.3],
-  stackHeight: 3,
-  tries: 5,
-  rewardItems: 3,
-  dropZ: -0.18,
-  claw: { gripAssist: 0.6 },
-};
-
-/** Defaults of section 3.3 (WS-C tunes them in rush.ts). */
-const RUSH_DEFAULTS: GenreParams['rush'] = {
-  seconds: 75,
-  pieces: 44,
-  radiusScale: 1,
-  rewardValue: 450,
-  claw: { moveSpeed: 1.2, descendSpeed: 1.25, liftSpeed: 1.25, closeSpeed: 1.2 },
-};
-
 /* ------------------------------------------------------------ the registry */
 
 export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
   classic: classicModule,
   bridge: bridgeModule,
-  shelf: pendingGenre('shelf', {
-    defaults: SHELF_DEFAULTS,
-    presentation: 'items',
-    awardPhases: ITEM_PHASES,
-    fromSettings: (s) => ({ tries: s.shelf.tries, rewardItems: s.shelf.rewardItems, lipHeight: s.shelf.lipHeight }),
-    session: (p) => ({ kind: 'tries', tries: p.tries }),
-    claw: (p) => p.claw,
-  }),
-  rush: pendingGenre('rush', {
-    defaults: RUSH_DEFAULTS,
-    presentation: 'items',
-    awardPhases: ITEM_PHASES,
-    fromSettings: (s) => ({ seconds: s.rush.seconds, pieces: s.rush.pieces, rewardValue: s.rush.rewardValue }),
-    session: (p) => ({ kind: 'timed', seconds: p.seconds }),
-    claw: (p) => p.claw,
-  }),
+  shelf: shelfModule,
+  rush: rushModule,
 };
 
 /** Every machine, in lobby order. Only `available` machines are ever offered or built for players. */
 export const MACHINES: readonly MachineDef[] = [
   { id: 'classic', genre: 'classic', order: 0, params: {}, available: true, unlockAfterWins: 0 },
   // Sweep gates passed (docs/machines/bridge.md): median 5-5.5 tries per box, one-try wins ≤ 1.9 %, stuck ≤ 4.2 %.
-  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: true, unlockAfterWins: 1 },
+  // Offered once its bars, fences and box are drawn (rendering workstream); until then a player
+  // would play the right physics in a classic-looking cabinet with an invisible box.
+  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: false, unlockAfterWins: 1 },
   { id: 'shelf', genre: 'shelf', order: 2, params: {}, available: false, unlockAfterWins: 3 },
   { id: 'rush', genre: 'rush', order: 3, params: {}, available: false, unlockAfterWins: 5 },
 ];
