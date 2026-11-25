@@ -33,6 +33,15 @@ import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
 import type { GameStore, PerfSnapshot } from './gameStore';
 
+/** Steering input as the round controller receives it, and where it came from. */
+export interface SteerInput {
+  x: number;
+  z: number;
+  source: 'keys' | 'stick' | 'none';
+  /** Set when the game dropped every input (pause, dialog, blur, new round): a held stick lets go. */
+  cleared?: boolean;
+}
+
 export interface PhysicalWindow {
   widthM: number;
   heightM: number;
@@ -179,8 +188,12 @@ export class Game {
   private readonly offs: (() => void)[] = [];
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
   private thumbnailJob: Promise<void> | null = null;
-  /** Latched keyboard / button directions. */
+  /** Latched keyboard directions. */
   private readonly dir = { left: false, right: false, back: false, front: false };
+  /** On-screen joystick gate (src/ui/Joystick.tsx): x right +1, z toward the player +1; 0, 0 = centred. */
+  private readonly stick = { x: 0, z: 0 };
+  /** HUD listeners of the steering input (the joystick mirrors the keys when nobody holds it). */
+  private readonly inputListeners = new Set<(input: SteerInput) => void>();
   /** Prize-claim codes for real wins (src/rewards/flow.ts): the store's `reward` slice. */
   private readonly rewards: RewardFlow;
 
@@ -449,6 +462,7 @@ export class Game {
 
   /* ---------------------------------------------------------------- input */
 
+  /** Keyboard arrows / WASD (src/ui/App.tsx). The joystick wins while it is deflected. */
   setDirection(direction: 'left' | 'right' | 'back' | 'front', pressed: boolean): void {
     if (this.paused && pressed) return;
     if (this.dir[direction] === pressed) return;
@@ -461,17 +475,58 @@ export class Game {
     this.pushInput();
   }
 
+  /**
+   * The on-screen joystick's gate (src/ui/stickMath.ts): x right +1 / left −1, z toward the player
+   * +1 / back −1, (0, 0) when centred or released. Each new gate clicks like a real lever's
+   * microswitch. Ignored while paused, like a key press.
+   */
+  setStick(x: number, z: number): void {
+    const sx = Number.isFinite(x) ? Math.sign(x) : 0;
+    const sz = Number.isFinite(z) ? Math.sign(z) : 0;
+    const engaged = sx !== 0 || sz !== 0;
+    if (this.paused && engaged) return;
+    if (this.stick.x === sx && this.stick.z === sz) return;
+    this.stick.x = sx;
+    this.stick.z = sz;
+    if (engaged) {
+      this.touchActivity();
+      const phase = this.core.machine.phase;
+      if (phase === 'READY' || phase === 'AIMING') this.deps.audio.playSfx('dir_press');
+    }
+    this.pushInput();
+  }
+
   clearDirections(): void {
     this.dir.left = this.dir.right = this.dir.back = this.dir.front = false;
+    this.stick.x = this.stick.z = 0;
     if (this.core) this.core.controller.clearInput();
+    this.notifyInput({ x: 0, z: 0, source: 'none', cleared: true });
+  }
+
+  /** Follows the steering input (keys or joystick). Returns the unsubscribe function. */
+  onInput(listener: (input: SteerInput) => void): () => void {
+    this.inputListeners.add(listener);
+    return () => this.inputListeners.delete(listener);
+  }
+
+  private notifyInput(input: SteerInput): void {
+    for (const listener of this.inputListeners) listener(input);
   }
 
   private pushInput(): void {
     const c = this.core.controller;
     if (this.core.machine.demo) return;
-    c.inputX = (this.dir.right ? 1 : 0) - (this.dir.left ? 1 : 0);
-    // "Up" on the pad moves the claw towards the back of the cabinet (−Z), "down" towards the glass.
-    c.inputZ = (this.dir.front ? 1 : 0) - (this.dir.back ? 1 : 0);
+    // The joystick wins while it is deflected; otherwise the keys steer.
+    const deflected = this.stick.x !== 0 || this.stick.z !== 0;
+    if (deflected) {
+      c.inputX = this.stick.x;
+      c.inputZ = this.stick.z;
+    } else {
+      c.inputX = (this.dir.right ? 1 : 0) - (this.dir.left ? 1 : 0);
+      // "Up" (arrow up / W) moves the claw towards the back of the cabinet (−Z), "down" towards the glass.
+      c.inputZ = (this.dir.front ? 1 : 0) - (this.dir.back ? 1 : 0);
+    }
+    this.notifyInput({ x: c.inputX, z: c.inputZ, source: deflected ? 'stick' : c.inputX !== 0 || c.inputZ !== 0 ? 'keys' : 'none' });
   }
 
   /**

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { aim, appliedValue, boot, click, closeSettings, collection, ff, fieldToys, grabAndWait, hold, openSettings, plush, readyForNext, setField, start, state, steerTo, watch, winARound } from './helpers';
 
 test.describe('2. full rounds through the HUD on all three display presets', () => {
-  test('desktop 1280×720: START, hold-to-aim with the direction buttons only, GRAB, win card, PLAY AGAIN', async ({ page }) => {
+  test('desktop 1280×720: START, aiming with the joystick only, GRAB, win card, PLAY AGAIN', async ({ page }) => {
     const w = watch(page);
     await boot(page, { display: 'desktop' });
     await start(page);
@@ -21,7 +21,7 @@ test.describe('2. full rounds through the HUD on all three display presets', () 
       if (result.outcome === 'won') won = result;
     }
     console.log('desktop HUD-only rounds:', tried.join(' | '));
-    expect(won, `no win with button-only aiming: ${tried.join(' | ')}`).not.toBeNull();
+    expect(won, `no win with joystick-only aiming: ${tried.join(' | ')}`).not.toBeNull();
 
     // The win card shows the prize and offers PLAY AGAIN; the collection has it.
     await expect(page.getByTestId('result-win')).toBeVisible();

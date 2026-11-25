@@ -1,0 +1,150 @@
+/* Arcade joystick (src/ui/Joystick.tsx): a ball-top lever on a round metal base, drawn with CSS 3D.
+
+   The push arrives as two numbers set from script, --nx / --ny (-1..1, screen axes, y down) and --p
+   (push length 0..1). They are registered properties, so one transition on the base animates every
+   part derived from them: the lever's tilt, the dust boot, the ball's highlight and its shadow. While
+   a finger holds the stick it follows at once; on release it springs back with a short overshoot.
+
+   Sizes are container units of the base (cqmin), so the stick looks the same in every slot size.
+   Colours come from the theme (CSS variables below); the GPU theme overrides them in theme-gpu.css. */
+
+@property --nx { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --ny { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --p { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+.pp-stick {
+  /* Rest lean: the deck is seen from the front and a little above, so the ball sits above the pivot. */
+  --lean: 15deg;
+  --tilt: 27deg;
+  /* Pivot to ball centre, and the viewing distance of the 3D parts. */
+  --len: 40cqmin;
+  --persp: 240cqmin;
+  --ball: var(--c-primary-deep);
+  --ball-hi: color-mix(in srgb, var(--ball) 40%, #fff);
+  --ball-lo: color-mix(in srgb, var(--ball) 58%, #000);
+  --metal: color-mix(in srgb, #e9e7ec 84%, var(--c-primary));
+  --metal-hi: #fff;
+  --metal-lo: color-mix(in srgb, var(--metal) 52%, #3b3342);
+  --face: color-mix(in srgb, var(--c-primary-deep) 24%, #221a27);
+  --gate-line: rgba(255, 255, 255, 0.16);
+  --rubber: #2c2531;
+  --rubber-hi: #5c5263;
+  --shaft: #dcdbe0;
+  --led: color-mix(in srgb, var(--c-primary-deep) 85%, #fff);
+  --engrave: color-mix(in srgb, var(--metal) 45%, #2e2834);
+  --nx: 0;
+  --ny: 0;
+  --p: 0;
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  container-type: size;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Release: a quick spring back past the centre and home (the curve overshoots by about a fifth). */
+  transition: --nx 420ms cubic-bezier(0.3, 1.75, 0.45, 1), --ny 420ms cubic-bezier(0.3, 1.75, 0.45, 1), --p 260ms ease-out, filter 160ms ease;
+}
+.pp-stick[data-held="true"] { cursor: grabbing; transition: filter 160ms ease; }
+/* Mirroring the keyboard: a short, firm lean (no overshoot while a key is down). */
+.pp-stick[data-source="keys"] { transition: --nx 110ms ease-out, --ny 110ms ease-out, --p 110ms ease-out, filter 160ms ease; }
+.pp-stick:focus-visible { outline: calc(var(--u) * 5) solid var(--c-accent2); outline-offset: calc(var(--u) * 4); }
+.pp-stick > * { pointer-events: none; }
+
+/* ------------------------------------------------------------------ base plate */
+.pp-stick .bezel, .pp-stick .face, .pp-stick .plate { position: absolute; border-radius: 50%; }
+/* Turned metal ring with a bright lip, sitting in the deck's well. */
+.pp-stick .bezel {
+  inset: 0;
+  background:
+    radial-gradient(circle, transparent 0 77%, rgba(255, 255, 255, 0.5) 79.5%, transparent 83%, transparent 93%, rgba(0, 0, 0, 0.28) 99%),
+    conic-gradient(from 200deg, var(--metal-hi) 0deg, var(--metal) 45deg, var(--metal-lo) 100deg, var(--metal) 150deg, var(--metal-hi) 205deg, var(--metal) 250deg, var(--metal-lo) 300deg, var(--metal) 335deg, var(--metal-hi) 360deg);
+  box-shadow: 0 1.4cqmin 0 var(--metal-lo), 0 3cqmin 5cqmin rgba(0, 0, 0, 0.38);
+}
+/* The recess the lever stands in, lit faintly from above. */
+.pp-stick .face {
+  inset: 10.5%;
+  background: radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--face) 78%, #fff), var(--face) 58%, color-mix(in srgb, var(--face) 62%, #000));
+  box-shadow: inset 0 1.8cqmin 3.4cqmin rgba(0, 0, 0, 0.62), inset 0 -0.7cqmin 0 rgba(255, 255, 255, 0.14);
+}
+.pp-stick .plate { inset: 0; width: 100%; height: 100%; overflow: visible; }
+.pp-stick .plate .gate { fill: rgba(0, 0, 0, 0.32); stroke: var(--gate-line); stroke-width: 0.7; stroke-linejoin: round; }
+.pp-stick .plate .lamps path { fill: var(--engrave); stroke: rgba(255, 255, 255, 0.55); stroke-width: 0.35; stroke-linejoin: round; transition: fill 120ms ease; }
+.pp-stick .plate .lamps circle { fill: var(--engrave); stroke: rgba(255, 255, 255, 0.45); stroke-width: 0.3; transition: fill 120ms ease; }
+/* Lit lamps: the arrows of the gate's straight parts ("right_back" lights right and back) and the
+   diagonal's own dot. */
+.pp-stick[data-gate*="right"] .lamps [data-g="right"],
+.pp-stick[data-gate*="left"] .lamps [data-g="left"],
+.pp-stick[data-gate*="back"] .lamps [data-g="back"],
+.pp-stick[data-gate*="front"] .lamps [data-g="front"],
+.pp-stick[data-gate="right_back"] .lamps [data-g="right_back"],
+.pp-stick[data-gate="left_back"] .lamps [data-g="left_back"],
+.pp-stick[data-gate="left_front"] .lamps [data-g="left_front"],
+.pp-stick[data-gate="right_front"] .lamps [data-g="right_front"] { fill: var(--led); stroke: color-mix(in srgb, var(--led) 60%, #fff); filter: drop-shadow(0 0 1.2px var(--led)) drop-shadow(0 0 2.6px var(--led)); }
+
+/* Ball shadow on the plate: under the ball, pushed away from the light (above front left). */
+.pp-stick .shadow {
+  position: absolute; left: 50%; top: 50%; width: 34cqmin; height: 28cqmin; margin: -14cqmin 0 0 -17cqmin; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.22) 62%, transparent);
+  transform: translate(calc(var(--nx) * 17cqmin + 3cqmin), calc(var(--ny) * 12cqmin + 5cqmin)) scale(calc(1 - var(--p) * 0.12));
+  opacity: calc(0.8 + var(--p) * 0.2);
+}
+
+/* ------------------------------------------------------------------ 3D lever */
+.pp-stick .boot, .pp-stick .lever {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d;
+  --rx: calc(var(--lean) - var(--ny) * var(--tilt));
+  --ry: calc(var(--nx) * var(--tilt));
+}
+.pp-stick .lever { transform: perspective(var(--persp)) rotateX(var(--rx)) rotateY(var(--ry)); }
+/* Rubber dust boot: its foot stays on the plate, its neck follows the shaft about halfway. */
+.pp-stick .boot { transform: perspective(var(--persp)) rotateX(calc(var(--rx) * 0.45)) rotateY(calc(var(--ry) * 0.45)); }
+.pp-stick .boot i {
+  --d: calc(25cqmin - var(--i) * 4.6cqmin);
+  position: absolute; left: calc(var(--d) / -2); top: calc(var(--d) / -2); width: var(--d); height: var(--d); border-radius: 50%;
+  transform: translateZ(calc(var(--i) * 2.4cqmin));
+  background: radial-gradient(circle at 40% 32%, var(--rubber-hi), var(--rubber) 52%, color-mix(in srgb, var(--rubber) 60%, #000));
+  box-shadow: 0 0 0 0.45cqmin rgba(0, 0, 0, 0.4), inset 0 0.5cqmin 0.6cqmin rgba(255, 255, 255, 0.14);
+}
+/* Shaft: discs stacked along the lever read as a polished cylinder from any angle. */
+.pp-stick .shaft {
+  position: absolute; left: -4.4cqmin; top: -4.4cqmin; width: 8.8cqmin; height: 8.8cqmin; border-radius: 50%;
+  transform: translateZ(calc(4cqmin + var(--i) * 5.2cqmin));
+  background: radial-gradient(circle at 38% 34%, #fff, var(--shaft) 42%, color-mix(in srgb, var(--shaft) 52%, #222) 100%);
+}
+/* The nut under the ball. */
+.pp-stick .collar {
+  position: absolute; left: -7.5cqmin; top: -7.5cqmin; width: 15cqmin; height: 15cqmin; border-radius: 50%;
+  transform: translateZ(calc(var(--len) - 15cqmin));
+  background: radial-gradient(circle at 40% 34%, var(--ball-hi), var(--ball-lo) 70%);
+  box-shadow: inset 0 0 0 0.8cqmin rgba(0, 0, 0, 0.25);
+}
+/* The ball always faces the viewer (a sphere is round from every side): the lever's rotation is
+   undone on it, so only its position follows the tilt. */
+.pp-stick .ball {
+  position: absolute; left: -15.5cqmin; top: -15.5cqmin; width: 31cqmin; height: 31cqmin; border-radius: 50%;
+  transform: translateZ(var(--len)) rotateY(calc(var(--ry) * -1)) rotateX(calc(var(--rx) * -1));
+  background:
+    radial-gradient(circle at calc(64% + var(--nx) * 6%) calc(82% + var(--ny) * 5%), color-mix(in srgb, var(--ball-hi) 70%, transparent) 0, transparent 30%),
+    radial-gradient(circle at calc(38% - var(--nx) * 9%) calc(32% - var(--ny) * 9%), var(--ball-hi) 0, var(--ball) 44%, var(--ball-lo) 96%);
+  box-shadow: inset 0 -1.6cqmin 3cqmin rgba(0, 0, 0, 0.28), 0 0.6cqmin 1.4cqmin rgba(0, 0, 0, 0.35);
+}
+/* Specular highlight: a crisp window of light that slides against the push. */
+.pp-stick .gloss {
+  position: absolute; left: calc(22% - var(--nx) * 9%); top: calc(13% - var(--ny) * 9%); width: 34%; height: 22%; border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.15));
+  transform: rotate(-28deg);
+}
+
+/* ------------------------------------------------------------------ states */
+.pp-stick[aria-disabled="true"] { cursor: default; filter: saturate(0.45) brightness(0.94); }
+.pp-stick[aria-disabled="true"] .lamps > * { fill: var(--engrave); filter: none; }
+
+/* Dark themes: a cooler gate line and a darker metal so the base does not glare. */
+.pp-root[data-theme="cosmic"] .pp-stick { --metal: color-mix(in srgb, #c9c3dc 82%, var(--c-primary)); --ball: color-mix(in srgb, var(--c-primary) 70%, var(--c-primary-deep)); }

@@ -88,7 +88,7 @@ html:has(.pp-root[data-theme="gpu"]) .pp-root[data-frame="simulate916"][data-let
 /* Focus rings in brand green everywhere (keyboard users on a desk kiosk). */
 .pp-root[data-theme="gpu"] .pp-btn:focus-visible, .pp-root[data-theme="gpu"] .pp-cta:focus-visible { outline: calc(var(--u) * 5) solid var(--g-green); outline-offset: calc(var(--u) * 5); }
 .pp-root[data-theme="gpu"] :is(.pp-tab, .pp-card, .pp-seg button, .pp-toggle, .pp-input, .pp-select, .pp-textarea, .pp-range, .pp-momo, button.pp-chip, .pp-rotate):focus-visible { outline: 3px solid var(--g-green); outline-offset: 2px; }
-.pp-root[data-theme="gpu"] .pp-grab[data-busy="true"]::after { border-color: rgba(0, 0, 0, 0.25); border-top-color: #000; }
+.pp-root[data-theme="gpu"] .pp-grab[data-busy="true"] > .cap::after { border-color: rgba(0, 0, 0, 0.25); border-top-color: #000; }
 
 /* ------------------------------------------------------------------ top bar */
 .pp-root[data-theme="gpu"] .pp-logo {
@@ -115,34 +115,92 @@ html:has(.pp-root[data-theme="gpu"]) .pp-root[data-frame="simulate916"][data-let
 .pp-root[data-theme="gpu"] .pp-chip .dot[data-tone="off"] { background: var(--g-600); }
 .pp-root[data-theme="gpu"] .pp-chip .dot[data-tone="live"] { background: var(--g-green); box-shadow: 0 0 0 calc(var(--u) * 4) color-mix(in srgb, var(--c-glow) 30%, transparent); }
 
-/* ------------------------------------------------------------ control panel */
-.pp-root[data-theme="gpu"] .pp-panel.bar {
-  border-radius: calc(var(--u) * 18);
-  background: linear-gradient(180deg, var(--g-900), #000);
-  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 5) 0 var(--g-green), 0 calc(var(--u) * 24) calc(var(--u) * 44) rgba(0, 0, 0, 0.6);
+/* ------------------------------------------------------------- control deck
+   Black anodised deck with a fine brushed grain, a green light strip along its back edge, grey
+   screws and a black well; the joystick's base is dark metal with a green ball (white gloss), the
+   big button a green plunger lit from inside (the glow shade at its centre) in a graphite bezel with
+   a white lamp ring. Palette only. */
+.pp-root[data-theme="gpu"] .pp-panel.bar, .pp-root[data-theme="gpu"] .pp-panel.split .pp-cluster.deck, .pp-root[data-theme="gpu"] .pp-panel.split:not(.phone)::before {
+  --deck-top: var(--g-900);
+  --deck-bottom: var(--g-950);
+  --deck-lip: var(--g-700);
+  --deck-rim: var(--g-green);
+  --deck-sheen: rgba(255, 255, 255, 0.07);
+  --deck-shade: rgba(0, 0, 0, 0.6);
+  --screw: var(--g-500);
+  --deck-grain: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 3px);
+  box-shadow:
+    inset 0 calc(var(--u) * 4) 0 var(--g-green),
+    inset 0 calc(var(--u) * 10) calc(var(--u) * 16) color-mix(in srgb, var(--c-glow) 22%, transparent),
+    inset 0 0 0 calc(var(--u) * 2) var(--g-700),
+    0 calc(var(--u) * 10) 0 var(--g-800),
+    0 calc(var(--u) * 12) 0 #000,
+    0 calc(var(--u) * 26) calc(var(--u) * 44) rgba(0, 0, 0, 0.6),
+    0 calc(var(--u) * -3) calc(var(--u) * 24) color-mix(in srgb, var(--c-glow) 30%, transparent);
 }
-.pp-root[data-theme="gpu"] .pp-panel.split .pp-cluster {
-  border-radius: calc(var(--u) * 18);
-  background: rgba(0, 0, 0, 0.82);
-  box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 5) 0 var(--g-green), 0 calc(var(--u) * 20) calc(var(--u) * 36) rgba(0, 0, 0, 0.55);
+.pp-root[data-theme="gpu"] .pp-panel.bar { border-radius: calc(var(--u) * 18); }
+.pp-root[data-theme="gpu"] .pp-panel.split .pp-cluster.deck { border-radius: calc(var(--u) * 18); }
+.pp-root[data-theme="gpu"] .pp-panel.phone.split :is(.pp-slot.pad, .pp-slot.action)::before {
+  --deck-top: var(--g-900);
+  --deck-bottom: #000;
+  --deck-lip: var(--g-800);
+  --deck-rim: var(--g-green);
+  background: linear-gradient(180deg, var(--deck-top), var(--deck-bottom));
+  box-shadow: inset 0 calc(var(--u) * 4) 0 var(--g-green), inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 8) 0 var(--g-800), 0 calc(var(--u) * 20) calc(var(--u) * 30) rgba(0, 0, 0, 0.6);
 }
+.pp-root[data-theme="gpu"] .pp-panel.phone.split .pp-slot.pad::before { border-radius: calc(var(--u) * 18); }
 .pp-root[data-theme="gpu"] .pp-status {
   color: #fff;
   border-radius: calc(var(--u) * 8);
   background: rgba(0, 0, 0, 0.88);
   box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 4) calc(var(--u) * 14) var(--g-shadow);
 }
-.pp-root[data-theme="gpu"] .pp-panel.bar .pp-status { background: none; box-shadow: none; }
+.pp-root[data-theme="gpu"] .pp-panel.bar .pp-status { background: #000; box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-700), inset 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0, 0, 0, 0.8); }
 .pp-root[data-theme="gpu"] .pp-status .timer { background: var(--g-green); color: #000; border-radius: calc(var(--u) * 6); }
 
-.pp-root[data-theme="gpu"] .pp-dpad .pp-btn {
-  --face: var(--g-800);
-  --edge: #000;
-  color: #fff;
-  box-shadow: 0 var(--depth) 0 var(--edge), 0 calc(var(--depth) + var(--u) * 6) calc(var(--u) * 14) var(--g-shadow), inset 0 0 0 calc(var(--u) * 2) var(--g-600);
+.pp-root[data-theme="gpu"] .pp-dpad {
+  --well: #000;
+  background: radial-gradient(circle at 50% 42%, var(--g-800), #000 70%);
+  box-shadow: inset 0 calc(var(--u) * 8) calc(var(--u) * 14) rgba(0, 0, 0, 0.9), inset 0 0 0 calc(var(--u) * 2) var(--g-700), 0 calc(var(--u) * 2) 0 var(--g-600);
 }
-.pp-root[data-theme="gpu"] .pp-dpad .pp-btn[data-pressed="true"], .pp-root[data-theme="gpu"] .pp-dpad .pp-btn:active { --face: var(--g-green); --edge: var(--g-green-deep); color: #000; }
-.pp-root[data-theme="gpu"] .pp-dpad .hub { background: radial-gradient(circle at 40% 35%, var(--g-600), var(--g-900)); box-shadow: inset 0 0 0 calc(var(--u) * 2) var(--g-green), 0 calc(var(--u) * 3) calc(var(--u) * 6) var(--g-shadow); }
+.pp-root[data-theme="gpu"] .pp-stick {
+  --ball: var(--g-green);
+  --ball-hi: #fff;
+  --ball-lo: var(--g-green-deep);
+  --metal: var(--g-600);
+  --metal-hi: var(--g-300);
+  --metal-lo: var(--g-800);
+  --face: var(--g-950);
+  --gate-line: var(--g-600);
+  --rubber: var(--g-900);
+  --rubber-hi: var(--g-600);
+  --shaft: var(--g-300);
+  --led: var(--g-green);
+  --engrave: #000;
+}
+.pp-root[data-theme="gpu"] .pp-stick:focus-visible { outline: calc(var(--u) * 5) solid var(--g-green); outline-offset: calc(var(--u) * 5); }
+.pp-root[data-theme="gpu"] .pp-stick .gloss { background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.1)); }
+
+/* Arcade button: graphite bezel, black hole, green plunger with black lettering, white lamp ring. */
+.pp-root[data-theme="gpu"] .pp-grab {
+  --bezel: var(--g-600);
+  --bezel-lo: var(--g-800);
+  --hole: #000;
+  --bezel-shadow: 0 calc(var(--u) * 4) 0 #000, 0 calc(var(--u) * 10) calc(var(--u) * 18) var(--g-shadow), 0 0 0 calc(var(--u) * 5) var(--g-800);
+  background:
+    radial-gradient(circle closest-side, var(--hole) calc(100% - var(--ring)), transparent calc(100% - var(--ring) + 1px)),
+    radial-gradient(circle closest-side, transparent 0 78%, rgba(255, 255, 255, 0.3) 84%, transparent 90%, rgba(0, 0, 0, 0.4) 100%),
+    conic-gradient(from 200deg, var(--g-300) 0deg, var(--g-600) 45deg, var(--g-800) 100deg, var(--g-600) 150deg, var(--g-300) 205deg, var(--g-600) 250deg, var(--g-800) 300deg, var(--g-600) 335deg, var(--g-300) 360deg);
+  box-shadow: var(--bezel-shadow);
+}
+.pp-root[data-theme="gpu"] .pp-grab:active, .pp-root[data-theme="gpu"] .pp-grab[data-pressed="true"] { --face: var(--g-green); box-shadow: var(--bezel-shadow); }
+.pp-root[data-theme="gpu"] .pp-grab > .cap {
+  text-shadow: none;
+  background:
+    radial-gradient(58% 40% at 50% 17%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 100%),
+    radial-gradient(circle at 50% 36%, var(--g-light) 0, var(--g-green) 50%, var(--g-green-deep) 100%);
+}
+.pp-root[data-theme="gpu"] .pp-grab::before { border-color: #fff; box-shadow: 0 0 calc(var(--u) * 14) color-mix(in srgb, var(--c-glow) 70%, transparent), inset 0 0 calc(var(--u) * 8) color-mix(in srgb, var(--c-glow) 60%, transparent); }
 
 /* -------------------------------------------------------------------- guide */
 .pp-root[data-theme="gpu"] .pp-momo { filter: drop-shadow(0 calc(var(--u) * 8) calc(var(--u) * 8) rgba(0, 0, 0, 0.5)); }

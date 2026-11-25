@@ -172,7 +172,7 @@ export async function start(page: Page): Promise<void> {
     await click(page, 'tutorial-ok');
     await expect.poll(() => plush(page, (p) => p.ui().modal)).toBeNull();
   }
-  await expect(page.getByTestId('dir-right')).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.getByTestId('stick')).toHaveAttribute('aria-disabled', 'false');
   // Let the claw travel to its home position.
   await ff(page, 1.2);
 }
@@ -387,12 +387,51 @@ export const appliedValue = <T = unknown>(page: Page, path: string): Promise<T> 
   );
 
 export type Dir = 'left' | 'right' | 'back' | 'front';
+/** The joystick's eight gates (src/ui/stickMath.ts): the left / right part first, then back / front. */
+export type Gate = Dir | 'right_back' | 'left_back' | 'left_front' | 'right_front';
 
-/** Presses and holds a direction button with the mouse while `seconds` of game time pass. */
-export async function hold(page: Page, dir: Dir, seconds: number): Promise<void> {
-  const b = await box(page, `dir-${dir}`);
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+/**
+ * The on-screen joystick (src/ui/Joystick.tsx, data-testid="stick"): press anywhere on its base and
+ * drag. A full push is TRAVEL × its width from the centre (Joystick.tsx); further only clamps. Up on
+ * the screen is the back of the machine. `data-gate` shows the engaged gate, `data-held` the hold.
+ */
+export const STICK_TRAVEL = 0.26;
+
+/** Screen direction of a gate: x right, y down (front = toward the player = down on the screen). */
+export function gateScreen(gate: Gate): { x: number; y: number } {
+  const x = gate.startsWith('right') ? 1 : gate.startsWith('left') ? -1 : 0;
+  const y = gate.endsWith('front') ? 1 : gate.endsWith('back') ? -1 : 0;
+  const len = Math.hypot(x, y);
+  return { x: x / len, y: y / len };
+}
+
+/** Centre of the joystick and the point that pushes it toward `gate` (`push` × the travel radius). */
+export async function stickPoint(page: Page, gate: Gate, push = 1.2): Promise<{ cx: number; cy: number; x: number; y: number; travel: number }> {
+  const b = await box(page, 'stick');
+  const cx = b.x + b.width / 2;
+  const cy = b.y + b.height / 2;
+  const travel = b.width * STICK_TRAVEL;
+  const d = gateScreen(gate);
+  return { cx, cy, x: cx + d.x * travel * push, y: cy + d.y * travel * push, travel };
+}
+
+/** Takes the joystick with the mouse on its centre and pushes it toward `gate`; it stays held. */
+export async function pushStick(page: Page, gate: Gate, push = 1.2): Promise<void> {
+  const p = await stickPoint(page, gate, push);
+  await page.mouse.move(p.cx, p.cy);
   await page.mouse.down();
+  await page.mouse.move(p.x, p.y, { steps: 2 });
+}
+
+/** Moves the held joystick to another gate without letting go. */
+export async function moveStick(page: Page, gate: Gate, push = 1.2): Promise<void> {
+  const p = await stickPoint(page, gate, push);
+  await page.mouse.move(p.x, p.y, { steps: 2 });
+}
+
+/** Pushes the joystick toward `gate` with the mouse while `seconds` of game time pass, then lets go. */
+export async function hold(page: Page, gate: Gate, seconds: number): Promise<void> {
+  await pushStick(page, gate);
   await ff(page, seconds);
   await page.mouse.up();
 }
@@ -410,9 +449,9 @@ async function settled(page: Page): Promise<{ x: number; z: number }> {
 }
 
 /**
- * Steers the claw above (x, z) the way a player does: only the on-screen direction
- * buttons, real pointer press-and-hold in real time, watching the claw and letting go
- * shortly before the target, then short corrective taps until it is within `tol`.
+ * Steers the claw above (x, z) the way a player does: only the on-screen joystick, a real pointer
+ * push in real time, watching the claw and letting go shortly before the target, then short
+ * corrective nudges until it is within `tol`.
  */
 export async function steerTo(page: Page, x: number, z: number, tol = 0.012): Promise<{ x: number; z: number; presses: number }> {
   let presses = 0;
@@ -423,12 +462,10 @@ export async function steerTo(page: Page, x: number, z: number, tol = 0.012): Pr
       const err = target - pos[axis];
       if (Math.abs(err) < tol) break;
       const dir: Dir = axis === 'x' ? (err > 0 ? 'right' : 'left') : err > 0 ? 'front' : 'back';
-      const b = await box(page, `dir-${dir}`);
-      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-      await page.mouse.down();
+      await pushStick(page, dir);
       presses++;
       if (Math.abs(err) > 0.07) {
-        // Long hold: release a braking distance (plus reaction time) before the target.
+        // Long push: let go a braking distance (plus reaction time) before the target.
         await page.waitForFunction(
           (a) => Math.abs(a.target - (window as any).__plush.state().claw[a.axis]) < 0.075 || !/READY|AIMING/.test((window as any).__plush.state().phase),
           { target, axis },
@@ -461,7 +498,7 @@ export interface Offender {
 }
 
 /**
- * Every visible interactive element (buttons, inputs, selects, tabs, switches)
+ * Every visible interactive element (buttons, inputs, selects, tabs, switches, the joystick)
  * whose visible rectangle leaves normalised screen Y [top, bottom]. Elements
  * scrolled out of a scroll container are not visible and are ignored.
  */
@@ -471,7 +508,7 @@ export const outsideZone = (page: Page, allow: string[] = [], top = 0.25, bottom
       const vh = window.innerHeight;
       const vw = window.innerWidth;
       const out: { id: string; top: number; bottom: number }[] = [];
-      const nodes = document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [role="switch"], [role="tab"], [role="slider"]');
+      const nodes = document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [role="switch"], [role="tab"], [role="slider"], [role="application"]');
       for (const el of nodes) {
         const style = getComputedStyle(el);
         if (style.visibility === 'hidden' || style.display === 'none' || style.pointerEvents === 'none') continue;
