@@ -138,10 +138,12 @@ function PanelMenu({ compact, layout, deck }: { compact: boolean; layout: HudLay
   const owned = useCollection((s) => Object.keys(s.counts).length);
   const recal = useRecalibrate();
   const recalHere = recal.show && !topBarReachable(layout);
+  // An upright phone's menu row has room for four buttons: the machine buttons go to the top bar.
+  const machinesHere = !machineButtonsInTopBar(layout);
   return (
     <div className="pp-menu" data-testid="panel-menu">
-      <LobbyDeckButton deck={deck} compact={compact} />
-      <StaffDeckButton deck={deck} compact={compact} />
+      {machinesHere ? <LobbyDeckButton deck={deck} compact={compact} /> : null}
+      {machinesHere ? <StaffDeckButton deck={deck} compact={compact} /> : null}
       <button type="button" className="pp-btn small soft" onClick={() => open('settings')} aria-label={t('hud.settings')} data-testid="menu-settings">
         <IconInfo />
         {compact ? null : <span>{t('hud.settings')}</span>}
@@ -173,6 +175,23 @@ function PanelMenu({ compact, layout, deck }: { compact: boolean; layout: HudLay
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** True on an upright phone, whose menu row is full: MACHINES and Call staff sit in the top bar there. */
+function machineButtonsInTopBar(layout: HudLayout): boolean {
+  return layout.controls !== null && layout.orientation === 'portrait';
+}
+
+/** The machine buttons in the top bar (upright phone only). */
+function TopBarMachineButtons({ layout }: { layout: HudLayout }) {
+  const deck = useMachineDeck();
+  const size = layout.touchMin;
+  return (
+    <>
+      <LobbyDeckButton deck={deck} compact size={size} />
+      <StaffDeckButton deck={deck} compact size={size} />
+    </>
   );
 }
 
@@ -362,6 +381,7 @@ function TopBar({ layout }: { layout: HudLayout }) {
           </span>
         ) : null}
         <span className="pp-spacer" />
+        {machineButtonsInTopBar(layout) ? <TopBarMachineButtons layout={layout} /> : null}
         {layout.density === 'rich' && wins > 0 ? <span className="pp-chip">{t('hud.wins', { count: wins })}</span> : null}
         <CameraChip withText={layout.density === 'rich' && layout.vw > 900} reachable={reachable} />
       </div>

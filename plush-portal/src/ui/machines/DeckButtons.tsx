@@ -47,13 +47,16 @@ export const IconLock = (p: IconProps) =>
     </>,
   );
 
+/** Square size in CSS px (top bar buttons), else the menu's own size. */
+const sized = (size?: number) => (size ? { minWidth: size, minHeight: size, padding: 0 } : undefined);
+
 /** MACHINES on the deck (`compact`: icon only, as the other compact menu buttons). */
-export function LobbyDeckButton({ deck, compact }: { deck: MachineDeck; compact: boolean }) {
+export function LobbyDeckButton({ deck, compact, size }: { deck: MachineDeck; compact: boolean; size?: number }) {
   const t = useT();
   if (!deck.lobby.visible) return null;
   const label = t('machines.deck.machines');
   return (
-    <button type="button" className="pp-btn small soft pp-deck-machines" onClick={deck.lobby.onPress} disabled={!deck.lobby.enabled} aria-label={label} title={label} data-testid="menu-machines">
+    <button type="button" className="pp-btn small soft pp-deck-machines" style={sized(size)} onClick={deck.lobby.onPress} disabled={!deck.lobby.enabled} aria-label={label} title={label} data-testid="menu-machines">
       <IconMachines />
       {compact ? null : <span>{label}</span>}
     </button>
@@ -61,7 +64,7 @@ export function LobbyDeckButton({ deck, compact }: { deck: MachineDeck; compact:
 }
 
 /** "Call staff" on the bridge: it glows while the box is stuck. */
-export function StaffDeckButton({ deck, compact }: { deck: MachineDeck; compact: boolean }) {
+export function StaffDeckButton({ deck, compact, size }: { deck: MachineDeck; compact: boolean; size?: number }) {
   const t = useT();
   if (!deck.staff.visible) return null;
   const label = t('machines.deck.staff');
@@ -69,6 +72,7 @@ export function StaffDeckButton({ deck, compact }: { deck: MachineDeck; compact:
     <button
       type="button"
       className="pp-btn small soft pp-deck-staff"
+      style={sized(size)}
       onClick={deck.staff.onPress}
       disabled={!deck.staff.enabled}
       data-highlighted={deck.staff.highlighted}

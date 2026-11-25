@@ -182,7 +182,13 @@ test.describe('30. machine lobby and session UI', () => {
     expect(await outsideZone(page, ALLOW), 'lobby scrolled').toEqual([]);
     for (let i = 0; i < 4 && (await page.getByTestId('lobby-card-rush').getAttribute('data-focused')) !== 'true'; i++) await click(page, 'lobby-next');
     await expect(page.getByTestId('lobby-card-rush')).toHaveAttribute('data-focused', 'true');
-    await expectInZone(page, 'lobby-play-rush');
+    // The list scrolls the focused card into view (smoothly): once there, its PLAY is inside the band.
+    await expect
+      .poll(async () => {
+        const b = await box(page, 'lobby-play-rush');
+        return b.y / 1920 >= 0.248 && (b.y + b.height) / 1920 <= 0.752;
+      }, { timeout: 60_000 })
+      .toBe(true);
     await click(page, 'lobby-play-rush');
     await expect.poll(() => settled(page), { timeout: 240_000 }).toBe('rush/false');
     expect(await ffUntil(page, ['READY', 'AIMING'], 5)).toMatch(/READY|AIMING/);
@@ -305,5 +311,24 @@ test.describe('30. machine lobby and session UI', () => {
       expect(b.x + b.width).toBeLessThanOrEqual(844.5);
       expect(b.y + b.height).toBeLessThanOrEqual(390.5);
     }
+    await click(page, 'modal-close');
+    await expect(page.getByTestId('lobby')).toHaveCount(0);
+    // Held upright the menu row is full: MACHINES moves to the top bar; nothing leaves the screen or overlaps.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => plush(page, (p) => p.game.hud.orientation), { timeout: 60_000 }).toBe('portrait');
+    await frames(page, 2);
+    const ids = ['menu-machines', 'menu-settings', 'menu-collection', 'menu-themes', 'menu-help', 'info-button', 'start'];
+    const boxes = [];
+    for (const id of ids) {
+      const b = await box(page, id);
+      boxes.push(b);
+      expect(Math.min(b.width, b.height), `${id} touch size`).toBeGreaterThanOrEqual(43.5);
+      expect(b.x, `${id} left`).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width, `${id} right`).toBeLessThanOrEqual(390.5);
+      expect(b.y + b.height, `${id} bottom`).toBeLessThanOrEqual(844.5);
+    }
+    const overlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
+      a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) expect(overlap(boxes[i]!, boxes[j]!), `${ids[i]} / ${ids[j]}`).toBe(false);
   });
 });

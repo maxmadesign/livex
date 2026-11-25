@@ -2070,7 +2070,7 @@ stays bit-identical (golden trace and round trip unchanged).
 | # | Design | Built | Why |
 | --- | --- | --- | --- |
 | F1 | WS-F never edits `Hud.tsx`; 4A renders the deck from `useMachineDeck()`. | Small additive edits in `Hud.tsx`: `useMachineDeck()` once in `ControlPanel`, passed to `StickWell` (two-step), `StatusLine` (plate) and `PanelMenu` (MACHINES, Call staff). | 4A has merged; this round's task asks for the deck buttons in Hud with additive edits. Every other line of Hud is unchanged. |
-| F2 | MACHINES on the deck. | Shown only when the lobby is on **and** more than one machine is offered; enabled at a round boundary with nothing open. | A lobby with one card is no choice. While every other machine is `available: false` the classic HUD is exactly as before. |
+| F2 | MACHINES on the deck. | Shown only when the lobby is on **and** more than one machine is offered; enabled at a round boundary with nothing open. On an upright phone MACHINES and Call staff sit in the top bar (44 px squares beside the camera chip). | A lobby with one card is no choice. While every other machine is `available: false` the classic HUD is exactly as before. The upright phone's menu row is solved for four buttons (src/layout/solve.ts); a fifth pushed "?" off the screen. |
 | F3 | The coin plate "FREE PLAY" / "TRY 3" / "TRIES 2/5" / "0:42". | Shown in the status line on machines other than classic only ("TIME 0:42"). | Classic's FREE PLAY plate is part of the 3D cabinet, and the phone's status line has no room to spare. |
 | F4 | Lobby ◀ ▶ buttons, vertical list on portrait. | ◀ ▶ (▲ ▼ in the list) in the dialog's footer with position dots and the keys hint; on a sideways phone each card is laid out as a row (art beside the text) so PLAY fits in 390 px of height. | One place for the controls on every layout, always inside the dialog and so inside the band. |
 | F5 | Card art: a genre SVG. | `art.tsx` draws an original SVG per genre in the theme's colours (GPU: its palette only, unit tested); `setMachinePreviewSource(fn)` is the injection point for rendered previews (`fn(id, genre, themeId)` returns an image URL or null; the cards redraw when it changes). | The rendering workstream's preview API is not in this tree. |
@@ -2084,6 +2084,23 @@ stays bit-identical (golden trace and round trip unchanged).
 | F13 | The key list of section 4.8. | Plus the keys the UI needed: `machines.<id>.tag`, `machines.rule.*`, `lobby.subtitle / keys / position / noTop / bestLabel / prizesLabel`, `hud.boxes / gems / prizeWon / bonus / clock`, `try.boxes / gems / multiDrop / handful / daily`, `session.boxes / gems / rank / rankValue / noRewardRush / thanks`, `rank.up / down / slot / keys / seconds`, `set.machines.group.* / unavailable`. The close button uses `common.close`. | — |
 | F14 | `machines.hidden` in the Machines section. | One toggle per machine (pressed = offered; home is always offered and its toggle is disabled). | `Field` has no control for string lists. |
 | F15 | `28-machines-lobby` and the 03-safe-zone change. | `30-lobby` (the name this round asked for); 03-safe-zone is unchanged. | `menu-machines` does not exist until a second machine is offered; 30-lobby checks the lobby, the HUD, the initials entry and the session card in the 86" band with the debug override. |
+
+### Verified
+
+- `tsc` on both configs; unit: 126 files, 1,530 tests pass (the new `machinesView` and `machineLines`
+  tests included); `npx vitest run tests/unit/machines` and `golden-classic.ts --check`: identical.
+- e2e (production build, SwiftShader, one worker): `30-lobby` 4 of 4 in one run (desktop shelf
+  session and back to classic; portrait86 in Chinese with a rush run, initials and the ranking inside
+  the band; bridge two-step and Call staff; phone sideways and upright targets). The existing
+  `03-safe-zone`, `04-settings-dialog`, `22-idle-attract`, `24-phone`, `26-rewards-client`: 13 of 13.
+  The first portrait86 run failed once: its clicks outlasted the 30 s initials deadline on software
+  rendering; the spec now moves the deadline out (the timeout itself is the director's, unit tested).
+- Screenshots, sakura and GPU, in six layouts (desktop 1280 × 720, portrait32 and portrait86
+  1080 × 1920, portrait86 simulated in 1280 × 720, phone 844 × 390 and 390 × 844): the HUD with
+  MACHINES, the lobby, the shelf session HUD, the try toast, the session card with its claim QR, the
+  rush clock in its last seconds, the initials entry, the rush card with the leaderboard row, and
+  Settings → Machines. The items themselves are not drawn in them (the rendering workstream's
+  `ItemVisuals` is not in this tree).
 
 ### Outside WS-F's files (section 6.2)
 

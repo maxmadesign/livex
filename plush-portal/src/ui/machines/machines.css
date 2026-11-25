@@ -130,7 +130,12 @@
 
 /* Phones: smaller type, the cards keep a 44 px PLAY. */
 .pp-root[data-profile="mobile"] .pp-lobby-track { --gap: 10px; padding: 6px 14px 10px; }
-.pp-root[data-profile="mobile"] .pp-mcard { border-radius: 16px; flex-basis: calc((100% - (var(--across) - 1) * var(--gap) - 28px) / var(--across)); }
+.pp-root[data-profile="mobile"] .pp-mcard { border-radius: 16px; }
+.pp-root[data-profile="mobile"] .pp-lobby[data-flow="row"] .pp-mcard { flex-basis: calc((100% - (var(--across) - 1) * var(--gap) - 28px) / var(--across)); }
+/* Upright phones: the list's cards stack (art on top), the column is too narrow to share. */
+.pp-root[data-profile="mobile"] .pp-lobby[data-flow="column"] .pp-mcard { flex-direction: column; }
+.pp-root[data-profile="mobile"] .pp-lobby[data-flow="column"] .pp-mcard .art { width: 100%; aspect-ratio: 16 / 7; min-height: 0; }
+.pp-root[data-profile="mobile"] .pp-lobby[data-flow="column"] .pp-mcard .name { padding-right: 0; }
 .pp-root[data-profile="mobile"] .pp-mcard .info { padding: 6px 10px 10px; gap: 3px; }
 .pp-root[data-profile="mobile"] .pp-mcard :is(.tagline, .howto) { display: none; }
 .pp-root[data-profile="mobile"] .pp-lobby-sub { display: none; }
