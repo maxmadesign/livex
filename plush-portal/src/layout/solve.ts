@@ -272,7 +272,10 @@ export const PHONE = {
   gap: 10,
   /** Inner padding of the upright panel. */
   pad: 12,
-  /** Gap between direction buttons (hud.css .pp-dpad gap). */
+  /**
+   * Sizes the joystick's slot: its round well is three touch sizes plus two of these gaps wide
+   * (hud.css .pp-dpad), the footprint of the direction pad it replaced, so every layout keeps its slots.
+   */
   dpadGap: 4,
   /** Gap between compact-menu buttons (hud.css .pp-menu gap). */
   menuGap: 12,

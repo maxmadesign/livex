@@ -33,7 +33,7 @@ editable under *Settings → Layout* and *Settings → Camera & Parallax*.
 | --- | --- | --- | --- | --- |
 | Intended for | Landscape monitor or laptop, mouse + keyboard | 32" 9:16 touch display | 86" 9:16 floor-standing display | Phone held sideways (upright also playable), touch |
 | Design size (units) | 1920 × 1080 | 1080 × 1920 | 1080 × 1920 | 1300 × 600 sideways (600 units on the short side) |
-| Panel style | *split*: direction pad and grab button in the lower corners | *bar*: one panel along the bottom | *bar*: one panel in the middle band | sideways *split* (pad and button in the display bays), upright *bar* |
+| Panel style | *split*: joystick and grab button in the lower corners | *bar*: one panel along the bottom | *bar*: one panel in the middle band | sideways *split* (joystick and button in the display bays), upright *bar* |
 | Safe zone (top – bottom) | 0 – 1 | 0 – 1 | **0.25 – 0.75** | 0 – 1, minus the screen's cut-outs |
 | Panel anchor Y | 0.84 | 0.865 | **0.60** | 0.86 (docked at the bottom) |
 | Panel width | 0.94 | 0.94 | 0.60 | 1.00 |
@@ -62,7 +62,7 @@ y = 0 top … 1 bottom**. Nothing in the layout is stored in pixels.
   above most people's reach and the bottom quarter is at knee height, hence
   0.25–0.75. On the other presets the zone is the whole screen.
 - **Panel anchor** (`anchorY`): where the *centre* of the main control panel
-  (direction pad, grab button, compact menu) sits. 0.60 on the 86" preset
+  (joystick, grab button, compact menu) sits. 0.60 on the 86" preset
   places it in the lower-middle of the safe zone.
 - **Play floor line** (`floorY`): where the front edge of the toy floor meets
   the glass on screen. The 3D scene is laid out around it (see below), so the
@@ -105,7 +105,7 @@ default to the browser's current values, so the HUD and the scene always agree.
 9. **Cut-outs are kept clear.** Panel, title row and dialogs stay inside the
    viewport minus the reported safe-area insets (notch, punch hole, home indicator).
 10. **Phones** (`mobile`) get exact rectangles for each part of the panel
-    (`layout.controls`: pad, big button, status line, compact menu) and these extra rules —
+    (`layout.controls`: the joystick's slot `dpad`, big button, status line, compact menu) and these extra rules —
     every main control ≥ 56 CSS px where the screen allows it and every touch target
     ≥ 44 CSS px always; no two controls overlap; Momo's block, at its largest
     (`guide.maxH`), never reaches a control or the title row. See [Phones](#phones).
@@ -149,8 +149,8 @@ image. Example: an 86" 4K panel in portrait is 2160 × 3840 physical pixels
 *Settings → Graphics* shows the resolution currently in use.
 
 The physical size of a control is `CSS px × (physical width ÷ CSS width)`. With
-the defaults the basic button size (*Button size*, the edge of one direction
-button) comes out at roughly 65 mm on a 1.071 m wide 86" panel and 38 mm on a
+the defaults the basic button size (*Button size*, the touch size: a third of the joystick's well,
+the edge of one button of the direction pad it replaced) comes out at roughly 65 mm on a 1.071 m wide 86" panel and 38 mm on a
 0.398 m wide 32" panel, whatever the OS scaling is, because the unit follows
 the viewport width. The round grab button is 2.15× that, the compact menu buttons 0.62×. These are computed values — check them with a ruler on the real device.
 
@@ -388,7 +388,7 @@ Real-device checks that nobody has done yet:
 
 - [ ] Every control reachable by a 1.2 m child and a 1.9 m adult without stretching or bending
 - [ ] Text readable at 0.8–1.5 m; nothing important in the top or bottom quarter
-- [ ] Touch accuracy at the panel edges; palm rejection; multi-touch on pad + grab at once
+- [ ] Touch accuracy at the panel edges; palm rejection; multi-touch on joystick + grab at once
 - [ ] Perspective feels like a window from the reference position and while walking past
 - [ ] No visible seam or scaling artefacts from the upscaled 3D view
 - [ ] Frame rate and thermals over an hour of attract mode
@@ -413,7 +413,7 @@ right-handed players (*Grab button side*), readability at arm's length, camera f
 
 - Landscape, any window size; the layout scales with the shorter side.
   Below roughly 1280 × 720 the buttons become small for touch — it is meant for mouse and keyboard.
-- Direction pad bottom-left, grab button bottom-right (swap with *Grab button side*).
+- Joystick bottom-left, grab button bottom-right (swap with *Grab button side*); the arrow keys / WASD and Space do the same.
 - *Game window: Browser window (approximate)* is the default: the perspective
   assumes a 24" monitor (0.531 × 0.299 m) and estimates where the window is on
   it. Enter your monitor's real size for a better result, or press `F` and
@@ -431,12 +431,13 @@ the styles are the *phones* section of `src/ui/hud.css`, the behaviour is
 
 - **Units.** One design unit is `clamp(short side / 600, 0.56, 0.68)` CSS px. A phone's
   CSS pixel is about 0.16 mm on every phone, so sizes come out physically alike:
-  text 14–17 px, direction buttons 56–68 px (≈ 9–11 mm), the big button 2.15× that.
+  text 14–17 px, the touch size 56–68 px (≈ 9–11 mm; the joystick's well is three of them plus two
+  4-unit gaps, the footprint of the direction pad it replaced), the big button 2.15× the touch size.
 - **Controls in the display bays.** The landscape window shows a display bay on
-  each side of the cabinet (`machineSpan` in `windowGeometry.ts`). The direction pad
+  each side of the cabinet (`machineSpan` in `windowGeometry.ts`). The joystick
   sits in the bottom-left bay, the big START / GRAB / PLAY AGAIN button in the
-  bottom-right bay, vertically centred on the pad (swap with *Grab button side*).
-  The pad is shrunk (not under 56 px) to stay in its bay; on 16:9 phones it may reach a few pixels over the cabinet's frame bar, never over the glass.
+  bottom-right bay, vertically centred on the joystick (swap with *Grab button side*).
+  The joystick is shrunk (touch size not under 56 px) to stay in its bay; on 16:9 phones it may reach a few pixels over the cabinet's frame bar, never over the glass.
 - **Status line and compact menu** (settings, collection, theme, help — every one
   44 px) sit between them at the bottom, below the play floor. The status line has its own backing.
 - **Compact title row** (either way up): one touch target high (44 px); logo smaller, the theme
@@ -465,7 +466,7 @@ over the phone's width), so the toys are not smaller than sideways.
 - Like the 32" preset scaled down: cabinet on top, Momo in one row just above the
   panel, the floor line placed just above Momo, and one **opaque** panel docked at
   the bottom — status line (at most two lines, then an ellipsis) and compact menu in its
-  top row, pad and big button in the row below. The solver keeps the panel under 45 % of the height and leaves the
+  top row, joystick and big button in the row below. The solver keeps the panel under 45 % of the height and leaves the
   cabinet the room its gantry needs (the floor line is at least 0.84 × width down the screen).
 - For seven seconds a dark chip under the title row says *Turn your phone
   sideways for the best view*; a tap hides it at once. It is shown once per page load.
@@ -501,9 +502,9 @@ over the phone's width), so the toys are not smaller than sideways.
   target, 512 textures, no fur shells, pixel-density cap 1.25 and at most 0.7 MP of 3D
   pixels. If that preset is ever raised above 1.5 device pixels per CSS pixel, the phone
   setup lowers the cap (and the preset then shows as *Custom*).
-- Direction buttons also release on any `pointerup` / `pointercancel` of their pointer
+- The joystick also springs back on any `pointerup` / `pointercancel` of its pointer
   anywhere, when the last finger leaves the screen, on window blur and when the page is
-  hidden — the claw never keeps moving after the finger is lifted.
+  hidden — the claw never keeps moving after the finger is lifted (`src/ui/Joystick.tsx`).
 - `index.html` also sets `theme-color`, `mobile-web-app-capable`,
   `apple-mobile-web-app-capable`, a translucent status bar and `format-detection`;
   `public/manifest.webmanifest` lets the game be added to the home screen and start
@@ -523,19 +524,19 @@ over the phone's width), so the toys are not smaller than sideways.
 Solver output (computed by the code above at default settings, not measured on a device;
 physical width at a pixel ratio of 3):
 
-| Viewport (CSS px) | Unit | Pad button / big button / menu (px) | Where | Momo (screen Y) | Floor line | Window width, scale | Adjusted |
+| Viewport (CSS px) | Unit | Touch size / big button / menu (px) | Where | Momo (screen Y) | Floor line | Window width, scale | Adjusted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| iPhone 15 Pro, full screen @ 852 × 393 | 0.655 | 66 / 141 / 44 | pad 17–219, button 694–835 (cabinet 266–586) | side 0.22–0.52 | 0.700 | 139 mm, ×20.3 | no |
-| same, cut-outs 0 / 59 / 21 / 59 | 0.655 | 66 / 141 / 44 | pad 59–261, button 652–793 | side 0.19–0.49 | 0.700 | 139 mm, ×20.3 | no |
-| iPhone 15 Pro in Safari @ 734 × 343 | 0.572 | 57 / 123 / 44 | pad 15–191, button 596–719 (cabinet 227–507) | side 0.21–0.52 | 0.700 | 120 mm, ×23.3 | no |
-| Pixel 7 in Chrome @ 863 × 360 | 0.600 | 60 / 129 / 44 | pad 17–202, button 717–846 (cabinet 285–578) | side 0.22–0.52 | 0.700 | 141 mm, ×22.2 | no |
-| iPhone SE (16:9) @ 667 × 375 | 0.625 | 57 / 123 / 44 | pad 13–190, button 531–654 (cabinet 181–486) | side 0.26–0.56 | 0.700 | 105 mm (DPR 2), ×22 | no |
-| Pixel 5 in Chrome @ 802 × 293 | 0.560 | 56 / 120 / 44 | pad 16–189, button 666–786 (cabinet 282–520) | side 0.30–0.45 | 0.700 | 131 mm, ×27.2 | no |
+| iPhone 15 Pro, full screen @ 852 × 393 | 0.655 | 66 / 141 / 44 | joystick 17–219, button 694–835 (cabinet 266–586) | side 0.22–0.52 | 0.700 | 139 mm, ×20.3 | no |
+| same, cut-outs 0 / 59 / 21 / 59 | 0.655 | 66 / 141 / 44 | joystick 59–261, button 652–793 | side 0.19–0.49 | 0.700 | 139 mm, ×20.3 | no |
+| iPhone 15 Pro in Safari @ 734 × 343 | 0.572 | 57 / 123 / 44 | joystick 15–191, button 596–719 (cabinet 227–507) | side 0.21–0.52 | 0.700 | 120 mm, ×23.3 | no |
+| Pixel 7 in Chrome @ 863 × 360 | 0.600 | 60 / 129 / 44 | joystick 17–202, button 717–846 (cabinet 285–578) | side 0.22–0.52 | 0.700 | 141 mm, ×22.2 | no |
+| iPhone SE (16:9) @ 667 × 375 | 0.625 | 57 / 123 / 44 | joystick 13–190, button 531–654 (cabinet 181–486) | side 0.26–0.56 | 0.700 | 105 mm (DPR 2), ×22 | no |
+| Pixel 5 in Chrome @ 802 × 293 | 0.560 | 56 / 120 / 44 | joystick 16–189, button 666–786 (cabinet 282–520) | side 0.30–0.45 | 0.700 | 131 mm, ×27.2 | no |
 | iPhone 15 Pro upright in Safari @ 393 × 659 | 0.655 | 57 / 123 / 44 | panel 0.606–0.975 | above panel 0.51–0.60 | 0.501 | 64 mm, ×16.5 | no |
 | Pixel 7 upright, full screen @ 412 × 915 | 0.680 | 68 / 146 / 44 | panel 0.673–0.975 | above panel 0.60–0.67 | 0.594 | 67 mm, ×15.8 | no |
 
 End-to-end check: `tests/e2e/24-phone.spec.ts` plays a round with taps on an emulated 844 × 390
-phone (touch targets ≥ 44 px, no overlaps, pad left / big button right, the call to action between them,
+phone (touch targets ≥ 44 px, no overlaps, joystick left / big button right, the call to action between them,
 hold-to-move with a finger).
 
 Testing without a phone: Playwright's phone devices (e.g. `devices['iPhone 15 Pro landscape']`,
@@ -545,8 +546,8 @@ behave as if the screen reported them.
 
 Real-device checks that nobody has done yet:
 
-- [ ] Thumb reach of pad and big button on a small (5.4") and a large (6.7") phone, both hands
-- [ ] Pad + big button pressed at the same time; no accidental zoom, scroll, selection or system menu
+- [ ] Thumb reach of joystick and big button on a small (5.4") and a large (6.7") phone, both hands
+- [ ] Joystick + big button pressed at the same time; no accidental zoom, scroll, selection or system menu
 - [ ] Notch / Dynamic Island on either side, home indicator, Android gesture bar; rounded corners
 - [ ] Full screen and landscape lock on Chrome for Android; behaviour on Safari (neither available)
 - [ ] Frame rate and heat with the Safe preset over ten minutes; battery drain

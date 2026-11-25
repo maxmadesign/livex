@@ -50,7 +50,7 @@ export const en: LangBank = {
     },
     first_play: {
       all: [
-        ['Use the arrows to line up the claw, then press the big grab button.', 'calm'],
+        ['Use the joystick to line up the claw, then press the big grab button.', 'calm'],
         ['Left and right slide the claw. Up sends it back, down brings it closer.', 'calm'],
         ['First try! Park the claw right above a plush, then press grab.', 'happy'],
         ['Tip for round one: aim for the middle of the body, not the ears.', 'think'],
@@ -61,9 +61,9 @@ export const en: LangBank = {
       cosmic: [['First mission! Steer above your target, then press grab for touchdown.', 'happy']],
       gpu: [['First benchmark! Line the claw up over a plush, then press grab to run it.', 'happy']],
       gtc: [
-        ['Think of this as a hands-on lab: arrows to aim, then press grab to run it.', 'calm'],
-        ['Your first {event} lab session! Steer with the arrows, then the grab button runs the experiment.', 'happy'],
-        ['Quick booth demo: the arrows move the claw, and the big button sends it down.', 'calm'],
+        ['Think of this as a hands-on lab: the joystick aims, then press grab to run it.', 'calm'],
+        ['Your first {event} lab session! Steer with the joystick, then the grab button runs the experiment.', 'happy'],
+        ['Quick booth demo: the joystick moves the claw, and the big button sends it down.', 'calm'],
       ],
     },
     idle: {
@@ -72,7 +72,7 @@ export const en: LangBank = {
         ['No rush! Move the claw around and see which plush looks easiest.', 'calm'],
         ['Psst, the ones near the front are simpler to line up.', 'think'],
         ["Want a hint? Look for a plush that isn't squeezed between the others.", 'think'],
-        ["Take your time. Press an arrow whenever you're ready to aim.", 'calm'],
+        ["Take your time. Nudge the joystick whenever you're ready to aim.", 'calm'],
       ],
       sakura: [["The petals can wait. Pick a fluffy friend to chase whenever you're ready.", 'calm']],
       storybook: [['Every story needs a hero. Which friend will you rescue first?', 'think']],
