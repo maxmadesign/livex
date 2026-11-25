@@ -113,7 +113,14 @@ export class PlaySession {
 
   /** Simulated time, once per fixed step before the controller: the clock of a timed run. */
   preStep(dt: number): void {
-    if (this.state !== 'running' || this.active.kind !== 'timed' || !this.timerStarted || this.expired) return;
+    if (this.state !== 'running' || this.active.kind !== 'timed' || !this.timerStarted) return;
+    if (this.expired) {
+      // The clock ran out while the claw was busy and that try never reached its RESULT (a restart
+      // or the error recovery aborted it): the run ends at the boundary instead of after a free try.
+      const phase = this.core.machine.phase;
+      if (phase === 'READY' || phase === 'RESULT') this.finish('time');
+      return;
+    }
     const left = Math.max(0, (this.secondsLeft ?? 0) - dt);
     this.secondsLeft = left;
     const whole = Math.ceil(left);
