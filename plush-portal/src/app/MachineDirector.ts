@@ -571,8 +571,12 @@ export class MachineDirector {
     return this.overPending !== null || this.host.core.session.snapshot().state === 'over';
   }
 
-  /** The idle hint may speak (not while a timed run is under way). */
+  /**
+   * The idle hint may speak: not while a timed run is under way, and not once a session is over (its
+   * card or the initials entry is up and the claw is locked: "move the claw" would be wrong there).
+   */
   allowHint(): boolean {
+    if (this.sessionOver()) return false;
     const s = this.host.core.session.snapshot();
     return !(s.kind === 'timed' && s.state === 'running' && s.timerStarted);
   }
