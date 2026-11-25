@@ -147,9 +147,38 @@ export function fillClaimTemplate(template: string, code: string): string {
   return `${template}${sep}code=${encodeURIComponent(code)}`;
 }
 
+/**
+ * Characters the server refuses in display text (server/rewards/validate.ts): C0 / C1 controls,
+ * line / paragraph separators and bidi overrides / isolates.
+ */
+const span = (from: number, to: number) => `${String.fromCharCode(from)}-${String.fromCharCode(to)}`;
+export const UNSAFE_TEXT_CHARS = new RegExp(`[${span(0x00, 0x1f)}${span(0x7f, 0x9f)}${span(0x2028, 0x2029)}${span(0x202a, 0x202e)}${span(0x2066, 0x2069)}]`);
+const UNSAFE_TEXT_ALL = new RegExp(UNSAFE_TEXT_CHARS.source, 'g');
+
+/**
+ * Display text (plush name, discount wording) as the server accepts it: unsafe characters become
+ * spaces (a tab pasted from a spreadsheet must not make every claim fail), runs of white space one
+ * space, trimmed and cut to `max` without splitting a surrogate pair.
+ */
+export function cleanDisplayText(value: string, max: number): string {
+  let text = value.replace(UNSAFE_TEXT_ALL, ' ').replace(/\s+/g, ' ').trim();
+  if (text.length > max) {
+    text = text.slice(0, max);
+    if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
+    text = text.trim();
+  }
+  return text;
+}
+
+/**
+ * The longest claim link a server answer may carry: an owner template of maxUrlChars grows when
+ * {code} is filled in (or ?code= appended), and the code it belongs to is already stored.
+ */
+export const MAX_ISSUED_URL_CHARS = REWARD_LIMITS.maxUrlChars * 2;
+
 /** True for an http(s) URL without credentials (owner-configured claim / swag links). */
-export function isSafeHttpUrl(value: string): boolean {
-  if (!value || value.length > REWARD_LIMITS.maxUrlChars) return false;
+export function isSafeHttpUrl(value: string, maxChars: number = REWARD_LIMITS.maxUrlChars): boolean {
+  if (!value || value.length > maxChars) return false;
   try {
     const url = new URL(value.replace('{code}', 'CODE'));
     return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password;

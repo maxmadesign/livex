@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DisplayProfileId } from '../../../src/core/types';
 import { solveFramed } from '../../../src/layout/frame';
 import { NO_INSETS, solveLayout, type HudLayout, type Rect } from '../../../src/layout/solve';
-import { QR_MIN_M, QR_MIN_PX, cardBounds, compactPoints, overlaps, screenWidthMetres, winCardGeometry, type RewardCardKind, type WinCardInput } from '../../../src/rewards/cardLayout';
+import { CARD, QR_MIN_M, QR_MIN_PX, cardBounds, codeRowWidth, compactPoints, overlaps, screenWidthMetres, winCardGeometry, type RewardCardKind, type WinCardInput } from '../../../src/rewards/cardLayout';
 import { defaultSettings } from '../../../src/settings/spec';
 import { placePopup, popupBox } from '../../../src/ui/ScoreHud';
 
@@ -120,6 +120,49 @@ describe('win card geometry', () => {
       expect(g.x).toBeGreaterThanOrEqual(l.controls!.dpad.x + l.controls!.dpad.w);
       expect(g.x + g.w).toBeLessThanOrEqual(l.controls!.action.x);
     }
+  });
+
+  it('side arrangement: the QR column is as wide as the code row under the tile (it stuck out of the 1280×720 card by 8 px)', () => {
+    let checked = 0;
+    for (const c of CASES) {
+      const l = layoutFor(c);
+      for (const { input } of INPUTS) {
+        if (input.kind !== 'qr') continue;
+        const g = winCardGeometry(l, { ...input, screenWidthM: metres(c, l) });
+        if (g.arrangement !== 'side') continue;
+        const k = l.unit * g.scale;
+        const column = g.w - k * (2 * CARD.padX + CARD.sideLeft + CARD.sideGap);
+        expect(column + EPS, `${c.label}`).toBeGreaterThanOrEqual(codeRowWidth(k, l.fontScale));
+        expect(column + EPS).toBeGreaterThanOrEqual(g.qrPx);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    // The desktop 1280×720 card of the e2e run: about 240 CSS px of code row beside a 167 px tile.
+    const desk = layoutFor(CASES[0]!);
+    const g = winCardGeometry(desk, { kind: 'qr', withPoints: true, pointRows: 4, ribbon: true, screenWidthM: null });
+    expect(g.arrangement).toBe('side');
+    expect(codeRowWidth(desk.unit * g.scale, desk.fontScale)).toBeGreaterThan(g.qrPx);
+  });
+
+  it("split panel: the card keeps clear of Momo's line beside the field, on either side, at its tallest", () => {
+    let checked = 0;
+    for (const c of CASES) {
+      for (const handedness of ['right', 'left'] as const) {
+        const base = layoutFor(c);
+        // Phones have their own guide placement (and no room to spare): not covered by this rule.
+        if (base.guide.place !== 'side' || base.controls) continue;
+        const l = solveLayout(c.profile, { ...settings.profiles[c.profile].layout, handedness }, c.vw, c.vh, NO_INSETS);
+        const bubble = { x: l.guide.x, y: l.guide.y, w: l.guide.w, h: l.guide.maxH };
+        for (const { label, input } of INPUTS) {
+          const g = winCardGeometry(l, { ...input, screenWidthM: metres(c, l) });
+          expect(overlaps(g, bubble), `${c.label} ${handedness}-handed, ${label}: covers Momo's line`).toBe(false);
+          expect(g.fits).toBe(true);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 
   it('bounds of a bar panel end above the panel and Momo', () => {

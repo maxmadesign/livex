@@ -28,7 +28,7 @@ import { ToyVisuals } from '../scene/ToyVisuals';
 import { diffSettings, profileDefaults, type AiSettings, type CameraSettings, type GraphicsSettings, type Settings, type ViewSettings } from '../settings/spec';
 import type { SettingsStore } from '../settings/store';
 import { themeOf } from '../themes/themes';
-import { RewardFlow } from '../rewards/flow';
+import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
 import type { GameStore, PerfSnapshot } from './gameStore';
@@ -1067,19 +1067,12 @@ export class Game {
     const brand = brandFacts(this.themeId);
     if (brand) facts.brand = brand;
     // The claim QR (src/rewards): only while a real, issued code (or the labelled public-demo code)
-    // for this very round is on screen, so Momo never invites anyone to scan a QR that is not there.
+    // for this very round is on screen as a scannable QR, so Momo never invites anyone to scan a QR
+    // that is not there (a phone shows a claim link, a loopback-only code no QR at all).
     // The guide uses it on prize_won and on the retry prompt that follows while the card is up.
     const reward = this.deps.ui.getState().reward;
-    const onScreen = !!reward && (reward.visibleUntil <= 0 || Date.now() < reward.visibleUntil);
-    if (
-      onScreen &&
-      (reward.state === 'ready' || reward.state === 'demoBuild') &&
-      reward.roundId === machine.roundId &&
-      !machine.demo &&
-      (!result || result.outcome === 'won')
-    ) {
-      facts.reward = { qr: true, options: reward.options };
-    }
+    const at = { roundId: machine.roundId, demo: machine.demo, phone: this.hud.controls !== null, now: Date.now(), outcome: result?.outcome };
+    if (scannableQrOnScreen(reward, at)) facts.reward = { qr: true, options: reward.options };
     return facts;
   }
 
@@ -1105,6 +1098,9 @@ export class Game {
       unsubscribe();
       clearTimeout(timer);
       if (this.disposed || this.core.machine.roundId !== result.roundId) return;
+      // PLAY AGAIN, the idle reset or a restart dismissed the card meanwhile (they clear the result
+      // before the round id moves on): the line would celebrate a card that is gone.
+      if (this.deps.ui.getState().result?.roundId !== result.roundId) return;
       this.emitGuide('prize_won', result);
     };
     const unsubscribe = this.deps.ui.subscribe(() => {
