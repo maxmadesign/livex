@@ -103,8 +103,10 @@ describe('bridge geometry', () => {
     expect(bridgeGeometry({ ...P, controls: 'twoStep' }).home).toEqual(BRIDGE_LAYOUT.twoStepHome);
   });
 
-  it('is the registered genre; its defaults agree with the settings defaults; gated until its sweep passes', () => {
+  it('is the registered genre, offered to players (its sweep gates passed); its defaults agree with the settings defaults', () => {
     expect(GENRES.bridge).toBe(bridgeModule);
+    expect(resolveMachine('bridge').def.id).toBe('bridge');
+    expect(resolveMachine('bridge', defaultSettings().machines).params).toEqual(P);
     const s = defaultSettings().machines;
     expect({ ...P, ...bridgeModule.fromSettings(s) }).toEqual(P);
     expect(bridgeModule.session(P)).toEqual({ kind: 'open' });

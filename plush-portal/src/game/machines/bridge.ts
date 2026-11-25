@@ -644,10 +644,10 @@ export class BridgeRules implements TryRules {
     const box = this.trackBox(ctx);
     this.settle = null;
     this.calmTime = 0;
-    // A try that ended with the claw still low (the settle cap) finishes its wind-up before the claw moves.
     this.clutchTime = 0;
     this.bobTime = 0;
     this.slowTime = 0;
+    // A try the SETTLING watchdog ended with the claw still low finishes its wind-up before the claw moves.
     if (ctx.claw.ropeLength > CLAW.ropeMin + 0.005) {
       ctx.claw.stopTrolley();
       this.settle = 'wind';
@@ -698,8 +698,9 @@ export class BridgeRules implements TryRules {
   /**
    * The wind-up after a try. The cable is a stiff spring: winding it up against a claw that a finger
    * still hooks into the box would store energy and fling both when the finger slips. So the cable
-   * winds slowly while the claw touches the box and pauses whenever it pulls harder than the claw's
-   * weight plus a little (a slip clutch): a hooked box is tipped off the finger, never yanked out.
+   * winds slowly while the claw touches the box, and once the box rises with the claw (a hooked
+   * finger) it pauses whenever it pulls harder than the claw's weight plus a little (a slip clutch),
+   * paying out a little now and then: a hooked box is tipped off the finger, never yanked out.
    */
   private windUp(ctx: TryContext, phase: RoundPhase, phaseTime: number, dt: number): void {
     const claw = ctx.claw;
@@ -733,7 +734,7 @@ export class BridgeRules implements TryRules {
     }
     if (claw.ropeLength <= CLAW.ropeMin + 0.002 && claw.winchArrived()) {
       this.settle = 'home';
-      // In SETTLING the try then ends on its way home; at READY (a capped try) the claw just goes home.
+      // In SETTLING the try then ends on its way home; at READY (after the watchdog) the claw just goes home.
       claw.setTrolleyTarget(this.home.x, this.home.z, ctx.params.moveSpeed);
       if (phase !== 'SETTLING') this.settle = null;
     }

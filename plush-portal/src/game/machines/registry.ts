@@ -129,7 +129,8 @@ export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
 /** Every machine, in lobby order. Only `available` machines are ever offered or built for players. */
 export const MACHINES: readonly MachineDef[] = [
   { id: 'classic', genre: 'classic', order: 0, params: {}, available: true, unlockAfterWins: 0 },
-  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: false, unlockAfterWins: 1 },
+  // Sweep gates passed (docs/machines/bridge.md): median 5-5.5 tries per box, one-try wins ≤ 1.9 %, stuck ≤ 4.2 %.
+  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: true, unlockAfterWins: 1 },
   { id: 'shelf', genre: 'shelf', order: 2, params: {}, available: false, unlockAfterWins: 3 },
   { id: 'rush', genre: 'rush', order: 3, params: {}, available: false, unlockAfterWins: 5 },
 ];

@@ -6,6 +6,7 @@
  *   npx tsx tools/dev/machine-sweep.ts --machine bridge --seeds 3 --tries 20 --verbose
  *   npx tsx tools/dev/machine-sweep.ts --machine bridge --set boxMass=0.5,liftDelta=0.06 --perf
  *   npx tsx tools/dev/machine-sweep.ts --machine bridge --json out.json    the report as JSON too
+ *   npx tsx tools/dev/machine-sweep.ts --machine bridge --seedBase 500     another set of seeds (11 by default)
  *
  * Every try is a real simulation through GameCore (tests/unit/game/harness.ts), like
  * tools/dev/grip-sweep.ts; nothing here feeds back into the game. Each genre has a plug-in in
@@ -146,7 +147,7 @@ function parseArgs(argv: string[]) {
   return {
     machine: value('machine', 'bridge'),
     difficulties: (d === 'all' ? ['easy', 'arcade', 'skill'] : d.split(',')) as Difficulty[],
-    seeds: Array.from({ length: Number(value('seeds', '8')) }, (_, i) => 11 + i * 17),
+    seeds: Array.from({ length: Number(value('seeds', '8')) }, (_, i) => Number(value('seedBase', '11')) + i * 17),
     tries: Number(value('tries', '40')),
     themes: value('themes', 'sakura').split(',') as ThemeId[],
     perf: argv.includes('--perf'),

@@ -70,9 +70,13 @@ describe('machine registry', () => {
 
   it('offers only playable machines; home is always offered; neighbours wrap around', () => {
     const s = defaultSettings().machines;
-    expect(offeredMachines(s, 'classic').map((m) => m.id)).toEqual(['classic']);
-    expect(offeredMachines({ hidden: ['classic'] }, 'classic').map((m) => m.id)).toEqual(['classic']);
-    expect(neighbours('classic', offeredMachines(s, 'classic'))).toEqual({ prev: null, next: null });
+    const playable = MACHINES.filter((m) => isPlayable(m)).map((m) => m.id);
+    expect(playable[0]).toBe('classic');
+    expect(offeredMachines(s, 'classic').map((m) => m.id)).toEqual(playable);
+    expect(offeredMachines({ hidden: ['classic'] }, 'classic').map((m) => m.id)).toEqual(playable);
+    const alone = offeredMachines({ hidden: [...MACHINE_IDS] }, 'classic');
+    expect(alone.map((m) => m.id)).toEqual(['classic']);
+    expect(neighbours('classic', alone)).toEqual({ prev: null, next: null });
     const three = MACHINES.slice(0, 3) as MachineDef[];
     expect(neighbours('classic', three)).toEqual({ prev: three[2], next: three[1] });
     expect(neighbours('shelf', three)).toEqual({ prev: three[1], next: three[0] });

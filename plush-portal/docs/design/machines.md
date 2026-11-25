@@ -1816,3 +1816,54 @@ why. Everything listed here is covered by the unit tests in `tests/unit/machines
   and `prints`. `machine.events` gains `item`; `award` may carry `session: true`.
 - **Classic gate**: `npx vitest run tests/unit/machines` (golden, round trip, contract) on every
   change; `npx tsx tools/dev/golden-classic.ts --check` gives the same answer from the shell.
+
+---
+
+## Implementation notes (WS-B: Tippy Bridge)
+
+The bridge genre (`src/game/machines/bridge.ts`), its tests (`tests/unit/machines/bridge.test.ts`), the
+shared sweep runner (`tools/dev/machine-sweep.ts`, plug-in `tools/dev/sweeps/bridge.ts`) and the
+tuning record (`docs/machines/bridge.md`). The machine is `available: true`: on Arcade, 8 seeds × 40
+tries plus 2 × 160 single tries, median 5.5 tries per box, one-try wins 0.6 % (pilot) and 1.9 % (random
+aims), stuck 4.2 %, 0 anomalies, median step 0.044 ms; an independent seed set gave 5 / 0.6 % / 1.3 % /
+0 % / 0. Classic stays bit-identical (golden trace and round trip unchanged).
+
+### Deviations from the design
+
+| # | Design | Built | Why |
+| --- | --- | --- | --- |
+| B1 | Box 0.24 × 0.10 × **0.13** m. | **0.24 × 0.10 × 0.10** m. | The open claw spreads about 0.15 m front to back between its finger tips (back finger 0.10 m behind the axis, two front fingers 0.05 m in front). 0.13 m plus two tip radii does not fit, so one finger always landed on the box's top and no try lifted anything (about 1 mm of movement per try, no win in 30). |
+| B2 | Bars: friction 0.35 (averaged with the box's 0.6). | Friction **0.15**, the bar's own value wins (`frictionCombine: 'min'`, `BRIDGE_LAYOUT.barCombine`). | With averaged friction most tries changed nothing and a few changed everything (stuck 25-50 %). Slick bars let the box slide on the other bar while one end is up, so tries add up: median 5-6. 0.10-0.13 gave too many lucky one-shots, 0.15-0.16 about 2 %. |
+| B3 | Claw scale: clawForce ×0.8. | ×**1.0**. | ×0.8 lifts nothing; ×1.1-1.2 let a squeeze hang the whole box from the claw more often (random-aim one-try wins 2.5-4.4 %). |
+| B4 | Fences 0.16 m high. | **0.22 m** (`BRIDGE_LAYOUT.fenceHeight`). | A box sliding fast on the slick bars could jump a 0.16 m fence and land on the floor outside the pit. None did at 0.22 m in any later sweep. |
+| B5 | SETTLING: wind the cable to `ropeMin`, then go home. | A three-stage wind-up. (1) Fingers open, cable held, until the claw has not touched the box for 0.1 s (at most 0.5 s). (2) Slow winding (0.06 m/s) while it still touches the box, for at most 1.5 s of rubbing. If the box rises with the claw (a hooked finger), a slip clutch holds the cable above the claw's weight + 2 N and pays out 3 cm after 0.4 s. (3) Then home. | The cable is a 2600 N/m spring. Winding it against a finger still hooked in the box stored energy and flung box and claw out of the pit when the finger slipped (seen in the sweeps). A clutch on every pull was tried and dropped: a finger caught under a *bar* then held the claw down until the watchdog. |
+| B6 | `canFinish` after 5 s at the latest. | The 5 s cap only applies once the claw is up; the 7 s watchdog stays behind it, and the next READY finishes a capped wind-up before the trolley moves. `BridgeField` defers a placement (new box, staff, takeover) into the next off-screen settle until no claw part hangs low over the pit; `staffReset` is refused meanwhile. | A try that ended with the claw low let the next box be placed at its start pose inside the fingers, and it was blasted out of the pit. |
+| B7 | "Shifted 0.10 it tips over a bar" into the 12 cm strip. | Boxes win **between the bars**: a box walked about 3.5 cm loses its far bar, that end drops into the gap and the box jams at 35-40°; working the raised end lets it slip through. A box whose centre passes a bar leans its far end on the side fence instead of falling. | The box end is already at the fence when its centre is over a bar (bar + 0.12 m vs fence at bar + 0.13 m), so the strip forces it nearly upright. A wider pit (half 0.24-0.25 m) fixes that but made one-try wins easier (4.4 %), so the pit is the design's. |
+| B8 | Stuck: "COM y < 0.12, asleep, not in the sensor; or 3 tries with progress gain < 0.01 while not on both bars". | A *stale* try leaves the box off the bars and moves it less than 5 mm and 3°. Stuck = sunk more than 4.25 cm below rest **and one stale try** (`wedged`), or 3 stale tries in a row (`stale`). `bridgeState(phys).stuckReason` says which. | Progress saturates at 1 for a tilted box, so "gain < 0.01" fired on boxes that were still moving. The common jam just before a drop (1.8 cm below rest) must not light "Call staff" after a single miss, or staff resets would throw progress away. |
+| B9 | Award "in DESCENDING … SETTLING (or at the next DESCENDING after a late fall)". | The opening test runs every step (all phases but ATTRACT). A pass outside the award phases is latched (`bridgeState.dropped`) and paid at the next award phase; the boundary keeps a player's dropped box for that (no refill). | A box lying in the bin under the floor slab later can fail `overOpening` (the bin is wider than the pit), so the fact is recorded when the box passes through the sensor. |
+| B10 | Pilot: "COM + axis·(L/2 − 0.015)". | Plus **2.5 cm towards the player** (`BRIDGE_AIM.dz`, the claw's asymmetric fingers), and a box tilted more than 12° is worked at its raised end. | Without the offset a finger always lands on the box's top. The jam is worked from its raised end. |
+| B11 | e2e: `machineDebug.nudge` + `fastForward(4)` → one award. | A recipe in READY: `nudge(0.2, 0, 0)`, then up to 12 nudges alternating `(0, 0, 1)` and `(∓0.2, 0, 0)` with `fastForward(1)` until the box is below the floor, then a grab → exactly one award (docs/machines/bridge.md, "Debug impulses"; covered by a unit test on seeds 7, 11 and 23). | `nudge` is an impulse at the box's centre (no torque). A single push jams the box and never wins reliably (best 6 of 8 seeds in a grid search). A box at rest in READY is asleep, so the recipe does not depend on frame timing. |
+| B12 | — | `result.machine.id` is `'bridge'`. | `createRules(p, g)` does not receive the `MachineDef` id; a data variant of the bridge would need it passed in (contract change, lead's). |
+| B13 | — | Field and rules share one `BridgeState` per `PhysicsWorld` (a WeakMap: box, tries, stale count, stuck, the dropped latch, reset and box counters). The rules pick up their box lazily (`trackBox`). | At READY the controller's rules run before `GameCore.onBoundary` places the next box. |
+| B14 | — | `bridge.ts` has its own copy of the claw scaling (`scaleClaw`, same as `scaleRoundParams`). | `registry.ts` imports `bridge.ts`, so importing the helper back would be an import cycle that breaks when bridge.ts loads first. |
+
+### Outside WS-B's files
+
+- `tests/unit/machines/contract.test.ts`: the registry test hard-coded the bridge as a pending genre and
+  classic as the only offered machine. It now derives both from the registry (pending genres; landed but
+  unavailable machines; playable machines; home alone when every other machine is hidden). WS-C will meet
+  the same lines for shelf and rush.
+
+### For the next workstreams
+
+- **WS-C**: `tools/dev/machine-sweep.ts` loads `tools/dev/sweeps/<genre>.ts` (default export
+  `SweepPlugin`: `genre`, `keys` for `--set`, `run(options) → { title, lines, metrics, gates, anomalies }`).
+  Helpers: `gate`, `median`, `quantile`, `mean`, `gaussian`, `num`, `pct`, `StepTimer`. Options:
+  `--difficulty all|a,b`, `--seeds`, `--seedBase`, `--tries`, `--themes`, `--perf`, `--verbose`, `--json`,
+  `--set`. Exit code 1 on a failed gate or an anomaly.
+- **WS-D**: two-step input expects button 1 as `inputX > 0`, button 2 as `inputZ < 0` (`axisStage`
+  follows). `field.stuck()` drives `staff.highlighted`; "Call staff" is `field.staffReset()` at a
+  boundary (false when refused). `bridgeModule.aim` gives the attract aim (patience 2.5 s).
+- **WS-E**: geometry from `core.def.geometry`; the fences are 0.22 m; the box is `bridgeBox`
+  0.24 × 0.10 × 0.10 m with its origin at the middle of its bottom face.
+- **WS-F**: the e2e recipe above; seed 7 falls after the first upward nudge.
