@@ -5,9 +5,10 @@
  * Per difficulty and seed:
  *   - centred grabs: a fresh pile, 10 grabs aimed exactly at the attract pilot's targets (no aim
  *     noise): how many pieces one well-aimed grab delivers;
- *   - timed runs: `tries` / 13 runs of `seconds` (75) on simulated time, played by the pilot's
- *     strategy with Gaussian aim noise, the app's 0.35 s auto-advance hold in RESULT and the bin
- *     cleared at every boundary like Game does; PLAY AGAIN (newSession) between runs.
+ *   - timed runs: 6 runs per 40 `tries` (48 per preset by default) of `seconds` (75) on simulated
+ *     time, played by the pilot's strategy with Gaussian aim noise, the app's 0.35 s auto-advance
+ *     hold in RESULT and the bin cleared at every boundary like Game does; PLAY AGAIN (newSession)
+ *     between runs.
  *
  * Every scored piece must have been carried (its centre of mass rose above the 20 cm chute guard
  * at some point): a piece pushed along the floor can never get in.
@@ -28,7 +29,12 @@ import type { Gate, SweepKit, SweepOptions, SweepReport } from '../item-sweep';
 /** Game's auto-advance after a try while a run has time left (design section 2.6). */
 const HOLD = 0.35;
 const CENTRED_GRABS = 10;
-const TRIES_PER_RUN_GUESS = 13;
+/**
+ * Timed runs per seed for every 40 `--tries`. Six, so 48 runs per preset: the share of runs that
+ * reach `rewardValue` has a standard error of about 9 points over 24 runs (as wide as its 25-35 %
+ * band) and about 6.5 over 48.
+ */
+const RUNS_PER_40_TRIES = 6;
 
 /** The rush machine built from its module (available or not), with parameter overrides. */
 export function rushMachine(params: Record<string, unknown>): ResolvedMachine {
@@ -73,7 +79,7 @@ async function sweep(o: SweepOptions, kit: SweepKit, difficulty: Difficulty, the
   const settleSeconds: number[] = [];
   let lateTries = 0;
   let uncarried = 0;
-  const runsPerSeed = Math.max(1, Math.round(o.tries / TRIES_PER_RUN_GUESS));
+  const runsPerSeed = Math.max(1, Math.round((o.tries / 40) * RUNS_PER_40_TRIES));
   const t0 = performance.now();
 
   for (let si = 0; si < o.seeds.length; si++) {
