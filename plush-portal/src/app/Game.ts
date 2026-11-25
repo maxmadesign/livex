@@ -8,6 +8,7 @@ import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
 import type { MachineId } from '../game/machines/ids';
+import { resolveMachine } from '../game/machines/registry';
 import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
@@ -252,12 +253,18 @@ export class Game {
       this.stage.scene.add(this.toyVisuals.group, this.effects.group);
 
       this.measure();
+      // The home machine of this page load: ?machine= (never saved) or machines.home. Machines that are
+      // not offered yet fall back to classic.
+      const wanted = this.deps.launch.machine ?? s.machines.home;
+      const machine = resolveMachine(wanted, s.machines);
+      if (machine.def.id !== wanted) log('info', 'round', `machine "${wanted}" is not available; playing ${machine.def.id}`);
       this.core = new GameCore({
         binFloorY: this.layout.binFloorY,
         toyFriction: s.gameplay.toyFriction,
         params: this.roundParams(s),
         field: this.fieldOptions(s),
         themeId: this.themeId,
+        machine,
       });
       this.attract = new AttractDirector(this.core);
       this.bindCore();
@@ -1350,7 +1357,7 @@ export class Game {
     const committedDiff = diffSettings(prevCommitted, committed);
     if (committedDiff.length === 0) return;
     if (committedDiff.some((p) => p.startsWith('gameplay.'))) {
-      this.core.controller.setParams(this.roundParams(committed));
+      this.core.setParams(this.roundParams(committed));
       this.core.phys.setToyFriction(committed.gameplay.toyFriction);
       // Same rule as the round parameters: between rounds the new difficulty applies at once.
       if (this.core.machine.atRoundBoundary) this.roundDifficulty = committed.gameplay.difficulty;

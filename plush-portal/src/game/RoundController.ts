@@ -3,9 +3,12 @@ import { Emitter } from '../core/events';
 import { clamp } from '../core/math';
 import type { ContactLevel, RoundPhase, RoundResult, SlipReason, ThemeId } from '../core/types';
 import type { ClawParams, ClawRig } from '../physics/ClawRig';
+import { CLASSIC_OPENING, type PrizeOpening } from '../physics/fieldGeometry';
 import { CLAW, FIXED_DT, PRIZE_SENSOR, isOverChute } from '../physics/fieldSpec';
 import type { GripFacts, GripMonitor } from '../physics/GripMonitor';
+import type { ItemSpec } from '../physics/items';
 import type { PhysicsWorld, ToyBody } from '../physics/PhysicsWorld';
+import type { TryContext, TryRules } from './machines/types';
 import type { RoundMachine } from './RoundMachine';
 
 /** Gameplay values latched at the start of every round (never changed mid-round). */
@@ -35,6 +38,25 @@ export interface RoundControllerEvents extends Record<string, unknown> {
   aimTick: { secondsLeft: number };
   /** A watchdog had to force the sequence forward. */
   recovered: { phase: RoundPhase; roundId: number };
+  /** Machines: an item reached the opening and was scored (emitted by the machine's rules). */
+  itemScored: { roundId: number; toy: ToyBody; item: ItemSpec };
+  /** Machines with two-step controls: which button is live now (null = none). */
+  axisStage: { roundId: number; stage: 'x' | 'z' | null };
+}
+
+export interface RoundControllerOptions {
+  /** Emitter to report on; GameCore passes one that outlives every rebuilt controller. */
+  events?: Emitter<RoundControllerEvents>;
+  /** The machine's rules for one try; absent / null = classic (today's code paths, untouched). */
+  rules?: TryRules | null;
+  /** The prize opening (classic: the chute). */
+  opening?: PrizeOpening;
+  /**
+   * false: the controller does not subscribe to the round machine itself; its owner forwards the
+   * `phase` and `watchdog` events to handlePhase / handleWatchdog (GameCore, which keeps one round
+   * machine while the controller is rebuilt per machine). Default true.
+   */
+  subscribe?: boolean;
 }
 
 const _v = new Vector3();
@@ -57,11 +79,21 @@ export const ROUND_TUNING = {
  * physics state; nothing is pre-determined.
  */
 export class RoundController {
-  readonly events = new Emitter<RoundControllerEvents>();
+  readonly events: Emitter<RoundControllerEvents>;
+  /** The machine's rules for one try; null on classic. */
+  readonly rules: TryRules | null;
+  readonly opening: PrizeOpening;
   /** Player (or demo pilot) input: unit-clamped direction, +x right, +z towards the player. */
   inputX = 0;
   inputZ = 0;
+  /** A session is over (tries / timed machines): the claw ignores input and the grab button. Classic never sets it. */
+  inputLocked = false;
   private grabQueued = false;
+  /** Two-step controls: the stage last reported through `axisStage`. */
+  private axisStage: 'x' | 'z' | null = null;
+  /** What the rules may read (the controller's own state, read-only). */
+  private readonly ctx: TryContext;
+  private readonly offs: (() => void)[] = [];
   private params: RoundParams;
   private pendingParams: RoundParams | null = null;
 
@@ -87,11 +119,53 @@ export class RoundController {
     readonly machine: RoundMachine,
     params: RoundParams,
     private readonly themeId: () => ThemeId,
+    options: RoundControllerOptions = {},
   ) {
+    this.events = options.events ?? new Emitter<RoundControllerEvents>();
+    this.rules = options.rules ?? null;
+    this.opening = options.opening ?? CLASSIC_OPENING;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+    this.ctx = {
+      phys,
+      claw,
+      grip,
+      machine,
+      events: this.events,
+      opening: this.opening,
+      get params() {
+        return self.params;
+      },
+      get releasedHolding() {
+        return self.releasedHolding;
+      },
+    };
     this.params = { ...params };
     this.applyParams();
-    machine.events.on('phase', (e) => this.onPhase(e.phase, e.prev));
-    machine.events.on('watchdog', (e) => this.onWatchdog(e.phase));
+    if (options.subscribe !== false) {
+      this.offs.push(machine.events.on('phase', (e) => this.onPhase(e.phase, e.prev)));
+      this.offs.push(machine.events.on('watchdog', (e) => this.onWatchdog(e.phase)));
+    }
+  }
+
+  /** The owner forwards the round machine's `phase` event (options.subscribe = false). */
+  handlePhase(phase: RoundPhase, prev: RoundPhase): void {
+    this.onPhase(phase, prev);
+  }
+
+  /** The owner forwards the round machine's `watchdog` event (options.subscribe = false). */
+  handleWatchdog(phase: RoundPhase): void {
+    this.onWatchdog(phase);
+  }
+
+  /** What the machine's rules see (tests, sweeps). */
+  get tryContext(): TryContext {
+    return this.ctx;
+  }
+
+  /** Stops listening to the round machine (a rebuilt machine replaces this controller). */
+  dispose(): void {
+    for (const off of this.offs.splice(0)) off();
   }
 
   /** New gameplay values; they take effect at the next round boundary. */
@@ -120,6 +194,7 @@ export class RoundController {
   requestGrab(): boolean {
     const phase = this.machine.phase;
     if (phase !== 'READY' && phase !== 'AIMING') return false;
+    if (this.inputLocked) return false;
     this.grabQueued = true;
     return true;
   }
@@ -133,7 +208,8 @@ export class RoundController {
   resetRound(reason: string, to: 'READY' | 'ATTRACT' = 'READY'): void {
     this.grip.release();
     this.grip.beginRound();
-    this.claw.reset(CLAW.homeX, CLAW.homeZ);
+    if (this.rules) this.claw.reset(this.rules.home.x, this.rules.home.z);
+    else this.claw.reset(CLAW.homeX, CLAW.homeZ);
     this.grabQueued = false;
     this.clearInput();
     this.machine.abort(reason, to);
@@ -158,13 +234,18 @@ export class RoundController {
         this.grip.beginRound();
         claw.setFingers(1);
         claw.setWinch(CLAW.ropeMin, this.params.liftSpeed);
-        if (prev === 'ATTRACT' || prev === 'RESULT') claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed);
+        if (this.rules) {
+          if (prev === 'ATTRACT' || prev === 'RESULT') claw.setTrolleyTarget(this.rules.home.x, this.rules.home.z, this.params.moveSpeed);
+          this.axisStage = null;
+          this.rules.beginTry(this.ctx);
+        } else if (prev === 'ATTRACT' || prev === 'RESULT') claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed);
         break;
       case 'ATTRACT':
         this.latchParams();
         claw.setFingers(1);
         claw.setWinch(CLAW.ropeMin, this.params.liftSpeed);
-        claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed * 0.7);
+        if (this.rules) claw.setTrolleyTarget(this.rules.home.x, this.rules.home.z, this.params.moveSpeed * 0.7);
+        else claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed * 0.7);
         break;
       case 'AIMING':
         break;
@@ -184,11 +265,19 @@ export class RoundController {
         claw.setFingers(0);
         break;
       case 'LIFTING': {
-        claw.setWinch(CLAW.ropeMin, this.params.liftSpeed);
+        if (this.rules) claw.setWinch(this.rules.liftTarget(this.ctx), this.params.liftSpeed);
+        else claw.setWinch(CLAW.ropeMin, this.params.liftSpeed);
         this.events.emit('liftStarted', { roundId: this.machine.roundId, holding: this.grip.target !== null });
         break;
       }
       case 'TRANSPORTING': {
+        if (this.rules) {
+          this.wasHolding = this.grip.holding();
+          const plan = this.rules.transportTarget(this.ctx, this.wasHolding);
+          this.destinationIsChute = plan.toOpening;
+          claw.setTrolleyTarget(plan.x, plan.z, plan.speed);
+          break;
+        }
         this.wasHolding = this.grip.holding();
         this.destinationIsChute = this.wasHolding;
         if (this.wasHolding) claw.setTrolleyTarget(CLAW.dropX, CLAW.dropZ, this.params.moveSpeed * 0.92);
@@ -205,7 +294,8 @@ export class RoundController {
         break;
       }
       case 'SETTLING':
-        claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed);
+        if (this.rules) this.rules.beginSettling(this.ctx);
+        else claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed);
         break;
       case 'RESULT':
         break;
@@ -249,12 +339,31 @@ export class RoundController {
     switch (m.phase) {
       case 'READY':
       case 'AIMING': {
-        const moving = Math.abs(this.inputX) > 1e-3 || Math.abs(this.inputZ) > 1e-3;
+        if (this.inputLocked) {
+          // The session is over: the claw waits at home until a new session starts.
+          claw.setTrolleyVelocity(0, 0);
+          this.grabQueued = false;
+          break;
+        }
+        // Classic: the joystick as it is. Two-step controls map it onto one axis at a time.
+        let inputX = this.inputX;
+        let inputZ = this.inputZ;
+        if (this.rules?.filterInput) {
+          const f = this.rules.filterInput(this.ctx, inputX, inputZ);
+          inputX = f.x;
+          inputZ = f.z;
+          if (f.grab) this.grabQueued = true;
+          if (f.stage !== this.axisStage) {
+            this.axisStage = f.stage;
+            this.events.emit('axisStage', { roundId: m.roundId, stage: f.stage });
+          }
+        }
+        const moving = Math.abs(inputX) > 1e-3 || Math.abs(inputZ) > 1e-3;
         if (m.phase === 'READY' && moving) m.beginAim();
         if (m.phase === 'AIMING' || moving) {
           // Diagonals are normalised so they are not faster than straight moves.
-          let x = clamp(this.inputX, -1, 1);
-          let z = clamp(this.inputZ, -1, 1);
+          let x = clamp(inputX, -1, 1);
+          let z = clamp(inputZ, -1, 1);
           const len = Math.hypot(x, z);
           if (len > 1) {
             x /= len;
@@ -346,15 +455,16 @@ export class RoundController {
       case 'LIFTING': {
         grip.track(dt, true);
         this.checkSlip(phase);
-        this.checkPrize();
+        if (!this.rules) this.checkPrize();
         if (claw.winchArrived()) m.lifted();
         break;
       }
       case 'TRANSPORTING': {
         grip.track(dt, false);
         this.checkSlip(phase);
-        this.checkPrize();
-        if (this.destinationIsChute && !grip.holding()) {
+        if (!this.rules) this.checkPrize();
+        // Machines: the rules chose the destination; a lost item does not send the claw home.
+        if (!this.rules && this.destinationIsChute && !grip.holding()) {
           // Lost the toy on the way: no reason to visit the chute any more.
           this.destinationIsChute = false;
           claw.setTrolleyTarget(CLAW.homeX, CLAW.homeZ, this.params.moveSpeed * 1.1);
@@ -366,12 +476,16 @@ export class RoundController {
         break;
       }
       case 'RELEASING': {
-        this.checkPrize();
+        if (!this.rules) this.checkPrize();
         const wait = this.releasedHolding ? 0.5 : 0.18;
         if (m.phaseTime > wait && claw.fingersAtGoal()) m.released();
         break;
       }
       case 'SETTLING': {
+        if (this.rules) {
+          if (this.rules.canFinish(this.ctx, m.phaseTime)) m.finish(this.buildResult());
+          break;
+        }
         this.checkPrize();
         const t = m.phaseTime;
         const award = m.award;
@@ -391,7 +505,10 @@ export class RoundController {
       default:
         break;
     }
-    this.checkStrays();
+    if (this.rules) {
+      // Everything that falls into a machine's opening is the machine's business (there are no strays).
+      if (m.phase !== 'ATTRACT') this.rules.postStep(this.ctx, m.phase, m.phaseTime, dt);
+    } else this.checkStrays();
   }
 
   private speedOf(toy: ToyBody): number {
@@ -488,7 +605,7 @@ export class RoundController {
       }
     } else outcome = 'empty';
     const target = grip.target;
-    return {
+    const result: RoundResult = {
       roundId: m.roundId,
       outcome,
       demo: m.demo,
@@ -503,6 +620,10 @@ export class RoundController {
       gripQuality: grip.facts ? Number(grip.facts.quality.toFixed(3)) : 0,
       nearest: this.nearest,
     };
+    if (!this.rules) return result;
+    // The rules add the machine's view of the try; the round's identity stays the controller's.
+    const { roundId, demo, themeId, prizeId } = result;
+    return { ...result, ...this.rules.resultExtras(this.ctx, result), roundId, demo, themeId, prizeId };
   }
 
   /** Position of the claw axis on the floor plane (for the aim reticle). */

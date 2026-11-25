@@ -1,5 +1,6 @@
 import { Emitter } from '../core/events';
-import type { RoundPhase, RoundResult } from '../core/types';
+import type { MachineItem, RoundPhase, RoundResult } from '../core/types';
+import type { ItemSpec } from '../physics/items';
 
 /**
  * Pure round state machine. It knows nothing about physics or rendering: the
@@ -34,8 +35,10 @@ export const BUSY_PHASES: ReadonlySet<RoundPhase> = new Set([
   'SETTLING',
 ]);
 
-/** Phases in which the awarded toy may legitimately reach the prize sensor. */
-const AWARD_PHASES: ReadonlySet<RoundPhase> = new Set(['LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING']);
+/** Phases in which the awarded toy may legitimately reach the prize sensor (classic; machines may configure others). */
+export const AWARD_PHASES: ReadonlySet<RoundPhase> = new Set(['LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING']);
+/** Phases in which a machine item may be scored (items that fall during RESULT count for the next try). */
+const ITEM_PHASES: ReadonlySet<RoundPhase> = new Set(['READY', 'AIMING', 'DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING']);
 
 /** Upper bound for each automatic phase in seconds; exceeding it triggers recovery. */
 export const PHASE_WATCHDOG: Partial<Record<RoundPhase, number>> = {
@@ -60,6 +63,14 @@ export interface PrizeAward {
   toyId: string;
   typeId: string;
   demo: boolean;
+  /** A session prize (shelf / rush): earned by a whole session, not by one toy. */
+  session?: true;
+}
+
+/** A machine item scored in a try (shelf, rush). */
+export interface ItemScore extends MachineItem {
+  roundId: number;
+  demo: boolean;
 }
 
 export interface RoundMachineEvents extends Record<string, unknown> {
@@ -70,6 +81,8 @@ export interface RoundMachineEvents extends Record<string, unknown> {
   watchdog: { phase: RoundPhase; roundId: number; seconds: number };
   /** The round was aborted and reset (error recovery / manual restart). */
   abort: { roundId: number; reason: string };
+  /** A machine item reached the opening and was scored (items machines only). */
+  item: ItemScore;
 }
 
 export class RoundMachine {
@@ -83,6 +96,14 @@ export class RoundMachine {
   private resultDone = false;
   private watchdogFired = false;
   private readonly awardedRounds = new Set<number>();
+  /** Phases in which awardPrize may succeed (machine.configure). */
+  private awardPhases: ReadonlySet<RoundPhase> = AWARD_PHASES;
+  /** Items scored in the current round, in order. */
+  private items: MachineItem[] = [];
+  /** Toys already scored since the last configure (an item scores once, ever). */
+  private readonly scoredToys = new Set<string>();
+  /** Rounds that already earned a session prize. */
+  private readonly sessionRounds = new Set<number>();
 
   /** `sessionId` makes prize ids unique across page loads. */
   constructor(private readonly sessionId: string = Math.random().toString(36).slice(2, 10)) {}
@@ -110,6 +131,21 @@ export class RoundMachine {
   get atRoundBoundary(): boolean {
     return this._phase === 'ATTRACT' || this._phase === 'READY' || this._phase === 'RESULT';
   }
+  /** Items scored in the current round (cleared when a round begins). */
+  get roundItems(): readonly MachineItem[] {
+    return this.items;
+  }
+
+  /**
+   * Machine switch (boundary only): the phases in which awardPrize may succeed. Also forgets which
+   * toys were scored, since the bodies of the previous machine are gone.
+   */
+  configure(options: { awardPhases: ReadonlySet<RoundPhase> }): void {
+    if (!this.atRoundBoundary) throw new Error(`RoundMachine.configure: not at a round boundary (${this._phase})`);
+    this.awardPhases = options.awardPhases;
+    this.scoredToys.clear();
+    this.items = [];
+  }
 
   canTransition(to: RoundPhase): boolean {
     return TRANSITIONS[this._phase].includes(to);
@@ -131,6 +167,7 @@ export class RoundMachine {
     this.grabUsed = false;
     this.awarded = null;
     this.resultDone = false;
+    this.items = [];
   }
 
   /** ATTRACT → READY: starts a new round (player or demo). */
@@ -184,7 +221,7 @@ export class RoundMachine {
    */
   awardPrize(roundId: number, toyId: string, typeId: string): PrizeAward | null {
     if (roundId !== this._roundId) return null;
-    if (!AWARD_PHASES.has(this._phase)) return null;
+    if (!this.awardPhases.has(this._phase)) return null;
     if (this.awarded || this.awardedRounds.has(roundId)) return null;
     this.awardedRounds.add(roundId);
     const award: PrizeAward = {
@@ -195,6 +232,37 @@ export class RoundMachine {
       demo: this._demo,
     };
     this.awarded = award;
+    this.events.emit('award', award);
+    return award;
+  }
+
+  /**
+   * Scores one machine item of this round (shelf, rush). Refused in ATTRACT and RESULT, for a stale
+   * round and for a toy that was already scored. Several items per round are fine.
+   */
+  scoreItem(roundId: number, toyId: string, item: Pick<ItemSpec, 'kind' | 'look' | 'print' | 'value'>): MachineItem | null {
+    if (roundId !== this._roundId) return null;
+    if (!ITEM_PHASES.has(this._phase)) return null;
+    if (this.scoredToys.has(toyId)) return null;
+    this.scoredToys.add(toyId);
+    const scored: MachineItem = { toyId, kind: item.kind, look: item.look, print: item.print, value: item.value, index: this.items.length + 1 };
+    this.items.push(scored);
+    this.events.emit('item', { ...scored, roundId, demo: this._demo });
+    return scored;
+  }
+
+  /**
+   * The prize of a whole session (shelf, rush), for the session's last try `roundId`. Never for demo
+   * rounds, once per round id, only between tries (READY or RESULT). Emits the ordinary `award`
+   * event with `session: true`, so the collection and the claim code work as for any prize.
+   */
+  awardSessionPrize(roundId: number, typeId: string): PrizeAward | null {
+    if (this._demo) return null;
+    if (this._phase !== 'RESULT' && this._phase !== 'READY') return null;
+    if (!(roundId > 0) || roundId > this._roundId) return null;
+    if (this.sessionRounds.has(roundId)) return null;
+    this.sessionRounds.add(roundId);
+    const award: PrizeAward = { roundId, prizeId: `${this.sessionId}-${roundId}-S`, toyId: '', typeId, demo: false, session: true };
     this.events.emit('award', award);
     return award;
   }

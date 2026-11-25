@@ -3,6 +3,7 @@ import type { Quat, Vec3 } from '../core/types';
 import type { PlushAsset } from '../plush/manifest';
 import { CHUTE, FIELD, FIXED_DT, PRIZE_SENSOR } from '../physics/fieldSpec';
 import type { PhysicsWorld, ToyBody } from '../physics/PhysicsWorld';
+import type { MachineField } from './machines/types';
 
 export interface FieldOptions {
   /** How many toys should be on the play field. */
@@ -63,7 +64,7 @@ function hexSlots(pitch: number): Slot[] {
  * Creates and maintains the toys on the play field: the initial tidy layout,
  * restocking between rounds and clearing toys that ended up in the prize bin.
  */
-export class ToyField {
+export class ToyField implements MachineField {
   private rng: () => number;
   private typeCursor = 0;
   private assets: PlushAsset[] = [];

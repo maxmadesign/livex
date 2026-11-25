@@ -219,6 +219,28 @@ export function recordGolden(core: GameCore, c: GoldenCase): GoldenTrace {
   return { theme: c.theme, seed: c.seed, fill, start, results, awards, timeline, poses, takeover, end: counts(core), steps };
 }
 
+/**
+ * The part of a trace that no demo-pilot choice can influence: the fill, the three player rounds
+ * and their restocks, up to the step at which the first demo round starts. The pilot's variety
+ * term reads `toy.id.length` and the round id (src/app/DemoPilot.ts), both of which legitimately
+ * differ after a machine switch (toy ids carry the stack prefix, round ids keep counting), so its
+ * picks may differ while the physics is identical (docs/design/machines.md, V13).
+ */
+export function beforeDemos(trace: GoldenTrace): unknown {
+  const line = trace.timeline.find((l) => l.endsWith('ATTRACT>READY demo'));
+  const step = line ? Number(line.split(':')[0]) : trace.steps;
+  const c = comparable(trace) as GoldenTrace;
+  return {
+    fill: c.fill,
+    start: c.start,
+    demoStartsAt: step,
+    results: c.results.filter((r) => !r.demo),
+    awards: c.awards.filter((a) => !a.demo),
+    timeline: c.timeline.filter((l) => Number(l.split(':')[0]) <= step),
+    poses: c.poses.slice(0, Math.floor(step / POSE_EVERY)),
+  };
+}
+
 /** The trace without what keeps counting across machine switches by design (round ids, prize ids). */
 export function comparable(trace: GoldenTrace): unknown {
   return {
