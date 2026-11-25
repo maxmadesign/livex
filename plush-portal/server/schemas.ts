@@ -63,6 +63,26 @@ export const FactsSchema = z.object({
     .strictObject({ qr: z.boolean(), options: z.enum(REWARD_OPTIONS) })
     .nullable()
     .optional(),
+  // Machines other than classic (docs/design/machines.md, section 4.9): numbers and enums only.
+  machine: z
+    .strictObject({
+      id: text(32),
+      genre: z.enum(['bridge', 'shelf', 'rush']),
+      name: text(AI_LIMITS.maxToyNameChars),
+      tries: z.number().int().min(0).max(100_000).optional(),
+      triesLeft: z.number().int().min(0).max(1000).nullable().optional(),
+      progress: z.number().min(0).max(1).optional(),
+      progressGain: z.number().min(-1).max(1).optional(),
+      stuck: z.boolean().optional(),
+      items: z.number().int().min(0).max(500).optional(),
+      sessionItems: z.number().int().min(0).max(5000).optional(),
+      score: z.number().int().min(0).max(100_000_000).optional(),
+      secondsLeft: z.number().min(0).max(600).optional(),
+      rank: z.number().int().min(1).max(10).nullable().optional(),
+      reason: z.enum(['tries', 'time']).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const LineRequestSchema = z.object({

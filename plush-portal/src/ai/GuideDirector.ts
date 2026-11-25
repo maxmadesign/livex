@@ -53,6 +53,11 @@ export const GUIDE_PRIORITY: Record<GuideEventType, number> = {
   aim_help: 1,
   retry_prompt: 1,
   idle_hint: 0,
+  machine_selected: 2,
+  machine_progress: 2,
+  items_scored: 2,
+  time_low: 3,
+  session_over: 3,
 };
 const RESULT_PRIORITY = 3;
 const FEEDBACK_PRIORITY = 2;
@@ -70,6 +75,11 @@ export const GUIDE_COOLDOWN_MS: Record<GuideEventType, number> = {
   aim_help: 18_000,
   retry_prompt: 16_000,
   idle_hint: 24_000,
+  machine_selected: 1_200,
+  machine_progress: 8_000,
+  items_scored: 6_000,
+  time_low: 0,
+  session_over: 0,
 };
 export const FREQUENCY_SCALE: Record<AiSettings['frequency'], number> = { quiet: 2.5, normal: 1, chatty: 0.45 };
 

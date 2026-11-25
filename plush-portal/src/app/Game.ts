@@ -7,6 +7,8 @@ import { getLog, log, logError } from '../diagnostics/log';
 import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
+import type { MachineId } from '../game/machines/ids';
+import { isMachineId, resolveMachine } from '../game/machines/registry';
 import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
@@ -32,7 +34,7 @@ import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
 import { attachPeekDrag } from './PeekDrag';
-import type { GameStore, PerfSnapshot } from './gameStore';
+import type { GameStore, MachineCardInfo, PerfSnapshot } from './gameStore';
 
 /** Steering input as the round controller receives it, and where it came from. */
 export interface SteerInput {
@@ -68,6 +70,11 @@ export interface LaunchParams {
   debug: boolean;
   /** Never ask for the camera (tests / kiosks without one). */
   noCamera: boolean;
+  /**
+   * `?machine=`: the home machine of this page load (attract mode and the idle reset), overriding
+   * machines.home without saving anything. Absent / null = machines.home.
+   */
+  machine?: MachineId | null;
 }
 
 export interface GameDeps {
@@ -246,12 +253,18 @@ export class Game {
       this.stage.scene.add(this.toyVisuals.group, this.effects.group);
 
       this.measure();
+      // The home machine of this page load: ?machine= (never saved) or machines.home. Machines that are
+      // not offered yet fall back to classic.
+      const wanted = this.deps.launch.machine ?? s.machines.home;
+      const machine = resolveMachine(wanted, s.machines);
+      if (machine.def.id !== wanted) log('info', 'round', `machine "${wanted}" is not available; playing ${machine.def.id}`);
       this.core = new GameCore({
         binFloorY: this.layout.binFloorY,
         toyFriction: s.gameplay.toyFriction,
         params: this.roundParams(s),
         field: this.fieldOptions(s),
         themeId: this.themeId,
+        machine,
       });
       this.attract = new AttractDirector(this.core);
       this.bindCore();
@@ -612,6 +625,45 @@ export class Game {
 
   requestTip(): void {
     this.emitGuide('user_requested_tip');
+  }
+
+  /* ------------------------------------------------------------- machines */
+  // Public contract of the machine framework (docs/design/machines.md, sections 2.2 and 4.11).
+  // The bodies arrive with the machine director; until then every call is a safe no-op on classic.
+
+  /** Switches to another machine at the next round boundary. False when refused. */
+  selectMachine(id: MachineId): boolean {
+    void id;
+    return false;
+  }
+
+  /** Opens the machine lobby (the MACHINES deck button). */
+  openLobby(): void {}
+
+  /** A machine deck action: 'staff' = "Call staff" on the bridge. False when not available. */
+  machineAction(action: 'staff'): boolean {
+    void action;
+    return false;
+  }
+
+  /** The two-step buttons of `twoStep` controls (button 1 = +x, button 2 = -z). */
+  stepInput(step: 1 | 2, pressed: boolean): void {
+    void step;
+    void pressed;
+  }
+
+  /** PLAY AGAIN on a session card: a fresh session on the same machine. */
+  newSession(): void {}
+
+  /** Initials for a ranking place. False when no entry is waiting or the initials are invalid. */
+  submitInitials(initials: string): boolean {
+    void initials;
+    return false;
+  }
+
+  /** The lobby cards. */
+  machineCards(): MachineCardInfo[] {
+    return [];
   }
 
   private touchActivity(): void {
@@ -1305,7 +1357,7 @@ export class Game {
     const committedDiff = diffSettings(prevCommitted, committed);
     if (committedDiff.length === 0) return;
     if (committedDiff.some((p) => p.startsWith('gameplay.'))) {
-      this.core.controller.setParams(this.roundParams(committed));
+      this.core.setParams(this.roundParams(committed));
       this.core.phys.setToyFriction(committed.gameplay.toyFriction);
       // Same rule as the round parameters: between rounds the new difficulty applies at once.
       if (this.core.machine.atRoundBoundary) this.roundDifficulty = committed.gameplay.difficulty;
@@ -1774,6 +1826,54 @@ export class Game {
       /** Runs the idle reset now (as if nobody had touched the machine for system.idleSeconds). */
       idleReset: () => this.idleReset('debug'),
       claw: CLAW,
+      /** The machine being played and its session (docs/design/machines.md, section 4.7). */
+      machine: () => {
+        const def = this.core.def;
+        return {
+          id: def.def.id,
+          genre: def.def.genre,
+          controls: def.controls,
+          presentation: def.module.presentation,
+          session: this.core.session.snapshot(),
+          rules: this.core.controller.rules?.debugState?.() ?? null,
+        };
+      },
+      /** Resolves when the switch has finished (false when it was refused). */
+      selectMachine: (id: string) => Promise.resolve(isMachineId(id) ? this.selectMachine(id) : false),
+      /** Test hooks of the machines; each call counts as input like the rest of the API. */
+      machineDebug: {
+        /** An impulse (N·s) on the bridge box, or else on the first item (tests only). */
+        nudge: (dx: number, dz: number, dy = 0): boolean => {
+          this.idle.touch();
+          const items = [...this.core.phys.toys.values()].filter((t) => t.item && !t.inBin);
+          const toy = items.find((t) => t.item!.kind === 'box') ?? items[0];
+          if (!toy) return false;
+          toy.body.applyImpulse({ x: dx, y: dy, z: dz }, true);
+          return true;
+        },
+        /** The clock of a running timed session. */
+        setSessionSeconds: (seconds: number): void => {
+          this.idle.touch();
+          this.core.session.setSecondsLeft(seconds);
+        },
+        /** "Call staff" on the field, at a round boundary only. */
+        staffReset: (): boolean => {
+          this.idle.touch();
+          if (!this.core.machine.atRoundBoundary) return false;
+          return this.core.field.staffReset?.() ?? false;
+        },
+        itemPoses: (): { id: string; look: string; pos: number[] }[] => {
+          this.idle.touch();
+          return [...this.core.phys.toys.values()].filter((t) => t.item).map((t) => ({ id: t.id, look: t.item!.look, pos: Array.from(t.pose.pos) }));
+        },
+      },
+      /** Local rankings of a machine (filled in with the machine persistence). */
+      rankings: (id?: string): { initials: string; score: number }[] => {
+        void id;
+        return [];
+      },
+      /** Today's pick (null until the daily pick exists). */
+      dailyPick: (): string | null => null,
     };
     // Automation that drives the game through this API plays the role of a player: every call
     // counts as input for the idle reset (a slow software-rendered test run must not be reset to

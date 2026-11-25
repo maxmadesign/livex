@@ -1,4 +1,5 @@
 import { DISPLAY_PROFILE_IDS, LANGS, THEME_IDS, type DisplayProfileId, type Lang, type ThemeId } from '../core/types';
+import { MACHINE_IDS, type MachineId } from '../game/machines/ids';
 import type { LaunchParams } from './Game';
 
 /**
@@ -10,6 +11,7 @@ import type { LaunchParams } from './Game';
  *   ?seed=123                                deterministic toy layout
  *   ?debug=1                                 expose window.__plush for tests / tuning
  *   ?camera=off                              never request the camera
+ *   ?machine=classic|bridge|shelf|rush       the machine of this page load (attract and idle reset); never saved
  *   ?debug=1&insets=47,0,21,47               pretend the screen has cut-outs (top,right,bottom,left CSS px)
  */
 export function readLaunchParams(search: string = globalThis.location?.search ?? ''): LaunchParams {
@@ -25,6 +27,7 @@ export function readLaunchParams(search: string = globalThis.location?.search ??
     seed: Number.isFinite(seed) ? Math.floor(seed) : null,
     debug: q.get('debug') === '1',
     noCamera: q.get('camera') === 'off',
+    machine: pick<MachineId>(q.get('machine'), MACHINE_IDS),
   };
 }
 

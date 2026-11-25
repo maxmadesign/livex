@@ -68,6 +68,28 @@ export interface RoundResult {
    * in metres. +x is to the player's right, +z is towards the player (front).
    */
   nearest: { dx: number; dz: number; dist: number; typeId: string } | null;
+  /** Only on non-classic machines (docs/design/machines.md); classic results never carry it. */
+  machine?: MachineRoundInfo;
+}
+
+/** One item scored in a try of an items machine (shelf, rush). */
+export interface MachineItem {
+  toyId: string;
+  kind: 'box' | 'snack' | 'gem' | 'coin';
+  look: string;
+  print: string | null;
+  value: number;
+  /** 1-based order within the try. */
+  index: number;
+}
+
+export interface MachineRoundInfo {
+  id: string; // MachineId
+  genre: string; // GenreId
+  items: MachineItem[]; // shelf / rush: items scored in this try
+  progress: number | null; // bridge: 0..1 after the try (presentation / guide only)
+  progressGain: number | null;
+  stuck: boolean; // bridge: "Call staff" is lit
 }
 
 export type Unsubscribe = () => void;

@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { IDLE_CALIBRATION, type AudioStatus, type GuideLine, type GuideStatus, type TrackerStatus } from '../core/contracts';
 import type { DisplayProfileId, RoundPhase, RoundResult, ThemeId } from '../core/types';
+import type { GenreId, MachineControls, MachineId, SessionEndReason, SessionKind, SessionState } from '../game/machines/ids';
 import type { RarityTier } from '../game/rarity';
 import type { ScoreAward } from '../game/scoring';
 import type { EffectiveGraphics } from '../scene/Stage';
@@ -33,7 +34,82 @@ export interface PrizeInfo {
   count: number;
 }
 
-export type ModalId = 'settings' | 'collection' | 'tutorial' | 'device' | 'themes' | null;
+export type ModalId = 'settings' | 'collection' | 'tutorial' | 'device' | 'themes' | 'lobby' | null;
+
+/* ------------------------------------------------------------------ machines (docs/design/machines.md) */
+
+/** One card of the machine lobby. */
+export interface MachineCardInfo {
+  id: MachineId;
+  genre: GenreId;
+  locked: boolean;
+  winsToUnlock: number;
+  current: boolean;
+  dailyPick: boolean;
+  best: number;
+  prizesHere: number;
+  top: { initials: string; score: number }[];
+}
+
+/** The machine being played and its session, for the HUD, the deck and the lobby. */
+export interface MachineUiState {
+  id: MachineId;
+  genre: GenreId;
+  controls: MachineControls;
+  presentation: 'prize' | 'items';
+  switching: boolean;
+  /** The MACHINES / leave-machine button may be pressed now (machines.lobby on, at a round boundary). */
+  lobby: boolean;
+  session: { kind: SessionKind; state: SessionState; tries: number; triesTotal: number | null; secondsLeft: number | null; items: number; points: number };
+  progress: number | null;
+  staff: { available: boolean; highlighted: boolean };
+  dailyPick: MachineId | null;
+  /** Points multiplier active on this machine (1 = none). */
+  bonus: number;
+  /** 'items' genres: the last try, for the try toast. */
+  lastTry: { roundId: number; items: number; points: number } | null;
+  /** twoStep: which button is live. */
+  axisStage: 'x' | 'z' | null;
+  /** 4A's coin plate: an i18n key and its parameters. */
+  plate: { key: string; params?: Record<string, string | number> };
+}
+
+/** The card at the end of a session on a tries / timed machine. */
+export interface SessionResultUi {
+  machineId: MachineId;
+  roundId: number;
+  reason: SessionEndReason;
+  items: number;
+  points: number;
+  best: number;
+  rank: number | null;
+  rewardTypeId: string | null;
+}
+
+/** A ranking place waiting for its initials. */
+export interface RankEntryUi {
+  machineId: MachineId;
+  score: number;
+  position: number;
+  deadline: number;
+}
+
+export const INITIAL_MACHINE: MachineUiState = {
+  id: 'classic',
+  genre: 'classic',
+  controls: 'joystick',
+  presentation: 'prize',
+  switching: false,
+  lobby: true,
+  session: { kind: 'open', state: 'idle', tries: 0, triesTotal: null, secondsLeft: null, items: 0, points: 0 },
+  progress: null,
+  staff: { available: false, highlighted: false },
+  dailyPick: null,
+  bonus: 1,
+  lastTry: null,
+  axisStage: null,
+  plate: { key: 'machines.plate.free' },
+};
 
 /** Points system state shown by the HUD (src/ui/ScoreHud.tsx and the result card). */
 export interface ScoreUiState {
@@ -106,6 +182,12 @@ export interface GameUiState {
   scorePopups: ScorePopup[];
   /** Prize-claim QR for the last real win (src/rewards, docs/REWARDS.md). */
   reward: RewardUiState;
+  /** The machine being played (classic unless a player picked another one). */
+  machine: MachineUiState;
+  /** The session card of a tries / timed machine, or null. */
+  sessionResult: SessionResultUi | null;
+  /** A ranking place waiting for initials, or null. */
+  rankEntry: RankEntryUi | null;
 }
 
 /**
@@ -224,6 +306,9 @@ export function createGameStore(profile: DisplayProfileId, profileChosen: boolea
     score: INITIAL_SCORE,
     scorePopups: [],
     reward: INITIAL_REWARD,
+    machine: INITIAL_MACHINE,
+    sessionResult: null,
+    rankEntry: null,
   }));
 }
 

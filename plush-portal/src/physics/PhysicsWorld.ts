@@ -1,7 +1,9 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { Quat, Vec3 } from '../core/types';
+import type { Quat, ThemeId, Vec3 } from '../core/types';
 import type { PlushAsset, ProxyShape } from '../plush/manifest';
-import { BIN, CHUTE, FIELD, FIXED_DT, GROUP, PRIZE_SENSOR, clampBinFloor, groups } from './fieldSpec';
+import { CLASSIC_FIELD, floorWithHole, type Fixture, type FieldGeometry, type FixtureKind, type PrizeOpening } from './fieldGeometry';
+import { itemAsset, type ItemSpec } from './items';
+import { BIN, CHUTE, FIELD, FIXED_DT, GROUP, clampBinFloor, groups } from './fieldSpec';
 
 export { RAPIER };
 
@@ -12,7 +14,7 @@ export function initRapier(): Promise<void> {
   return rapierReady;
 }
 
-export type StaticKind = 'floor' | 'glass' | 'backWall' | 'ceiling' | 'chuteWall' | 'bin';
+export type StaticKind = 'floor' | 'glass' | 'backWall' | 'ceiling' | 'chuteWall' | 'bin' | FixtureKind;
 
 /** Interpolated transform of one dynamic body (previous + current fixed step). */
 export class BodyPose {
@@ -62,6 +64,8 @@ export interface ToyBody {
   inBin: boolean;
   /** Linear velocity at the end of the previous step (impact detection). */
   lastVel: Float32Array;
+  /** Set for machine items (boxes, snacks, gems, coins); absent on plush toys. */
+  item?: ItemSpec;
 }
 
 export interface ImpactEvent {
@@ -80,6 +84,10 @@ export interface PhysicsOptions {
   /** Y of the prize bin floor (depends on the display layout, clamped to the allowed range). */
   binFloorY: number;
   toyFriction: number;
+  /** The machine's static layout (docs/design/machines.md). Default: today's classic cabinet. */
+  field?: FieldGeometry;
+  /** Prepended to every toy id, so ids never repeat across rebuilt worlds. Default: none. */
+  idPrefix?: string;
 }
 
 const TOY_GROUPS = groups(GROUP.TOY, GROUP.STATIC | GROUP.TOY | GROUP.CLAW | GROUP.SENSOR);
@@ -93,6 +101,13 @@ const STATIC_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.TOY_SOFT | GROUP.CL
 const GUARD_GROUPS = groups(GROUP.STATIC, GROUP.TOY | GROUP.CLAW);
 const SENSOR_GROUPS = groups(GROUP.SENSOR, GROUP.TOY | GROUP.TOY_SOFT);
 const NO_GROUPS = groups(GROUP.NONE, GROUP.NONE);
+
+/** Hamilton product a · b (apply b first, then a). */
+function multiplyQuat(a: Quat, b: Quat): Quat {
+  const [ax, ay, az, aw] = a;
+  const [bx, by, bz, bw] = b;
+  return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz];
+}
 
 /**
  * Owns the Rapier world: the cabinet's static colliders, the toys and the
@@ -110,8 +125,13 @@ export class PhysicsWorld {
   readonly clawColliders = new Set<number>();
   private fixedBody!: RAPIER.RigidBody;
   private binBody: RAPIER.RigidBody | null = null;
+  /** Machine fixtures (bars, fences, shelves) on their own fixed body; null on classic. */
+  private fixtureBody: RAPIER.RigidBody | null = null;
   private prizeSensor!: RAPIER.Collider;
   private options: PhysicsOptions;
+  /** The static layout this world was built from. */
+  readonly field: FieldGeometry;
+  private readonly idPrefix: string;
   /** Toys whose colliders touched the prize sensor during the last step. */
   readonly sensorHits = new Set<ToyBody>();
   /** Impacts detected during the last step (reused array). */
@@ -126,16 +146,29 @@ export class PhysicsWorld {
 
   constructor(options: PhysicsOptions) {
     this.options = { ...options, binFloorY: clampBinFloor(options.binFloorY) };
+    this.field = options.field ?? CLASSIC_FIELD;
+    this.idPrefix = options.idPrefix ?? '';
     this.world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
     this.world.timestep = FIXED_DT;
     this.world.numSolverIterations = 8;
     this.events = new RAPIER.EventQueue(true);
     this.buildCabinet();
     this.buildBin();
+    // After the bin, so the classic creation order (and with it every Rapier handle) stays as it was.
+    if (this.field.fixtures.length > 0) this.buildFixtures(this.field.fixtures);
   }
 
   get binFloorY(): number {
     return this.options.binFloorY;
+  }
+
+  get toyFriction(): number {
+    return this.options.toyFriction;
+  }
+
+  /** The prize opening and its sensor volume. */
+  get opening(): PrizeOpening {
+    return this.field.opening;
   }
 
   dispose(): void {
@@ -179,21 +212,29 @@ export class PhysicsWorld {
     const wallT = 0.06;
     const top = FIELD.ceilingY;
 
-    // Floor slab with the chute hole in the front-left corner (two boxes).
+    const field = this.field;
     const matFriction = 0.95;
-    this.addStatic(body, 'floor', (CHUTE.xMax + W) / 2, -T / 2, -D / 2, (W - CHUTE.xMax) / 2, T / 2, D / 2, matFriction, 0.02);
-    this.addStatic(
-      body,
-      'floor',
-      (CHUTE.xMin + CHUTE.xMax) / 2,
-      -T / 2,
-      (-D + CHUTE.zMin) / 2,
-      (CHUTE.xMax - CHUTE.xMin) / 2,
-      T / 2,
-      (D + CHUTE.zMin) / 2,
-      matFriction,
-      0.02,
-    );
+    if (field.floor.kind === 'classic') {
+      // Floor slab with the chute hole in the front-left corner (two boxes).
+      this.addStatic(body, 'floor', (CHUTE.xMax + W) / 2, -T / 2, -D / 2, (W - CHUTE.xMax) / 2, T / 2, D / 2, matFriction, 0.02);
+      this.addStatic(
+        body,
+        'floor',
+        (CHUTE.xMin + CHUTE.xMax) / 2,
+        -T / 2,
+        (-D + CHUTE.zMin) / 2,
+        (CHUTE.xMax - CHUTE.xMin) / 2,
+        T / 2,
+        (D + CHUTE.zMin) / 2,
+        matFriction,
+        0.02,
+      );
+    } else {
+      // The machine's own hole (always inside the prize bin's footprint).
+      for (const b of floorWithHole(field.floor.hole)) {
+        this.addStatic(body, 'floor', b.center[0], b.center[1], b.center[2], b.half[0], b.half[1], b.half[2], matFriction, 0.02);
+      }
+    }
 
     // Glass box. Left wall and front glass continue below the floor (they are also walls of the bin).
     const low = BIN.minFloorY - 0.1;
@@ -206,22 +247,17 @@ export class PhysicsWorld {
     this.addStatic(body, 'ceiling', 0, top + wallT / 2, -D / 2, W + wallT, wallT / 2, D / 2 + wallT, 0.4);
 
     // Clear guard walls around the chute.
-    const h = CHUTE.wallHeight;
-    const t = CHUTE.wallThickness;
-    this.addStatic(body, 'chuteWall', CHUTE.xMax + t / 2, h / 2, (CHUTE.zMin + CHUTE.zMax) / 2 - t / 2, t / 2, h / 2, (CHUTE.zMax - CHUTE.zMin) / 2 + t / 2, 0.35, 0.1);
-    this.addStatic(body, 'chuteWall', (CHUTE.xMin + CHUTE.xMax) / 2, h / 2, CHUTE.zMin - t / 2, (CHUTE.xMax - CHUTE.xMin) / 2, h / 2, t / 2, 0.35, 0.1);
+    if (field.chuteGuard) {
+      const h = CHUTE.wallHeight;
+      const t = CHUTE.wallThickness;
+      this.addStatic(body, 'chuteWall', CHUTE.xMax + t / 2, h / 2, (CHUTE.zMin + CHUTE.zMax) / 2 - t / 2, t / 2, h / 2, (CHUTE.zMax - CHUTE.zMin) / 2 + t / 2, 0.35, 0.1);
+      this.addStatic(body, 'chuteWall', (CHUTE.xMin + CHUTE.xMax) / 2, h / 2, CHUTE.zMin - t / 2, (CHUTE.xMax - CHUTE.xMin) / 2, h / 2, t / 2, 0.35, 0.1);
+    }
 
-    // Prize sensor inside the chute, below floor level.
-    const sensor = RAPIER.ColliderDesc.cuboid(
-      (PRIZE_SENSOR.xMax - PRIZE_SENSOR.xMin) / 2,
-      (PRIZE_SENSOR.yTop - PRIZE_SENSOR.yBottom) / 2,
-      (PRIZE_SENSOR.zMax - PRIZE_SENSOR.zMin) / 2,
-    )
-      .setTranslation(
-        (PRIZE_SENSOR.xMin + PRIZE_SENSOR.xMax) / 2,
-        (PRIZE_SENSOR.yTop + PRIZE_SENSOR.yBottom) / 2,
-        (PRIZE_SENSOR.zMin + PRIZE_SENSOR.zMax) / 2,
-      )
+    // Prize sensor inside the opening, below floor level (classic: the chute, PRIZE_SENSOR).
+    const o = field.opening;
+    const sensor = RAPIER.ColliderDesc.cuboid((o.xMax - o.xMin) / 2, (o.sensorTop - o.sensorBottom) / 2, (o.zMax - o.zMin) / 2)
+      .setTranslation((o.xMin + o.xMax) / 2, (o.sensorTop + o.sensorBottom) / 2, (o.zMin + o.zMax) / 2)
       .setSensor(true)
       .setCollisionGroups(SENSOR_GROUPS)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
@@ -250,6 +286,38 @@ export class PhysicsWorld {
     this.addStatic(body, 'bin', cx, mid, BIN.zMin - 0.02, hx + 0.02, half, 0.02, 0.5, 0.05);
   }
 
+  /**
+   * Machine fixtures on one extra fixed body. A capsule is Rapier's Y capsule turned onto its
+   * world axis; `frictionCombine: 'min'` lets a slick surface (the shelf's gutter) win over the
+   * items' own friction.
+   */
+  private buildFixtures(fixtures: readonly Fixture[]): void {
+    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    this.fixtureBody = body;
+    const s = Math.SQRT1_2;
+    for (const f of fixtures) {
+      let desc: RAPIER.ColliderDesc;
+      // Rotation that turns the shape's own frame onto the world (fixture rotation, then axis).
+      let q: Quat = f.rot ?? [0, 0, 0, 1];
+      if (f.shape.type === 'box') desc = RAPIER.ColliderDesc.cuboid(f.shape.half[0], f.shape.half[1], f.shape.half[2]);
+      else {
+        desc = RAPIER.ColliderDesc.capsule(f.shape.halfLength, f.shape.radius);
+        // Rapier capsules lie along +Y: a quarter turn about Z maps it onto X, about X onto Z.
+        const axis: Quat = f.shape.axis === 'x' ? [0, 0, s, s] : f.shape.axis === 'z' ? [s, 0, 0, s] : [0, 0, 0, 1];
+        q = multiplyQuat(q, axis);
+      }
+      desc
+        .setTranslation(f.center[0], f.center[1], f.center[2])
+        .setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] })
+        .setFriction(f.friction)
+        .setRestitution(f.restitution)
+        .setCollisionGroups(STATIC_GROUPS);
+      if (f.frictionCombine === 'min') desc.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+      const collider = this.world.createCollider(desc, body);
+      this.staticKinds.set(collider.handle, f.kind);
+    }
+  }
+
   /** Changes the depth of the prize bin. Only call between rounds. */
   setBinFloor(y: number): void {
     const clamped = clampBinFloor(y);
@@ -261,7 +329,11 @@ export class PhysicsWorld {
 
   setToyFriction(friction: number): void {
     this.options.toyFriction = friction;
-    for (const toy of this.toys.values()) for (const c of toy.colliders) c.collider.setFriction(0.9 * friction);
+    for (const toy of this.toys.values()) {
+      // Machine items keep their own material (the plush friction setting does not apply to boxes or gems).
+      if (toy.item) continue;
+      for (const c of toy.colliders) c.collider.setFriction(0.9 * friction);
+    }
   }
 
   staticKind(handle: number): StaticKind | undefined {
@@ -303,7 +375,7 @@ export class PhysicsWorld {
   }
 
   addToy(asset: PlushAsset, position: Vec3, rotation: Quat, scale: number, massScale: number): ToyBody {
-    const id = `toy-${++this.toyCounter}`;
+    const id = `${this.idPrefix}toy-${++this.toyCounter}`;
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(position[0], position[1], position[2])
       .setRotation({ x: rotation[0], y: rotation[1], z: rotation[2], w: rotation[3] })
@@ -342,6 +414,44 @@ export class PhysicsWorld {
       inBin: false,
       lastVel: new Float32Array(3),
     };
+    for (const c of colliders) {
+      this.toyByCollider.set(c.collider.handle, toy);
+      this.toyColliderInfo.set(c.collider.handle, c);
+    }
+    toy.pose.snap(body, this.scratchV, this.scratchQ);
+    this.toys.set(id, toy);
+    return toy;
+  }
+
+  /**
+   * A machine item (box, snack, gem, coin): the same body as a toy (addToy), but with the item's
+   * own mass, friction, restitution and damping. The item is solid everywhere (no soft parts).
+   */
+  addItem(spec: ItemSpec, themeId: ThemeId, position: Vec3, rotation: Quat): ToyBody {
+    const id = `${this.idPrefix}item-${++this.toyCounter}`;
+    const asset = itemAsset(spec, themeId);
+    const body = this.world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(position[0], position[1], position[2])
+        .setRotation({ x: rotation[0], y: rotation[1], z: rotation[2], w: rotation[3] })
+        .setLinearDamping(spec.linearDamping)
+        .setAngularDamping(spec.angularDamping)
+        .setCanSleep(true),
+    );
+    const colliders: ToyCollider[] = [];
+    for (const proxy of spec.proxies) {
+      const desc = this.colliderDesc(proxy, 1) ?? RAPIER.ColliderDesc.ball(Math.max(0.005, spec.footprint));
+      desc
+        .setTranslation(proxy.pos[0], proxy.pos[1], proxy.pos[2])
+        .setRotation({ x: proxy.rot[0], y: proxy.rot[1], z: proxy.rot[2], w: proxy.rot[3] })
+        .setMass(Math.max(1e-4, spec.mass * proxy.massFraction))
+        .setFriction(spec.friction)
+        .setRestitution(spec.restitution)
+        .setCollisionGroups(TOY_GROUPS)
+        .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+      colliders.push({ collider: this.world.createCollider(desc, body), part: proxy.part, role: 'core' });
+    }
+    const toy: ToyBody = { id, asset, scale: 1, body, colliders, pose: new BodyPose(), mass: body.mass(), inBin: false, lastVel: new Float32Array(3), item: spec };
     for (const c of colliders) {
       this.toyByCollider.set(c.collider.handle, toy);
       this.toyColliderInfo.set(c.collider.handle, c);

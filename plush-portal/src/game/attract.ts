@@ -120,6 +120,12 @@ export class AttractDirector {
    */
   resetField(): number {
     const { field, controller } = this.core;
+    // Machines with their own field (a fresh box, full stacks, a full pile) reset to their start layout.
+    const reset = field.resetForTakeover?.();
+    if (reset !== undefined) {
+      this.core.settle(1.5);
+      return reset;
+    }
     let added = 0;
     for (let pass = 0; pass < 2; pass++) {
       if (field.clearFallen().length > 0) controller.forgetStrays();

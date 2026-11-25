@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { DIFFICULTY_PRESETS } from '../../../src/app/presets';
 import type { RoundPhase, RoundResult, SlipReason, ThemeId } from '../../../src/core/types';
 import { GameCore } from '../../../src/game/GameCore';
+import type { MachineId } from '../../../src/game/machines/ids';
+import { resolveMachine } from '../../../src/game/machines/registry';
+import type { ResolvedMachine } from '../../../src/game/machines/types';
 import type { RoundParams } from '../../../src/game/RoundController';
 import { BIN, CHUTE, CLAW, FIELD, FIXED_DT, PRIZE_SENSOR } from '../../../src/physics/fieldSpec';
 import { initRapier, type ToyBody } from '../../../src/physics/PhysicsWorld';
@@ -42,6 +45,15 @@ export interface CoreOptions {
   density?: number;
   binFloorY?: number;
   assets?: PlushAsset[];
+  /** The machine to build (default classic). An id may name a machine that is not offered to players yet. */
+  machine?: MachineId | ResolvedMachine;
+}
+
+/** The machine for an id, available or not; throws when its genre module has not landed yet. */
+export function testMachine(id: MachineId): ResolvedMachine {
+  const machine = resolveMachine(id, undefined, { includeUnavailable: true });
+  if (machine.def.id !== id) throw new Error(`machine "${id}" can not be built yet (its genre module is pending)`);
+  return machine;
 }
 
 /** Default field: exactly what a fresh install plays (18 toys, scale 0.92, density 0.2). */
@@ -56,6 +68,7 @@ export async function makeCore(options: CoreOptions = {}): Promise<GameCore> {
     field: { count: options.count ?? 18, scale: options.scale ?? 0.92, density: options.density ?? 0.2, massScale: 1, seed },
     themeId: theme,
     sessionId: 'test',
+    machine: options.machine === undefined ? undefined : typeof options.machine === 'string' ? testMachine(options.machine) : options.machine,
   });
   core.populate(options.assets ?? themeAssets(theme), seed);
   return core;
