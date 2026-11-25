@@ -13,6 +13,8 @@ import { AppContext, useApp, useSettings, useUi } from './context';
 import { CollectionDialog, DeviceChooser, ThemePicker, TutorialDialog } from './Dialogs';
 import { Hud } from './Hud';
 import { ScoreHud } from './ScoreHud';
+import { LobbyDialog } from './machines/LobbyDialog';
+import { MachineLayer } from './machines/MachineLayer';
 import { useModals } from './modals';
 import { useHudLayout, useReducedMotion } from './useHudLayout';
 
@@ -168,12 +170,14 @@ function Shell({ onFrame }: { onFrame: (report: FrameReport) => void }) {
         {/* Stacking follows document order: HUD, score, attract call to action, calibration countdown, then dialogs. */}
         {bootStage === 'ready' ? <Hud layout={layout} /> : null}
         {bootStage === 'ready' ? <ScoreHud layout={layout} /> : null}
+        {bootStage === 'ready' ? <MachineLayer layout={layout} /> : null}
         {bootStage === 'ready' ? <AttractOverlay layout={layout} /> : null}
         {bootStage === 'ready' ? <CalibrationOverlay layout={layout} /> : null}
         {modal === 'device' ? <DeviceChooser layout={layout} /> : null}
         {modal === 'tutorial' ? <TutorialDialog layout={layout} /> : null}
         {modal === 'themes' ? <ThemePicker layout={layout} /> : null}
         {modal === 'collection' ? <CollectionDialog layout={layout} /> : null}
+        {modal === 'lobby' ? <LobbyDialog layout={layout} /> : null}
         {modal === 'settings' ? (
           <Suspense fallback={null}>
             <SettingsDialog layout={layout} onClose={close} />

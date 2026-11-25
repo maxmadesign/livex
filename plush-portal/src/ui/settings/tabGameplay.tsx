@@ -1,7 +1,9 @@
 import { applyDifficultyPreset } from '../../app/presets';
+import { MACHINE_IDS, type MachineId } from '../../game/machines/ids';
+import { isPlayable, machineDef } from '../../game/machines/registry';
 import { TIER_POINTS } from '../../game/rarity';
 import { useApp, useSettings, useT } from '../context';
-import { Field, Row, Section } from './Field';
+import { Field, Row, Section, useSetter } from './Field';
 
 /* ------------------------------------------------------------------ Game */
 
@@ -56,6 +58,72 @@ export function GameplayTab() {
       <Field path="gameplay.aimReticle" />
       <Field path="gameplay.aimBeam" />
       <Field path="gameplay.tips" />
+      <MachinesSection />
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ Machines */
+
+/** Machines other than the classic claw (docs/design/machines.md, section 4.6): every machines.* setting. */
+function MachinesSection() {
+  const t = useT();
+  const offered = (id: MachineId) => {
+    const def = machineDef(id);
+    return !!def && isPlayable(def);
+  };
+  const group = (id: 'bridge' | 'shelf' | 'rush') => (
+    <h4 className="pp-subsec" data-testid={`machines-group-${id}`}>
+      {t(`set.machines.group.${id}`)}
+      {offered(id) ? null : <small> · {t('set.machines.unavailable')}</small>}
+    </h4>
+  );
+  return (
+    <>
+      <Section title={t('set.machines.section')} />
+      <Field path="machines.home" />
+      <Field path="machines.lobby" />
+      <HiddenMachines />
+      <Field path="machines.unlock" />
+      <Field path="machines.dailyPick" />
+      <Field path="machines.dailyBonus" />
+      <Field path="machines.attractCycle" />
+      {group('bridge')}
+      <Field path="machines.bridge.controls" />
+      <Field path="machines.bridge.triesPerBox" />
+      <Field path="machines.bridge.gap" />
+      <Field path="machines.bridge.boxMass" />
+      {group('shelf')}
+      <Field path="machines.shelf.tries" />
+      <Field path="machines.shelf.rewardItems" />
+      <Field path="machines.shelf.lipHeight" />
+      {group('rush')}
+      <Field path="machines.rush.seconds" />
+      <Field path="machines.rush.pieces" />
+      <Field path="machines.rush.rewardValue" />
+    </>
+  );
+}
+
+/** machines.hidden as one toggle per machine (pressed = offered in the lobby); `home` is always offered. */
+function HiddenMachines() {
+  const t = useT();
+  const set = useSetter();
+  const hidden = useSettings((s) => s.machines.hidden);
+  const home = useSettings((s) => s.machines.home);
+  const toggle = (id: MachineId) => {
+    const next = hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id];
+    set('machines.hidden', next);
+  };
+  return (
+    <Row label={t('set.machines.hidden')} hint={t('set.machines.hidden.hint')}>
+      <div className="pp-seg" role="group" data-testid="field-machines.hidden">
+        {MACHINE_IDS.map((id) => (
+          <button key={id} type="button" aria-pressed={id === home || !hidden.includes(id)} disabled={id === home} onClick={() => toggle(id)} data-value={id}>
+            {t(`set.machines.home.o.${id}`)}
+          </button>
+        ))}
+      </div>
+    </Row>
   );
 }

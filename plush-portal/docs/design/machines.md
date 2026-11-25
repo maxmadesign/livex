@@ -2017,3 +2017,87 @@ the same arithmetic it always did).
 - Guide lines and `resolveSituation` for the five machine events; `sanitizeFacts` still drops
   `facts.machine` (N17).
 - `tests/e2e/helpers.ts` `BootOptions.machine` (UI workstream); spec 29 uses the debug override.
+
+---
+
+## Implementation notes (WS-F: UI, i18n, guide, e2e)
+
+Built: `src/ui/machines/` (`LobbyDialog`, `MachineCard`, `art.tsx`, `SessionHud`, `TryToast`,
+`SessionResultCard`, `InitialsEntry`, `MachineLayer`, `DeckButtons`, `useMachineDeck.ts`, `view.ts`,
+`machines.css`), the `machines` i18n namespace (`src/i18n/strings/machines.ts`, en / zh / ja), the
+Machines section of Settings → Gameplay, fourteen guide line pools in en / zh / ja with their GTC
+pools, `resolveSituation` for the five machine events, `facts.machine` through the prompt's whitelist
+with a machine context note, unit tests (`tests/unit/ui/machinesView.test.ts`,
+`tests/unit/ai/machineLines.test.ts`, the machine variants in `lines.test.ts` / `brandLines.test.ts`)
+and `tests/e2e/30-lobby.spec.ts`. Mount points: `App.tsx` (the machine layer after the score, the
+`lobby` modal case) and small additive lines in `Hud.tsx` (below). No game code changed: classic
+stays bit-identical (golden trace and round trip unchanged).
+
+### How it fits together
+
+- **Deck** (`useMachineDeck`, called once in Hud's `ControlPanel` and passed down): MACHINES
+  (`menu-machines`) and Call staff (`menu-staff`) lead the panel menu, the two-step buttons (`step-1`,
+  `step-2`) take the joystick's well when `ui.machine.controls` is `twoStep`, and the coin plate
+  (`machine-plate`: TRIES 2/5, TIME 0:42, TRY 3) sits in the status line.
+- **Lobby** (`modal === 'lobby'`, opened with `Game.openLobby`): a sideways carousel with scroll
+  snap on wide screens (three cards on a desktop, about two on a phone, the next one peeking in), a
+  list on tall screens (`vh > 1.15 vw`: the portrait presets and an upright phone). ◀ ▶ in the footer,
+  the arrow keys and a swipe move the focus; PLAY or Enter calls `Game.selectMachine`, Esc / ✕ close.
+  A card shows the genre art, the genre tag, the name, tagline, how-to, a rule line made from the
+  committed settings ("5 tries · 5 boxes win a prize", "75 s score attack · top 10 board"), best /
+  prizes here (rush: the top score with its initials), the TODAY'S PICK ribbon with "×1.5 points
+  today", "Playing now" and, in unlock-by-prizes mode, a lock with "Win n more prizes to unlock".
+- **Machine layer** (`MachineLayer`, its own `.pp-hud` layer after the score, so the win card's
+  styles apply): the session HUD, the try toast, and at a session's end the initials entry (a top-10
+  run) or the session card.
+- **Session HUD**: under the score (on 86", beside the panel on the side away from the score):
+  bridge "Try n" + five-segment progress meter + "Stuck? Call staff"; shelf tries left, boxes with a
+  dot meter up to the prize, points; rush a large m:ss clock (red and pulsing for the last 10 s, the
+  plate too), points, gems, and "the clock starts on your first move" before it runs; today's ×1.5.
+  Hidden on classic, in attract mode, during a switch and under the session card.
+- **Session card**: `WinCard` + `winCardGeometry` with the session's content (title TIME UP! /
+  SESSION OVER, a summary block in the breakdown's place: what dropped, leaderboard place, best
+  session, points; the session prize's portrait or else the machine art; the claim QR block of the
+  session's last try when a prize was earned; NEW BEST!; PLAY AGAIN → `Game.newSession`, MACHINES →
+  `Game.openLobby`). Phones get the compact points line and the claim link, as for a win.
+- **Initials entry**: three letter tiles with ▲ / ▼ (touch size, at least 44 px), OK and the
+  seconds left, centred in the win card's bounds. Arrow keys / W A S D (an arcade joystick wired as
+  keys), typed letters and Enter work; the keys are captured so Enter never presses PLAY AGAIN
+  underneath. A refused set of letters shakes the tiles and keeps the entry open.
+
+### Deviations from the design
+
+| # | Design | Built | Why |
+| --- | --- | --- | --- |
+| F1 | WS-F never edits `Hud.tsx`; 4A renders the deck from `useMachineDeck()`. | Small additive edits in `Hud.tsx`: `useMachineDeck()` once in `ControlPanel`, passed to `StickWell` (two-step), `StatusLine` (plate) and `PanelMenu` (MACHINES, Call staff). | 4A has merged; this round's task asks for the deck buttons in Hud with additive edits. Every other line of Hud is unchanged. |
+| F2 | MACHINES on the deck. | Shown only when the lobby is on **and** more than one machine is offered; enabled at a round boundary with nothing open. | A lobby with one card is no choice. While every other machine is `available: false` the classic HUD is exactly as before. |
+| F3 | The coin plate "FREE PLAY" / "TRY 3" / "TRIES 2/5" / "0:42". | Shown in the status line on machines other than classic only ("TIME 0:42"). | Classic's FREE PLAY plate is part of the 3D cabinet, and the phone's status line has no room to spare. |
+| F4 | Lobby ◀ ▶ buttons, vertical list on portrait. | ◀ ▶ (▲ ▼ in the list) in the dialog's footer with position dots and the keys hint; on a sideways phone each card is laid out as a row (art beside the text) so PLAY fits in 390 px of height. | One place for the controls on every layout, always inside the dialog and so inside the band. |
+| F5 | Card art: a genre SVG. | `art.tsx` draws an original SVG per genre in the theme's colours (GPU: its palette only, unit tested); `setMachinePreviewSource(fn)` is the injection point for rendered previews (`fn(id, genre, themeId)` returns an image URL or null; the cards redraw when it changes). | The rendering workstream's preview API is not in this tree. |
+| F6 | `InitialsEntry` sits inside the session card. | Its own card in the win card's bounds while `ui.rankEntry` is set; the session card (with the leaderboard row "#1 ZBA") follows once it is confirmed. No Skip button. | The entry needs touch-size letter buttons, more than the card's points block holds on a phone; `submitInitials` takes three letters only (`???` comes from the 30 s timeout or PLAY AGAIN). |
+| F7 | — | The try toast stays at least 1.5-2.2 s (rush 0.9-1.5 s) and as long as its try's RESULT is up. | With slow frames a wall-clock timer alone hid it before it was seen. |
+| F8 | — | NEW BEST! on the session card when a try of that session lifted the best session (`score.last.newBest`). | `SessionResultUi.best` already includes the session, so it cannot tell a new best from a tie. |
+| F9 | `session_over` with a QR on screen → the `win.reward*` keys via `rewardFor`. | Mapped through `rewardFor` as designed, but `REWARD_EVENTS` (src/ai/brand.ts, not WS-F's) lists only `prize_won` and `retry_prompt`, so session lines never mention a QR, and the model's QR check agrees. | When `session_over` is emitted the claim code has only just been requested, so `facts.reward` would be absent anyway. |
+| F10 | `session.reward` when the session earned a prize (`facts.toy`). | The key and its lines exist and are tested, but the director's `say('session_over')` carries no `facts.toy` today, so a prize session gets `session.over` (or `session.rank`). | `MachineDirector.ts` is WS-D's; see below. |
+| F11 | ≥ 1 GTC line per key. | 2 per key and language. | `brandLines.test.ts` requires at least 2 for every key. |
+| F12 | Fallbacks without `facts.machine`. | `machine_selected` → `machine.classic` (the switch back to classic carries no machine facts), `machine_progress` → `retry`, `items_scored` → `items.one`, `time_low` → `time.low`, `session_over` → `session.over`. | Each is true on any machine. |
+| F13 | The key list of section 4.8. | Plus the keys the UI needed: `machines.<id>.tag`, `machines.rule.*`, `lobby.subtitle / keys / position / noTop / bestLabel / prizesLabel`, `hud.boxes / gems / prizeWon / bonus / clock`, `try.boxes / gems / multiDrop / handful / daily`, `session.boxes / gems / rank / rankValue / noRewardRush / thanks`, `rank.up / down / slot / keys / seconds`, `set.machines.group.* / unavailable`. The close button uses `common.close`. | — |
+| F14 | `machines.hidden` in the Machines section. | One toggle per machine (pressed = offered; home is always offered and its toggle is disabled). | `Field` has no control for string lists. |
+| F15 | `28-machines-lobby` and the 03-safe-zone change. | `30-lobby` (the name this round asked for); 03-safe-zone is unchanged. | `menu-machines` does not exist until a second machine is offered; 30-lobby checks the lobby, the HUD, the initials entry and the session card in the 86" band with the debug override. |
+
+### Outside WS-F's files (section 6.2)
+
+- `tests/unit/i18n/featureStrings.test.ts`: `'machines'` in the namespace list.
+- `tests/unit/settings/spec.test.ts`: `machines.(bridge|shelf|rush).*` are never `live`.
+
+### For the integrator
+
+- **Rendered previews**: `setMachinePreviewSource((id, genre, themeId) => url | null)` from
+  `src/ui/machines/art.tsx` (for example a data URL rendered from `buildMachinePreview(genre, tier)`);
+  the lobby cards and the session card switch to it, the SVG stays the fallback.
+- **The session prize by name**: pass the prize's character to the guide with `session_over`
+  (`facts.toy` of `reward.typeId`) and it picks `session.reward` ("Great session! {toy} joins your
+  collection.").
+- **QR on the session line**: add `'session_over'` to `REWARD_EVENTS` (src/ai/brand.ts) and emit the
+  line once the code is ready (as `emitPrizeWon` does); the mapping already goes through `rewardFor`.
+- **03-safe-zone**: once a second machine is `available`, add `menu-machines` to its HUD list.

@@ -16,15 +16,18 @@ import { hasCoarsePointer, type Rect } from '../layout/solve';
 import { usePhoneGuards, usePhoneSetup } from './useHudLayout';
 import { Joystick } from './Joystick';
 import { reductionLabelKey, visibleReductions } from '../app/AdaptiveQuality';
+// Machines other than classic (src/ui/machines): deck buttons, two-step controls, coin plate.
+import { LobbyDeckButton, PlateChip, StaffDeckButton, TwoStepButtons } from './machines/DeckButtons';
+import { useMachineDeck, type MachineDeck } from './machines/useMachineDeck';
 
 /**
  * The joystick in its well on the deck. The well keeps the old direction pad's test id ("dpad") and
  * its slot size (three touch sizes plus two gaps, src/layout/solve.ts), so layouts are unchanged.
  */
-function StickWell({ disabled }: { disabled: boolean }) {
+function StickWell({ disabled, deck }: { disabled: boolean; deck: MachineDeck }) {
   return (
     <div className="pp-dpad" data-testid="dpad">
-      <Joystick disabled={disabled} />
+      {deck.controls === 'twoStep' ? <TwoStepButtons deck={deck} disabled={disabled} /> : <Joystick disabled={disabled} />}
     </div>
   );
 }
@@ -85,7 +88,7 @@ function ActionButton() {
   );
 }
 
-function StatusLine() {
+function StatusLine({ deck }: { deck: MachineDeck }) {
   const t = useT();
   const phase = useUi((s) => s.phase);
   const demo = useUi((s) => s.demo);
@@ -99,6 +102,7 @@ function StatusLine() {
   return (
     <div className="pp-status" data-testid="status" data-phase={phase}>
       <span>{text}</span>
+      <PlateChip deck={deck} />
       {aim >= 0 && phase === 'AIMING' ? <span className="timer">{t('hud.timer', { seconds: aim })}</span> : null}
       {pending ? <span className="timer">{t('hud.pending')}</span> : null}
     </div>
@@ -128,7 +132,7 @@ function useRecalibrate(): { show: boolean; busy: boolean; run: () => void } {
  * Compact menu inside the reachable zone: settings (same dialog as the corner "i"), collection, theme,
  * help, and "Recalibrate view" where the camera chip in the top bar cannot be reached (86" portrait).
  */
-function PanelMenu({ compact, layout }: { compact: boolean; layout: HudLayout }) {
+function PanelMenu({ compact, layout, deck }: { compact: boolean; layout: HudLayout; deck: MachineDeck }) {
   const t = useT();
   const { open } = useModals();
   const owned = useCollection((s) => Object.keys(s.counts).length);
@@ -136,6 +140,8 @@ function PanelMenu({ compact, layout }: { compact: boolean; layout: HudLayout })
   const recalHere = recal.show && !topBarReachable(layout);
   return (
     <div className="pp-menu" data-testid="panel-menu">
+      <LobbyDeckButton deck={deck} compact={compact} />
+      <StaffDeckButton deck={deck} compact={compact} />
       <button type="button" className="pp-btn small soft" onClick={() => open('settings')} aria-label={t('hud.settings')} data-testid="menu-settings">
         <IconInfo />
         {compact ? null : <span>{t('hud.settings')}</span>}
@@ -196,7 +202,7 @@ function RotateHint({ layout }: { layout: HudLayout }) {
 }
 
 /** Phone panel: every part at the rectangle the solver computed (relative to the panel's corner). */
-function PhonePanel({ layout, padDisabled }: { layout: HudLayout; padDisabled: boolean }) {
+function PhonePanel({ layout, padDisabled, deck }: { layout: HudLayout; padDisabled: boolean; deck: MachineDeck }) {
   const p = layout.panel;
   const c = layout.controls!;
   const rel = (r: Rect): CSSProperties => ({ left: r.x - p.x, top: r.y - p.y, width: r.w, height: r.h });
@@ -214,13 +220,13 @@ function PhonePanel({ layout, padDisabled }: { layout: HudLayout; padDisabled: b
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="pp-slot pad" style={rel(c.dpad)} data-testid="slot-dpad">
-          <StickWell disabled={padDisabled} />
+          <StickWell disabled={padDisabled} deck={deck} />
         </div>
         <div className="pp-slot status" style={rel(c.status)}>
-          <StatusLine />
+          <StatusLine deck={deck} />
         </div>
         <div className="pp-slot menu" style={rel(c.menu)}>
-          <PanelMenu compact layout={layout} />
+          <PanelMenu compact layout={layout} deck={deck} />
         </div>
         <div className="pp-slot action" style={rel(c.action)} data-testid="slot-action">
           <ActionButton />
@@ -236,19 +242,20 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
   const demo = useUi((s) => s.demo);
   const paused = useUi((s) => s.paused);
   const padDisabled = paused || demo || !(phase === 'READY' || phase === 'AIMING');
+  const deck = useMachineDeck();
   const p = layout.panel;
   usePhoneSetup();
   usePhoneGuards(layout.profile === 'mobile');
-  if (layout.controls) return <PhonePanel layout={layout} padDisabled={padDisabled} />;
+  if (layout.controls) return <PhonePanel layout={layout} padDisabled={padDisabled} deck={deck} />;
   if (layout.panelStyle === 'split') {
     return (
       <div className="pp-panel split" data-handed={layout.handed} data-testid="panel" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}>
         <div className="pp-cluster deck stick">
-          <StickWell disabled={padDisabled} />
+          <StickWell disabled={padDisabled} deck={deck} />
         </div>
         <div className="pp-cluster info">
-          <StatusLine />
-          <PanelMenu compact={false} layout={layout} />
+          <StatusLine deck={deck} />
+          <PanelMenu compact={false} layout={layout} deck={deck} />
         </div>
         <div className="pp-cluster deck action">
           <ActionButton />
@@ -258,12 +265,12 @@ function ControlPanel({ layout }: { layout: HudLayout }) {
   }
   return (
     <div className="pp-panel bar" data-handed={layout.handed} data-testid="panel" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}>
-      <StatusLine />
+      <StatusLine deck={deck} />
       <div className="row main">
-        <StickWell disabled={padDisabled} />
+        <StickWell disabled={padDisabled} deck={deck} />
         <ActionButton />
       </div>
-      <PanelMenu compact layout={layout} />
+      <PanelMenu compact layout={layout} deck={deck} />
     </div>
   );
 }
