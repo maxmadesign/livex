@@ -13,6 +13,8 @@ import type { RoundPhase } from '../../core/types';
 import type { RoundParams } from '../RoundController';
 import { classicModule } from './classic';
 import { MACHINE_IDS, type GenreId, type MachineId } from './ids';
+import { rushModule } from './rush';
+import { shelfModule } from './shelf';
 import type { ClawScale, GenreModule, GenreParams, MachineDef, MachineSettings, ResolvedMachine, SessionRule } from './types';
 
 /** The difficulty preset's claw parameters scaled by a genre's multipliers (absent = ×1). */
@@ -76,8 +78,6 @@ function pendingGenre<G extends GenreId>(genre: G, spec: PendingSpec<G>): GenreM
   return module;
 }
 
-const ITEM_PHASES: readonly RoundPhase[] = ['READY', 'AIMING', 'DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING'];
-
 /** Defaults of docs/design/machines.md, section 3.1 (WS-B tunes them in bridge.ts). */
 const BRIDGE_DEFAULTS: GenreParams['bridge'] = {
   centerX: -0.2,
@@ -97,30 +97,6 @@ const BRIDGE_DEFAULTS: GenreParams['bridge'] = {
   claw: { moveSpeed: 0.9, descendSpeed: 0.8, liftSpeed: 0.6, clawForce: 0.8, gripAssist: 0 },
 };
 
-/** Defaults of section 3.2 (WS-C tunes them in shelf.ts). */
-const SHELF_DEFAULTS: GenreParams['shelf'] = {
-  shelfY: 0.16,
-  shelfFront: -0.3,
-  lipHeight: 0.014,
-  shelfFriction: 0.55,
-  rowsZ: [-0.39, -0.53],
-  columnsX: [-0.3, -0.1, 0.1, 0.3],
-  stackHeight: 3,
-  tries: 5,
-  rewardItems: 3,
-  dropZ: -0.18,
-  claw: { gripAssist: 0.6 },
-};
-
-/** Defaults of section 3.3 (WS-C tunes them in rush.ts). */
-const RUSH_DEFAULTS: GenreParams['rush'] = {
-  seconds: 75,
-  pieces: 44,
-  radiusScale: 1,
-  rewardValue: 450,
-  claw: { moveSpeed: 1.2, descendSpeed: 1.25, liftSpeed: 1.25, closeSpeed: 1.2 },
-};
-
 /* ------------------------------------------------------------ the registry */
 
 export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
@@ -135,22 +111,8 @@ export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
     claw: (p) => p.claw,
     controls: (p) => p.controls,
   }),
-  shelf: pendingGenre('shelf', {
-    defaults: SHELF_DEFAULTS,
-    presentation: 'items',
-    awardPhases: ITEM_PHASES,
-    fromSettings: (s) => ({ tries: s.shelf.tries, rewardItems: s.shelf.rewardItems, lipHeight: s.shelf.lipHeight }),
-    session: (p) => ({ kind: 'tries', tries: p.tries }),
-    claw: (p) => p.claw,
-  }),
-  rush: pendingGenre('rush', {
-    defaults: RUSH_DEFAULTS,
-    presentation: 'items',
-    awardPhases: ITEM_PHASES,
-    fromSettings: (s) => ({ seconds: s.rush.seconds, pieces: s.rush.pieces, rewardValue: s.rush.rewardValue }),
-    session: (p) => ({ kind: 'timed', seconds: p.seconds }),
-    claw: (p) => p.claw,
-  }),
+  shelf: shelfModule,
+  rush: rushModule,
 };
 
 /** Every machine, in lobby order. Only `available` machines are ever offered or built for players. */
