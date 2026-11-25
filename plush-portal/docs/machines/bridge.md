@@ -189,6 +189,6 @@ box jams (the jam needs its raised end worked). The recipe used by
 - Wins are mostly drops between the bars after a jam; a box leaning on the side fence with its centre
   of mass past a bar can need several tries (or staff).
 - The two-step mapping assumes the app feeds button 1 as `inputX > 0` and button 2 as `inputZ < 0`.
-- No rendering here: the box (`ItemVisuals`), the bars, fences and the floor with its hole (`Cabinet` +
-  `src/scene/machines`) are WS-E's. Until they land, `?machine=bridge` in the browser plays the right
-  physics in a classic-looking cabinet with nothing of the bridge drawn.
+- No rendering here: the box (`src/scene/ItemVisuals.ts`), the bars, fences and the floor with its
+  hole (`Cabinet` + `src/scene/machines`) are drawn from the same `bridgeGeometry` and item spec
+  (design notes, WS-E).

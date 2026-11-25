@@ -264,6 +264,8 @@ export class Game {
         this.setPaused('context', false);
       };
       this.toyVisuals = new ToyVisuals(this.library, { lod: s.graphics.lod, fur: s.graphics.fur, deform: s.graphics.deform, textures: s.graphics.textures });
+      // The character portraits are printed on the machine items' boxes (src/scene/machines/printAtlas.ts).
+      this.offs.push(ui.subscribe((state) => this.toyVisuals.setThumbnails(state.thumbnails)));
       this.effects = new Effects();
       this.stage.scene.add(this.toyVisuals.group, this.effects.group);
 
@@ -383,7 +385,7 @@ export class Game {
       this.effects.setTheme(theme);
     }
     this.cabinet?.dispose();
-    this.cabinet = new Cabinet(this.layout, theme, this.materials);
+    this.cabinet = new Cabinet(this.layout, theme, this.materials, this.core.def.geometry);
     this.cabinet.group.traverse((o) => {
       const mat = (o as { material?: unknown }).material;
       if (mat === this.materials!.glass || mat === this.materials!.acrylic) o.userData.skipAO = true;

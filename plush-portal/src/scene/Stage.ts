@@ -37,11 +37,14 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OffAxisCamera } from '../perspective/OffAxisCamera';
 import type { WindowLayout } from '../perspective/windowGeometry';
+import type { FieldGeometry } from '../physics/fieldGeometry';
 import { CHUTE, FIELD } from '../physics/fieldSpec';
 import type { GraphicsSettings } from '../settings/spec';
 import type { ThemeDef } from '../themes/themes';
 import { CONTACT_RANGE, ContactShadows } from './contactShadows';
 import { buildStudioScene, captureSize, environmentBlur, studioEnvironmentSize } from './environment';
+import { guardBloomInput, guardOutput, installFiniteGuard } from './finiteGuard';
+import { openingLook } from './machines';
 import { FrontGlass } from './glass';
 import { setMaxAnisotropy } from './textures';
 import { CasterWatch, VIEWER_ENV_SCALE, VIEWER_FILL_SCALE, ViewerLight } from './viewerLight';
@@ -96,6 +99,9 @@ const SHADOW_PASS_LAYER = 31;
 /** Scene groups whose shadow-casting meshes are drawn into the contact-shadow map. */
 const CONTACT_GROUPS = new Set(['toys', 'claw']);
 
+// Before any program is compiled: no material writes a non-finite colour into the HDR target.
+installFiniteGuard();
+
 /** Largest device pixel ratio honoured: the setting when present, otherwise unlimited. */
 function dprCap(g: GraphicsSettings): number {
   const value = (g as { maxDpr?: number }).maxDpr;
@@ -147,6 +153,10 @@ export class Stage {
   private readonly clawBox = new Box3();
   /** Diagnostics: whether the contact map was re-rendered in the last frame. */
   contactRendered = false;
+  /** The machine layout of the cabinet in the scene (its `group.userData.field`), last applied. */
+  private field: FieldGeometry | null = null;
+  /** False when the machine covers its whole floor (a shelf): no contact pass then. */
+  private contactFloor = true;
   private graphics: GraphicsSettings;
   private cssW = 1;
   private cssH = 1;
@@ -330,6 +340,8 @@ export class Stage {
       // Restrained bloom: only the LED strips and bright highlights glow.
       // The threshold sits above diffuse white, so only emissive strips and specular glints bloom.
       const bloom = new UnrealBloomPass(new Vector2(size.x, size.y), 0.015 + g.bloom * 0.2, 0.35, 1.5);
+      // A non-finite pixel would be spread over the whole frame by the blur (src/scene/finiteGuard.ts).
+      guardBloomInput(bloom.materialHighPassFilter);
       composer.addPass(bloom);
       this.bloomPass = bloom;
     }
@@ -348,7 +360,9 @@ export class Stage {
       this.afterimagePass = after;
     }
 
-    composer.addPass(new OutputPass());
+    const output = new OutputPass();
+    guardOutput(output.material);
+    composer.addPass(output);
 
     this.fxaaPass = null;
     this.smaaPass = null;
@@ -401,7 +415,7 @@ export class Stage {
       this.scene.environmentIntensity = this.theme.lights.envIntensity * (graphics.viewerLight ? VIEWER_ENV_SCALE : 1);
     }
     const contact = CONTACT_SHADOWS[graphics.shadows];
-    this.contact.mesh.visible = contact.size > 0;
+    this.contact.mesh.visible = contact.size > 0 && this.contactFloor;
     if (contact.size > 0) {
       this.contact.setResolution(contact.size);
       // Toys may have moved while contact shadows were off: draw a fresh map.
@@ -605,7 +619,10 @@ export class Stage {
     this.renderer.info.reset();
     this.contactRendered = false;
     this.contactRoots.length = 0;
-    for (const child of this.scene.children) if (CONTACT_GROUPS.has(child.name)) this.contactRoots.push(child);
+    for (const child of this.scene.children) {
+      if (CONTACT_GROUPS.has(child.name)) this.contactRoots.push(child);
+      else if (child.name === 'cabinet' && child.userData.field && child.userData.field !== this.field) this.applyField(child.userData.field as FieldGeometry);
+    }
     // View-dependent choices (toy LODs) for the camera that is about to render.
     this.camera.updateMatrixWorld();
     for (const root of this.contactRoots) (root.userData.onView as ((camera: Camera, height: number) => void) | undefined)?.(this.camera, this.effective.height);
@@ -631,6 +648,22 @@ export class Stage {
       this.useShadowGeometry(false);
     }
     this.composer.render(dt);
+  }
+
+  /**
+   * A new cabinet with another machine layout is in the scene: the contact shadows follow its
+   * floor hole (and stop where a shelf covers the whole floor), and every scene group that asks
+   * (`userData.onField`: the effects) learns the prize opening and the height of its mouth.
+   */
+  private applyField(field: FieldGeometry): void {
+    this.field = field;
+    const look = openingLook(field);
+    const h = look.contactHole;
+    this.contact.setHole({ minX: h.xMin, maxX: h.xMax, minZ: h.zMin, maxZ: h.zMax });
+    this.contactFloor = look.floorVisible;
+    this.contact.mesh.visible = CONTACT_SHADOWS[this.graphics.shadows].size > 0 && this.contactFloor;
+    this.contact.invalidate();
+    for (const child of this.scene.children) (child.userData.onField as ((f: { opening: typeof look.opening; mouthY: number }) => void) | undefined)?.({ opening: look.opening, mouthY: look.mouthY });
   }
 
   /**
@@ -727,7 +760,11 @@ export class Stage {
    * its effect on a shadow cast from the front is far below a texel.
    */
   private readonly watchCaster = (o: Object3D): void => {
-    if ((o as Mesh).isMesh && o.visible && o.castShadow) this.casters.add(o.matrixWorld);
+    if (!(o as Mesh).isMesh || !o.visible || !o.castShadow) return;
+    const instanced = o as InstancedMesh;
+    // Instances move inside a still mesh: their own matrices tell whether a gem or a snack moved.
+    if (instanced.isInstancedMesh) this.casters.addInstances(o.matrixWorld, instanced.instanceMatrix.array, instanced.count);
+    else this.casters.add(o.matrixWorld);
   };
 
   /**

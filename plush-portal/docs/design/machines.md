@@ -1975,6 +1975,72 @@ the same arithmetic it always did).
   ranking place is dropped) and switches back to `home` in attract mode; the optional attract cycle
   moves to the next offered machine every 3 demo rounds while nothing is open.
 
+## Implementation notes (WS-E: rendering)
+
+Built: `src/scene/machines/{index,floor,fixtures,itemLooks,printAtlas,preview}.ts`,
+`src/scene/ItemVisuals.ts`, `src/scene/finiteGuard.ts`, the Cabinet's fourth argument, the opening
+setters (`ContactShadows.setHole`, `Effects.setOpening`, `ParticlePool.setHole`), instanced
+viewer-light casters (`CasterWatch.addInstances`), the Medium budgets (docs/PERFORMANCE.md,
+"Machines (round 4B)") and the phone NaN fix. Tests: `tests/unit/scene/{machineDressing,itemVisuals,printAtlas}.test.ts`
+with `cabinetHarness.ts` (a real Cabinet built in Node with stand-in materials and a no-op canvas).
+Classic stays bit-identical in physics (golden trace, round trip) **and in its cabinet geometry**:
+`machineDressing.test.ts` compares every merged mesh (material, flags, attribute bytes) of the classic
+cabinet in four layout / theme / tier cases with the digest recorded on the untouched tree.
+
+### How it fits together
+
+- **Cabinet** (`new Cabinet(layout, theme, materials, field = CLASSIC_FIELD)`): classic runs today's
+  floor and chute statements in today's order; a hole floor comes from `floorWithHole` (the physics'
+  own boxes, world-projected mat UVs so the pattern runs on), with a dark collar and a light lip on
+  every edge of the hole that is not the glass, and the chrome front lip wherever there is floor.
+  The guard walls and their sign need `chuteGuard`; without it the PRIZE sign hangs low on the
+  front-most fence (bridge) or on the shelf's front panel above the trough. `buildFixtures` adds
+  chrome capsule bars (casting the key light's shadow, brushed flanges where they enter a fence),
+  acrylic fences with lit top edges and shared corner posts, the shelf deck (printed fascia front, mat
+  top, accent edge, light strip, baked corner shading at the back wall) and the gutter (plastic slab,
+  two arrows pointing down the slope at the trough). Everything lands in existing buckets: a machine
+  adds no draw call except the bridge's casting chrome bucket (+1). The lower cabinet is untouched.
+- **Items**: `ItemVisuals` follows the bodies' interpolated poses exactly like ToyVisuals. Bridge box:
+  its own mesh with its own print (front window card, portrait on the back, initial and rarity on the
+  sides, theme stripes on top); on every tier but Safe a window box (clear film, the inside, the
+  print's coarsest LOD standing inside, render-only). Snack boxes: one InstancedMesh per size with a
+  per-instance `aCell` into the theme's print atlas. Gems: one InstancedMesh per look, a flat-shaded
+  brilliant on the 17 hull points, clearcoat, tinted reflections, a faint glow and a per-facet "fire"
+  glint that follows the eye. Coins: 12-sided discs. Batches are rebuilt with exact counts when the
+  set of items changes (boundaries only) and placed at their poses at once.
+- **Print atlas**: one canvas texture per theme (512 on Safe, 1024 on Medium / High, 2048 on Ultra),
+  a cell per character: a pastel of its colour, the theme border, the portrait from the UI thumbnails
+  (colour and initial until they arrive, redrawn when they do), a rarity stripe and the name in the
+  page's language.
+- **Stage**: reads `cabinet.group.userData.field` when a new cabinet is in the scene: the contact
+  shadows get the machine's floor hole (and switch off where the floor is fully covered: the shelf),
+  and every scene group with `userData.onField` (the effects) gets the opening and its mouth height.
+- **Previews**: `buildMachinePreview(genre, theme)` (a static Group, < 3 k triangles, one merged mesh
+  per colour) for neighbouring cabinets, and `renderMachinePreviews(theme, genres, size)` → data URLs
+  for the lobby cards (own small WebGL context, released afterwards, like the plush thumbnails).
+
+### The phone NaN (bug)
+
+Phone 844 × 390, Medium, Sakura: some frames lost the red (sometimes green) channel everywhere. Read
+back before the bloom, the HDR scene target held NaN in a 1-pixel column of 2-12 pixels near the top
+middle (G and B about 40 000) on about a third of the frames. Re-rendering such a frame with single
+meshes hidden named one claw part with the anodised material (MeshPhysicalMaterial, metalness 1,
+roughness 0.3, anisotropy 0.27); anisotropy 0 or the viewer light off removed it. **Source**: without
+a tangent attribute three.js builds the anisotropy frame from screen-space UV derivatives, scales T
+and B by one shared factor and returns zero vectors where the UVs do not change across the pixel.
+The anisotropic GGX term is then unbounded at grazing angles (D ∝ 1 / dotNH⁴); lit by the viewer
+light (which sits near the eye, so its highlight is centred on the view) a few pixels reached about
+1e5, overflowed the half-float target and became Inf / NaN, and the bloom spread them over the frame.
+**Fix** (`boundAnisotropy`, src/scene/materials.ts, on the brushed and anodised metals): an
+orthonormal frame around the shading normal that keeps the brush direction (D ≤ 1 / (π αT αB)).
+After it: 0 frames with a NaN in 58 (before: 35 of 109), and the frame's brightest HDR value stays at 300-2 200
+(glints of the key light on chrome) instead of reaching 63 000. **Safety net** (src/scene/finiteGuard.ts,
+a few ALU operations each): (1) every built-in material clamps its final colour to [0, 65 000] and
+writes black instead of NaN / Inf before it enters the HDR target (`opaque_fragment`), the glass and
+acrylic premultiplied path too; (2) the bloom's bright pass ignores non-finite input; (3) the output
+pass (compiled as GLSL ES 3.00 for `isnan`) does the same before tone mapping. So a NaN can reach
+neither the bloom nor the screen; finite colours pass unchanged.
+
 ### Deviations from the design
 
 | # | Design | Built | Why |
@@ -2120,3 +2186,39 @@ stays bit-identical (golden trace and round trip unchanged).
 - **QR on the session line**: add `'session_over'` to `REWARD_EVENTS` (src/ai/brand.ts) and emit the
   line once the code is ready (as `emitPrizeWon` does); the mapping already goes through `rewardFor`.
 - **03-safe-zone**: once a second machine is `available`, add `menu-machines` to its HUD list.
+
+| E1 | `ItemVisuals` created by Game next to ToyVisuals (6.3 item 10). | ToyVisuals hosts it (`toyVisuals.items`) and hands every `toy.item` over in `sync`; `update`, `clear`, `dispose`, `positionOf`, `setQuality` and warm-up pass through. | Every place Game syncs, updates or clears toys then does the same for items without a Game.ts hook (Game.ts is WS-D's), and the stage treats items like toys (the `toys` group is a contact-shadow root, a viewer-light caster root, a warm-up provider). WS-D's `Game.itemVisuals` port (their D6) can stay `null`, or be set to `this.toyVisuals.items` (it satisfies `ItemVisualsPort`; the second sync / update per frame is a no-op). |
+| E2 | Game hook lines for the scene. | Two lines in Game.ts: `new Cabinet(…, this.core.def.geometry)` in `rebuildScene`, and a store subscription in `init` that hands `ui.thumbnails` to `toyVisuals.setThumbnails` (the atlas and the box prints). | Everything else is in `src/scene`. Neither line overlaps WS-D's hunks. |
+| E3 | Game calls `ContactShadows.setHole` and `Effects.setOpening`. | Both exist; the Stage calls them itself when the cabinet in the scene carries another field (the `userData` protocol of `onView` / `warmUpObjects`). Mouth height: the guard's top, else the top of the acrylic fences around the opening (bridge 0.232 m), else 0.012 m. Particles fall through the machine's hole. | No Game hook; works for a switch and a boot alike. |
+| E4 | Instanced items skip the contact-shadow pass this round. | They join it: the contact height material already handles `USE_INSTANCING`, and `ContactShadows.compile` builds the instanced variant at warm-up. The shelf covers its whole floor (deck, trough, gutter), so its contact pass is off: boxes on the deck have no contact shadow (no plane at deck height). | Free; one pass saved on the shelf. |
+| E5 | Gems and coins cast shadows on High / Ultra only. | Every item casts on every tier that draws shadows. | The contact pass needs `castShadow`; the key-light cost is one instanced draw per batch (rush: 5 calls, about 1.5 k triangles, measured). |
+| E6 | Atlas cells 256². | A square grid sized to the theme's characters: `ceil(√n)` columns, cell = size / columns (Safe 512² with 6-7 characters: 170 px cells). | A fixed 256² cell holds only 4 characters at 512². |
+| E7 | Window box on Medium+. | On every tier but Safe (textures 512); the box print is its own canvas (not an atlas cell); the plush inside is the print's coarsest LOD (LOD2), fitted to 0.21 × 0.084 × 0.078 m; outer box, inside, film and plush = 4 draw calls. | — |
+| E8 | 48-triangle brilliant. | 30 triangles (table 6, crown 16, pavilion 8) on exactly the physics hull's 17 points, so the drawn gem matches the collider. The brilliance comes from the per-facet fire shader instead of more facets; no transmission. | — |
+| E9 | Gem emissive tied to `fxIntensity`. | A constant faint glow plus the fire term. | ItemVisuals does not see the effects intensity (would need another Game hook). |
+| E10 | Bridge display riser with 2-3 theme plush. | Not built. | Render-only plush on the open floor would be passed through by the claw (no colliders in the bridge geometry, which is WS-B's). |
+| E11 | `buildMachinePreview(genre, tier)`. | `buildMachinePreview(genre, theme)` plus `renderMachinePreviews(theme, genres, size)` for the lobby cards. | Previews are tiny (< 3 k triangles); one detail level is enough. The UI workstream gets pictures directly. |
+| E12 | — | Anisotropic metals (brushed, anodised: rails, claw knuckles, fan frames) use the orthonormal anisotropy frame on Medium and better: their highlights are bounded; where the frame was fine they look as before. | The NaN source above. |
+| E13 | gpu palette rule. | `itemColors(gpu)` comes from the kit palette: gems grey → greens → white, silver coins, black cards with green borders, palette rarity stripes, no iridescence, no character colours on cards or fallbacks (the portraits themselves are the characters' own art). `printAtlas.test.ts` checks every colour and every painted fill. | — |
+
+### Available flags
+
+`bridge` and `shelf` are `available: true` (registry.ts): both were seen drawn and playing in a
+browser via `?machine=<id>` in all four layouts (desktop, portrait32, portrait86 simulated, phone;
+Sakura and GPU Party): a bridge box walked, jammed and dropped through the pit into the bin (desktop,
+phone, portrait32; in the portrait86 run the debug impulses of the e2e recipe left the box jammed at
+a steeper tilt, drawn correctly, without a drop), a shelf grab lifting a stack and dropping snack
+boxes into the trough (all four). `rush` stays `available: false` (its caging gate waits for the scoop);
+its pieces are drawn in every layout. Unit suite (121 files), machine tests and the golden trace
+pass with the flags flipped.
+
+### For the integrator
+
+- Merge after WS-D: their `Game.itemVisuals` stays `null` (or `= this.toyVisuals.items`); keep both of
+  this workstream's Game.ts lines.
+- The scoop workstream adds its part in `ClawVisual.ts`: nothing here depends on it; rush draws its
+  pieces either way.
+- Screenshots (session scratchpad `round4/e-render/`, outside the repository): `shots/` (attract and
+  play views of all three machines on desktop, portrait32, portrait86 simulated and phone, Sakura and
+  GPU Party), `play/` (a bridge box dropped through the pit, shelf and rush grabs), `previews/` (the
+  lobby-card pictures).

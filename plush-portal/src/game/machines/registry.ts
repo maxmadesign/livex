@@ -92,10 +92,11 @@ export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
 export const MACHINES: readonly MachineDef[] = [
   { id: 'classic', genre: 'classic', order: 0, params: {}, available: true, unlockAfterWins: 0 },
   // Sweep gates passed (docs/machines/bridge.md): median 5-5.5 tries per box, one-try wins ≤ 1.9 %, stuck ≤ 4.2 %.
-  // Offered once its bars, fences and box are drawn (rendering workstream); until then a player
-  // would play the right physics in a classic-looking cabinet with an invisible box.
-  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: false, unlockAfterWins: 1 },
-  { id: 'shelf', genre: 'shelf', order: 2, params: {}, available: false, unlockAfterWins: 3 },
+  // Drawn (src/scene/machines, ItemVisuals) and seen playing in all four layouts.
+  { id: 'bridge', genre: 'bridge', order: 1, params: {}, available: true, unlockAfterWins: 1 },
+  // Sweep gates passed with rewardItems 5 (docs/machines/shelf.md); drawn and seen playing in all four layouts.
+  { id: 'shelf', genre: 'shelf', order: 2, params: {}, available: true, unlockAfterWins: 3 },
+  // Fails the caging gate until the scoop attachment lands (docs/machines/rush.md); drawn already.
   { id: 'rush', genre: 'rush', order: 3, params: {}, available: false, unlockAfterWins: 5 },
 ];
 

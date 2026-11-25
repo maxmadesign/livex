@@ -114,6 +114,15 @@ export class CasterWatch {
     this.now.push(e[0]!, e[1]!, e[2]!, e[4]!, e[5]!, e[6]!, e[8]!, e[9]!, e[10]!, e[12]!, e[13]!, e[14]!);
   }
 
+  /** Adds every instance of an instanced caster (gems, coins, snack boxes: their world matrices). */
+  addInstances(matrixWorld: Matrix4, instanceMatrices: ArrayLike<number>, count: number): void {
+    this.add(matrixWorld);
+    for (let i = 0; i < count; i++) {
+      const o = i * 16;
+      this.now.push(instanceMatrices[o]!, instanceMatrices[o + 1]!, instanceMatrices[o + 2]!, instanceMatrices[o + 4]!, instanceMatrices[o + 5]!, instanceMatrices[o + 6]!, instanceMatrices[o + 8]!, instanceMatrices[o + 9]!, instanceMatrices[o + 10]!, instanceMatrices[o + 12]!, instanceMatrices[o + 13]!, instanceMatrices[o + 14]!);
+    }
+  }
+
   /** A number that changes whenever a caster moved by more than the tolerance (or one came or went). */
   signature(): number {
     const now = this.now, kept = this.kept;

@@ -14,6 +14,7 @@ import {
 } from 'three';
 import type { ThemeDef } from '../themes/themes';
 import { sceneInk, sceneKit, sceneParts } from './brandScene';
+import { finiteStatement } from './finiteGuard';
 import { BrandWall } from './ledWall';
 import { textureBytes } from './texgen';
 import {
@@ -76,7 +77,9 @@ function makeGlassy(m: MeshPhysicalMaterial, edgeTint: Color, edgeAmount: number
           // the faint body haze does not, so a pane seen edge-on stays clear rather than milky.
           float gA = clamp( diffuseColor.a + gF * uEdgeAmount + gScratch * 0.035, 0.0, 1.0 );
           vec3 gBody = ( totalDiffuse + totalEmissiveRadiance ) * diffuseColor.a + uEdgeTint * gF * uEdgeAmount * 0.12;
-          gl_FragColor = vec4( gBody + totalSpecular, gA );
+          vec3 gOut = gBody + totalSpecular;
+          ${finiteStatement('gOut')}
+          gl_FragColor = vec4( gOut, gA );
         #else
           #include <opaque_fragment>
         #endif`,
@@ -84,6 +87,41 @@ function makeGlassy(m: MeshPhysicalMaterial, edgeTint: Color, edgeAmount: number
   };
   m.customProgramCacheKey = () => 'glassy';
   setPremultiplied(m, true);
+}
+
+/**
+ * Anisotropic metals (brushed steel, anodised aluminium) without a tangent attribute: three.js builds
+ * the tangent frame from screen-space UV derivatives, scales T and B by one common factor and returns
+ * zero vectors where the UVs do not change across a pixel. With such a frame the anisotropic GGX
+ * distribution is unbounded at grazing angles (D grows like 1 / dotNH^4): on the phone view a few
+ * pixels of the claw's anodised knuckles, lit by the viewer light, reached about 1e5, overflowed the
+ * half-float scene target to Inf / NaN, and the bloom spread that over the whole frame (one colour
+ * channel lost). This rebuilds an orthonormal frame around the shading normal that keeps the brush
+ * direction, so the highlight stays bounded (D ≤ 1 / (π αT αB)) and looks the same elsewhere.
+ */
+export const ANISOTROPY_FRAME_GLSL = /* glsl */ `
+#include <lights_physical_fragment>
+#ifdef USE_ANISOTROPY
+  {
+    vec3 aT = material.anisotropyT - normal * dot( normal, material.anisotropyT );
+    float aLen = length( aT );
+    vec3 aSide = abs( normal.y ) < 0.9 ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 );
+    aT = aLen > 1e-5 ? aT / aLen : normalize( cross( normal, aSide ) );
+    material.anisotropyT = aT;
+    material.anisotropyB = cross( normal, aT );
+  }
+#endif
+`;
+
+export function boundAnisotropy<T extends MeshPhysicalMaterial>(m: T): T {
+  const previous = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    previous.call(m, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <lights_physical_fragment>', ANISOTROPY_FRAME_GLSL);
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => `${key()}|aniso-frame`;
+  return m;
 }
 
 function setPremultiplied(m: MeshPhysicalMaterial, on: boolean): void {
@@ -222,7 +260,7 @@ export class CabinetMaterials {
         anisotropy: d >= 2 ? anisotropy : anisotropy * 0.6,
         anisotropyRotation: Math.PI / 2,
       });
-      return track(m);
+      return track(boundAnisotropy(m));
     };
     this.brushed = brushedMetal(cab.metalTint, 0.36, 0.7);
     // A brand kit asks for black anodising; other themes tint the aluminium with their accent.

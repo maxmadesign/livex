@@ -8,6 +8,7 @@ import { MAX_DENTS, PLUSH_DEFORM_GLSL, PlushDepthMaterial, PlushMaterial, applyP
 import type { PlushAsset, TextureSetting } from '../plush/manifest';
 import type { DisplaySlot } from './Cabinet';
 import { createContactMaterial } from './contactShadows';
+import { ItemVisuals } from './ItemVisuals';
 
 export interface ToyQuality {
   lod: 'low' | 'medium' | 'high';
@@ -125,6 +126,13 @@ export class ToyVisuals {
    * the stage reads it to skip re-rendering an unchanged map.
    */
   private contactVersion = 0;
+  /**
+   * The machine items (boxes, snacks, gems, coins: `toy.item`), drawn by ItemVisuals inside this
+   * group, so the stage treats them like toys (contact shadows, viewer-light casters, warm-up) and
+   * every place that syncs, updates or clears the toys does the same for the items.
+   */
+  readonly items: ItemVisuals;
+  private itemsSeen = -1;
 
   constructor(
     private readonly library: PlushLibrary,
@@ -139,6 +147,8 @@ export class ToyVisuals {
     this.group.userData.onView = (camera: Camera, viewportHeight: number) => this.updateView(camera, viewportHeight);
     this.group.userData.warmUpObjects = () => this.warmUpObjects();
     this.group.userData.contactVersion = 0;
+    // Its group joins this one with the first item (classic scenes never carry it).
+    this.items = new ItemVisuals(library, { textures: quality.textures, lod: quality.lod });
   }
 
   private touchContact(): void {
@@ -157,6 +167,7 @@ export class ToyVisuals {
     for (const m of this.displayMaterials) this.applyFurUniforms(m.plush);
     if (texturesChanged) this.switchTextures(textures);
     for (const v of this.visuals.values()) this.applyShadowLod(v);
+    this.items.setQuality({ textures: quality.textures, lod: quality.lod });
   }
 
   /** Points the toy's shadow / contact geometry at the LOD the quality asks for. */
@@ -233,10 +244,18 @@ export class ToyVisuals {
   /** Creates visuals for new toys and removes those of toys that no longer exist. */
   sync(toys: Iterable<ToyBody>, animateNew = false): void {
     const alive = new Set<string>();
+    const items: ToyBody[] = [];
     for (const toy of toys) {
+      // Machine items are drawn by ItemVisuals (their assets have no plush model anyway).
+      if (toy.item) {
+        items.push(toy);
+        continue;
+      }
       alive.add(toy.id);
       if (!this.visuals.has(toy.id)) this.create(toy, animateNew);
     }
+    if (items.length > 0 && !this.items.group.parent) this.group.add(this.items.group);
+    this.items.sync(items, animateNew);
     for (const [id, v] of this.visuals) {
       if (alive.has(id)) continue;
       this.destroy(v);
@@ -498,7 +517,12 @@ export class ToyVisuals {
       v.deformer.impact(_n.x, _n.y, _n.z, _v.x, _v.y, _v.z, impact.strength);
       v.awake = true;
     }
-    this.triangles = triangles;
+    this.items.update(alpha, dt);
+    this.triangles = triangles + this.items.triangles;
+    if (this.items.changed !== this.itemsSeen) {
+      this.itemsSeen = this.items.changed;
+      contactChanged = true;
+    }
     if (contactChanged || contacts.length > 0 || impacts.length > 0) this.touchContact();
   }
 
@@ -531,7 +555,7 @@ export class ToyVisuals {
       this.selectLod(v);
       triangles += visualTriangles(v);
     }
-    this.triangles = triangles;
+    this.triangles = triangles + this.items.triangles;
   }
 
   /**
@@ -542,8 +566,8 @@ export class ToyVisuals {
    */
   warmUpObjects(): Object3D[] {
     const fur = this.quality.fur;
-    if (fur !== 'shell' && fur !== 'shellHigh') return [];
-    const out: Object3D[] = [];
+    const out: Object3D[] = this.items.warmUpObjects();
+    if (fur !== 'shell' && fur !== 'shellHigh') return out;
     const seen = new Set<boolean>();
     for (const v of this.visuals.values()) {
       if (!v.mesh.visible || seen.has(v.material.textured)) continue;
@@ -574,7 +598,13 @@ export class ToyVisuals {
   /** World position of a toy's visual (for effects). */
   positionOf(toy: ToyBody, out: Vector3): Vector3 | null {
     const v = this.visuals.get(toy.id);
-    return v ? out.copy(v.root.position) : null;
+    if (v) return out.copy(v.root.position);
+    return this.items.positionOf(toy, out) ? out : null;
+  }
+
+  /** The UI's character portraits (id → data URL), printed on the machine items' boxes. */
+  setThumbnails(thumbnails: Readonly<Record<string, string>>): void {
+    this.items.setThumbnails(thumbnails);
   }
 
   /** Static display toys: the plush piles of the neighbouring machines (src/scene/arcadeRow.ts). */
@@ -626,6 +656,7 @@ export class ToyVisuals {
   clear(): void {
     for (const v of this.visuals.values()) this.destroy(v);
     this.visuals.clear();
+    this.items.clear();
     this.setDisplay([], []);
     for (const g of this.shellGeometries.values()) {
       // The vertex buffers belong to the library's geometries: detach them so that disposing the
@@ -642,6 +673,7 @@ export class ToyVisuals {
 
   dispose(): void {
     this.clear();
+    this.items.dispose();
     this.group.removeFromParent();
   }
 }

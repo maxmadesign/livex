@@ -18,6 +18,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeRng } from '../core/math';
 import type { WindowLayout } from '../perspective/windowGeometry';
+import { CLASSIC_FIELD, type FieldGeometry } from '../physics/fieldGeometry';
 import { BIN, CHUTE, FIELD } from '../physics/fieldSpec';
 import type { ThemeDef } from '../themes/themes';
 import { addCeiling, buildArcadeRow, pileSlots, ROW, shadeStrip, type DisplaySlot } from './arcadeRow';
@@ -26,6 +27,8 @@ import { CabinetBuilder as Builder, worldUV, type UvRule } from './builder';
 import { boxUV, fanBladeShape, fanFrameShape, TESSELLATION } from './decor';
 import type { BrandWall } from './ledWall';
 import { UV_DENSITY, type CabinetMaterials, type DetailLevel } from './materials';
+import { buildFixtures, prizeSignSpot } from './machines/fixtures';
+import { buildHoleFloor } from './machines/floor';
 import { decalUv, makeBackdropTexture, type DecalId } from './textures';
 
 export type { DisplaySlot } from './arcadeRow';
@@ -90,6 +93,11 @@ function moonShape(r: number): Shape {
  * prize shaft, and the arcade row around it (pillars and two neighbouring machines,
  * src/scene/arcadeRow.ts). Tessellation and the amount of small detail follow the
  * materials' detail level (texture tier).
+ *
+ * The play floor, the chute and the machine's fixtures follow the machine's FieldGeometry
+ * (src/scene/machines): classic draws exactly today's floor and chute; a machine with its own
+ * hole gets a floor with that hole, and its bars, fences, shelf and gutter. The lower cabinet
+ * (prize shaft, bin, body panel) is the same for every machine.
  */
 export class Cabinet {
   readonly group = new Group();
@@ -102,8 +110,11 @@ export class Cabinet {
     readonly layout: WindowLayout,
     readonly theme: ThemeDef,
     private readonly mats: CabinetMaterials,
+    readonly field: FieldGeometry = CLASSIC_FIELD,
   ) {
     this.group.name = 'cabinet';
+    // The stage reads the machine's opening from here (contact-shadow hole, effects' prize mouth).
+    this.group.userData.field = field;
     this.detail = mats.detail ?? 1;
     this.build();
   }
@@ -188,12 +199,19 @@ export class Cabinet {
     addCeiling(b, M, rowCtx, 0, 0, -D);
 
     /* ---------------------------------------------------- play floor (mat) */
-    b.add(M.mat, worldUV(this.box(HW - CHUTE.xMax, FT, D), 'xz', 2.6), (CHUTE.xMax + HW) / 2, -FT / 2, -D / 2, 0, 0, 0, { receive: true });
-    b.add(M.mat, worldUV(this.box(CHUTE.xMax - CHUTE.xMin, FT, D + CHUTE.zMin), 'xz', 2.6), (CHUTE.xMin + CHUTE.xMax) / 2, -FT / 2, (-D + CHUTE.zMin) / 2, 0, 0, 0, { receive: true });
-    // Front lip with a light strip underneath.
-    b.add(M.chrome, this.box(HW - CHUTE.xMax + 0.004, 0.014, 0.012, 0.004), (CHUTE.xMax + HW) / 2, 0.004, -0.008);
-    b.add(M.accent, this.box(2 * HW, FT - 0.012, 0.01, 0.003), 0, -FT / 2 - 0.004, -0.007);
-    b.add(M.leds[0]!, this.box(HW - CHUTE.xMax - 0.04, 0.006, 0.004), (CHUTE.xMax + HW) / 2, -0.012, -0.0015);
+    const field = this.field;
+    const dress = { detail: this.detail, radial: this.radial, box: (w: number, h: number, d: number, r = 0) => this.box(w, h, d, r) };
+    if (field.floor.kind === 'classic') {
+      b.add(M.mat, worldUV(this.box(HW - CHUTE.xMax, FT, D), 'xz', 2.6), (CHUTE.xMax + HW) / 2, -FT / 2, -D / 2, 0, 0, 0, { receive: true });
+      b.add(M.mat, worldUV(this.box(CHUTE.xMax - CHUTE.xMin, FT, D + CHUTE.zMin), 'xz', 2.6), (CHUTE.xMin + CHUTE.xMax) / 2, -FT / 2, (-D + CHUTE.zMin) / 2, 0, 0, 0, { receive: true });
+      // Front lip with a light strip underneath.
+      b.add(M.chrome, this.box(HW - CHUTE.xMax + 0.004, 0.014, 0.012, 0.004), (CHUTE.xMax + HW) / 2, 0.004, -0.008);
+      b.add(M.accent, this.box(2 * HW, FT - 0.012, 0.01, 0.003), 0, -FT / 2 - 0.004, -0.007);
+      b.add(M.leds[0]!, this.box(HW - CHUTE.xMax - 0.04, 0.006, 0.004), (CHUTE.xMax + HW) / 2, -0.012, -0.0015);
+    } else {
+      // The machine's own hole, collar, light lip and front lip (src/scene/machines/floor.ts).
+      buildHoleFloor(b, M, field.floor.hole, dress);
+    }
 
     /* ---------------------------------------- baked depth cues in the corners */
     // Medium has no ambient occlusion: darken the inside corners a little so the box reads deep.
@@ -229,19 +247,33 @@ export class Cabinet {
 
     /* ---------------------------------------------------------------- chute */
     const ch = CHUTE.wallHeight, ct = CHUTE.wallThickness;
-    b.add(M.acrylic, this.box(ct, ch, CHUTE.zMax - CHUTE.zMin - fd, 0.002), CHUTE.xMax + ct / 2, ch / 2, (CHUTE.zMin - fd) / 2);
-    b.add(M.acrylic, this.box(CHUTE.xMax - CHUTE.xMin, ch, ct, 0.002), (CHUTE.xMin + CHUTE.xMax) / 2, ch / 2, CHUTE.zMin - ct / 2);
-    b.add(M.acrylicEdge, this.box(ct + 0.006, 0.008, CHUTE.zMax - CHUTE.zMin - fd, 0.003), CHUTE.xMax + ct / 2, ch + 0.002, (CHUTE.zMin - fd) / 2);
-    b.add(M.acrylicEdge, this.box(CHUTE.xMax - CHUTE.xMin + ct, 0.008, ct + 0.006, 0.003), (CHUTE.xMin + CHUTE.xMax + ct) / 2, ch + 0.002, CHUTE.zMin - ct / 2);
-    b.add(M.chrome, new CylinderGeometry(0.009, 0.009, ch + 0.012, this.radial), CHUTE.xMax + ct / 2, ch / 2, CHUTE.zMin - ct / 2);
-    // Dark collar through the floor slab.
-    b.add(M.dark, this.box(0.004, FT, CHUTE.zMax - CHUTE.zMin), CHUTE.xMax - 0.002, -FT / 2, (CHUTE.zMin + CHUTE.zMax) / 2);
-    b.add(M.dark, this.box(CHUTE.xMax - CHUTE.xMin, FT, 0.004), (CHUTE.xMin + CHUTE.xMax) / 2, -FT / 2, CHUTE.zMin + 0.002);
-    // A light lip just inside the prize hole, seen when the eye is high enough to look down into it.
-    b.add(M.leds[0]!, this.box(0.003, 0.009, CHUTE.zMax - CHUTE.zMin - 0.01), CHUTE.xMax - 0.0055, -0.011, (CHUTE.zMin + CHUTE.zMax) / 2);
-    b.add(M.leds[0]!, this.box(CHUTE.xMax - CHUTE.xMin - 0.01, 0.009, 0.003), (CHUTE.xMin + CHUTE.xMax) / 2, -0.011, CHUTE.zMin + 0.0055);
-    // "PRIZE" sign on the guard wall.
-    b.add(M.sign, new PlaneGeometry(0.16, 0.05), (CHUTE.xMin + CHUTE.xMax) / 2, ch * 0.56, CHUTE.zMin + 0.001);
+    if (field.chuteGuard) {
+      b.add(M.acrylic, this.box(ct, ch, CHUTE.zMax - CHUTE.zMin - fd, 0.002), CHUTE.xMax + ct / 2, ch / 2, (CHUTE.zMin - fd) / 2);
+      b.add(M.acrylic, this.box(CHUTE.xMax - CHUTE.xMin, ch, ct, 0.002), (CHUTE.xMin + CHUTE.xMax) / 2, ch / 2, CHUTE.zMin - ct / 2);
+      b.add(M.acrylicEdge, this.box(ct + 0.006, 0.008, CHUTE.zMax - CHUTE.zMin - fd, 0.003), CHUTE.xMax + ct / 2, ch + 0.002, (CHUTE.zMin - fd) / 2);
+      b.add(M.acrylicEdge, this.box(CHUTE.xMax - CHUTE.xMin + ct, 0.008, ct + 0.006, 0.003), (CHUTE.xMin + CHUTE.xMax + ct) / 2, ch + 0.002, CHUTE.zMin - ct / 2);
+      b.add(M.chrome, new CylinderGeometry(0.009, 0.009, ch + 0.012, this.radial), CHUTE.xMax + ct / 2, ch / 2, CHUTE.zMin - ct / 2);
+    }
+    if (field.floor.kind === 'classic') {
+      // Dark collar through the floor slab.
+      b.add(M.dark, this.box(0.004, FT, CHUTE.zMax - CHUTE.zMin), CHUTE.xMax - 0.002, -FT / 2, (CHUTE.zMin + CHUTE.zMax) / 2);
+      b.add(M.dark, this.box(CHUTE.xMax - CHUTE.xMin, FT, 0.004), (CHUTE.xMin + CHUTE.xMax) / 2, -FT / 2, CHUTE.zMin + 0.002);
+      // A light lip just inside the prize hole, seen when the eye is high enough to look down into it.
+      b.add(M.leds[0]!, this.box(0.003, 0.009, CHUTE.zMax - CHUTE.zMin - 0.01), CHUTE.xMax - 0.0055, -0.011, (CHUTE.zMin + CHUTE.zMax) / 2);
+      b.add(M.leds[0]!, this.box(CHUTE.xMax - CHUTE.xMin - 0.01, 0.009, 0.003), (CHUTE.xMin + CHUTE.xMax) / 2, -0.011, CHUTE.zMin + 0.0055);
+    }
+    if (field.chuteGuard) {
+      // "PRIZE" sign on the guard wall.
+      b.add(M.sign, new PlaneGeometry(0.16, 0.05), (CHUTE.xMin + CHUTE.xMax) / 2, ch * 0.56, CHUTE.zMin + 0.001);
+    } else {
+      // Without the guard the sign goes onto a fixture (the bridge's front fence, the shelf's front).
+      const sign = prizeSignSpot(field);
+      if (sign) b.add(M.sign, new PlaneGeometry(0.16, 0.05), sign.x, sign.y, sign.z);
+    }
+
+    /* ------------------------------------------------- the machine's fixtures */
+    // Bars, fences, shelf, gutter (classic has none): merged into the existing material buckets.
+    buildFixtures(b, M, field.fixtures, dress);
 
     /* -------------------------------------------------------- lower cabinet */
     const binFloor = L.binFloorY;
