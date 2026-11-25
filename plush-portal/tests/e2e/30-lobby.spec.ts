@@ -397,6 +397,24 @@ test.describe('30. machine lobby and session UI', () => {
       expect(b.x + b.width).toBeLessThanOrEqual(844.5);
       expect(b.y + b.height).toBeLessThanOrEqual(390.5);
     }
+    // ◀ from Plush Classic wraps to Sparkle Rush at the far end of the row, ▶ comes back: once the row
+    // has stopped scrolling the end card still has the focus, although it can not sit in the middle.
+    const rowAtRest = async () => {
+      let last = -1;
+      for (let i = 0; i < 60; i++) {
+        const left = await page.getByTestId('lobby-track').evaluate((el) => el.scrollLeft);
+        if (left === last) return left;
+        last = left;
+        await frames(page, 3);
+      }
+      return last;
+    };
+    await click(page, 'lobby-prev');
+    console.log(`phone lobby ◀ from classic: row at ${await rowAtRest()} px`);
+    await expect(page.getByTestId('lobby-card-rush')).toHaveAttribute('data-focused', 'true');
+    await click(page, 'lobby-next');
+    console.log(`phone lobby ▶ back: row at ${await rowAtRest()} px`);
+    await expect(page.getByTestId('lobby-card-classic')).toHaveAttribute('data-focused', 'true');
     await click(page, 'modal-close');
     await expect(page.getByTestId('lobby')).toHaveCount(0);
     // Held upright the menu row is full: MACHINES moves to the top bar; nothing leaves the screen or overlaps.

@@ -11,6 +11,10 @@ import { ensureMachinePreviews } from './previews';
 import { cardsAcross, initialCardIndex, lobbyFlow, wrapIndex } from './view';
 import './machines.css';
 
+/** How long scroll events after the dialog's own scrollTo are taken as that scroll (ms), and how much each further event of it extends that. */
+const OWN_SCROLL_MS = 900;
+const OWN_SCROLL_TAIL_MS = 400;
+
 /**
  * The machine lobby ("Which machine today?", docs/design/machines.md, section 4.1): a carousel of
  * machine cards inside the dialog frame of every layout (the 86" band, the 32" zone, the simulated
@@ -37,6 +41,11 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
   const track = useRef<HTMLDivElement>(null);
   const n = cards.length;
   const index = Math.min(focus, Math.max(0, n - 1));
+  // Until this time (performance.now) scroll events come from scrollTo below, not from a swipe: they
+  // must not move the focus. Otherwise the first frame of the smooth scroll towards a card at either
+  // end of the row (which can never sit in the middle) handed the focus back to its neighbour, so
+  // ◀ ▶ could not reach Plush Classic or Sparkle Rush and Enter played the neighbour.
+  const ownScroll = useRef(0);
   // Scroll the track itself (never the page) so the focused card is in view, centred on the row.
   const scrollTo = useCallback(
     (i: number, smooth: boolean) => {
@@ -44,6 +53,7 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
       const card = el?.children[i] as HTMLElement | undefined;
       if (!el || !card) return;
       const behavior: ScrollBehavior = smooth && !reduced ? 'smooth' : 'auto';
+      ownScroll.current = performance.now() + OWN_SCROLL_MS;
       if (flow === 'row') el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2, behavior });
       else el.scrollTo({ top: card.offsetTop - (el.clientHeight - card.offsetHeight) / 2, behavior });
     },
@@ -92,23 +102,28 @@ export function LobbyDialog({ layout }: { layout: HudLayout }) {
   // A swipe moves the row: the card nearest the middle becomes the focused one.
   const frame = useRef(0);
   const onScroll = () => {
+    const now = performance.now();
+    if (now < ownScroll.current) {
+      // Our own scroll still running (frames can be slow): keep ignoring it while it moves.
+      ownScroll.current = Math.max(ownScroll.current, now + OWN_SCROLL_TAIL_MS);
+      return;
+    }
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
       const el = track.current;
-      if (!el) return;
-      const mid = flow === 'row' ? el.scrollLeft + el.clientWidth / 2 : el.scrollTop + el.clientHeight / 2;
+      if (!el || flow !== 'row') return;
+      const mid = el.scrollLeft + el.clientWidth / 2;
       let best = index;
       let bestD = Infinity;
       Array.from(el.children).forEach((c, i) => {
         const card = c as HTMLElement;
-        const centre = flow === 'row' ? card.offsetLeft + card.offsetWidth / 2 : card.offsetTop + card.offsetHeight / 2;
-        const d = Math.abs(centre - mid);
+        const d = Math.abs(card.offsetLeft + card.offsetWidth / 2 - mid);
         if (d < bestD) {
           bestD = d;
           best = i;
         }
       });
-      if (best !== index && flow === 'row') setFocus(best);
+      if (best !== index) setFocus(best);
     });
   };
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
