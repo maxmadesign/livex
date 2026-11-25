@@ -72,16 +72,25 @@ const GLOW_CODE = spriteCode(SHAPE.GLOW, MODE.BILLBOARD);
 /** Height of the chute mouth (top of its clear guard walls): rings and shockwaves sit there. */
 const MOUTH_Y = CHUTE.wallHeight + 0.012;
 
-function inChute(x: number, z: number): boolean {
-  return x < CHUTE.xMax && x > CHUTE.xMin - 0.05 && z > CHUTE.zMin && z < CHUTE.zMax + 0.05;
+/** The prize opening effects erupt from: the classic chute unless a machine sets its own (setOpening). */
+export interface FxOpening {
+  xMin: number;
+  xMax: number;
+  zMin: number;
+  zMax: number;
+}
+const CHUTE_OPENING: FxOpening = { xMin: CHUTE.xMin, xMax: CHUTE.xMax, zMin: CHUTE.zMin, zMax: CHUTE.zMax };
+
+function inOpening(o: FxOpening, x: number, z: number): boolean {
+  return x < o.xMax && x > o.xMin - 0.05 && z > o.zMin && z < o.zMax + 0.05;
 }
 
 /**
- * Where a burst at (x, y, z) should start: positions inside the chute or the bin below the
+ * Where a burst at (x, y, z) should start: positions inside the opening or the bin below the
  * floor (the game's prize exit point) are lifted to just above the floor so the effect is seen.
  */
-function originY(x: number, y: number, z: number): number {
-  return inChute(x, z) ? Math.max(y, 0.06) : y;
+function originYIn(o: FxOpening, x: number, y: number, z: number): number {
+  return inOpening(o, x, z) ? Math.max(y, 0.06) : y;
 }
 
 /** Brightness 0..1 of a theme's cabinet, from its UI paper colour (pastel themes ≈ 0.9, dark ≈ 0.1). */
@@ -150,15 +159,40 @@ export class Effects implements FxApi {
   private readonly tierRgb: Rgb = { r: 1, g: 1, b: 1 };
   private readonly tmpRgb: Rgb = { r: 1, g: 1, b: 1 };
   private readonly focus = { x: 0, y: 0, z: 0 };
+  /** The machine's prize opening and the height of its mouth (rings sit there). */
+  private opening: FxOpening = CHUTE_OPENING;
+  private mouthY = MOUTH_Y;
 
   constructor() {
     this.group.name = 'effects';
+    // The stage hands the cabinet's machine layout to every scene group that asks for it.
+    this.group.userData.onField = (field: { opening: FxOpening; mouthY: number }) => this.setOpening(field.opening, field.mouthY);
     this.group.add(this.normBatch.mesh, this.addBatch.mesh);
     for (let i = 0; i < MAX_EMITTERS; i++) this.emitters.push(new Emitter());
     this.rec = new FxRecipes(this.addPool, this.normPool, this.rng, this.pal);
   }
 
   /* --------------------------------------------------------------- setup */
+
+  /**
+   * The prize opening of the current machine (docs/design/machines.md, section 5.2): bursts at the
+   * exit start just above it, rings sit at `mouthY` (the top of its guard walls or fences, else just
+   * above the floor), and particles fall through it into the bin. Classic: the chute, as before.
+   */
+  setOpening(rect: FxOpening, mouthY: number): void {
+    this.opening = { xMin: rect.xMin, xMax: rect.xMax, zMin: rect.zMin, zMax: rect.zMax };
+    this.mouthY = mouthY;
+    this.addPool.setHole(rect.xMin, rect.xMax, rect.zMin, rect.zMax);
+    this.normPool.setHole(rect.xMin, rect.xMax, rect.zMin, rect.zMax);
+  }
+
+  private inChute(x: number, z: number): boolean {
+    return inOpening(this.opening, x, z);
+  }
+
+  private originY(x: number, y: number, z: number): number {
+    return originYIn(this.opening, x, y, z);
+  }
 
   setTheme(theme: ThemeDef): void {
     this.theme = theme;
@@ -254,8 +288,8 @@ export class Effects implements FxApi {
       }
       case 'drop': {
         // Splash at the exit: a crown of streaks, a ring and the theme motif.
-        const oy = Math.max(originY(x, y, z), 0.02);
-        const ry = inChute(x, z) ? MOUTH_Y : oy + 0.006;
+        const oy = Math.max(this.originY(x, y, z), 0.02);
+        const ry = this.inChute(x, z) ? this.mouthY : oy + 0.006;
         rec.colors(tierPal ?? this.pal.particles, custom).sparks(x, oy, z, rec.n(18), 0.9, 1.3, true, 0.5, 0.8, 0.006, 0.05, -2.6, 2.2);
         rec.ring(x, ry, z, 0.03, 0.2, 0.5, custom ?? this.pal.primary, 0.7);
         rec.motif(x, oy, z, rec.n(10), 0);
@@ -271,14 +305,14 @@ export class Effects implements FxApi {
       }
       case 'combo': {
         // Flames swirling up around the point.
-        const oy = inChute(x, z) ? Math.max(y, MOUTH_Y - 0.04) : y;
+        const oy = this.inChute(x, z) ? Math.max(y, this.mouthY - 0.04) : y;
         rec.flameSwirl(x, oy, z, rec.n(26));
         rec.ring(x, oy - 0.04, z, 0.05, 0.16, 0.6, custom ?? this.pal.flameB, 0.6);
         rec.colors(null, custom ?? this.pal.flameB).sparks(x, oy, z, rec.n(6), 0.5, 0.8, true, 0.4, 0.6, 0.005, 0.05, -0.8, 2);
         break;
       }
       case 'score':
-        rec.coins(x, originY(x, y, z), z, rec.n(8));
+        rec.coins(x, this.originY(x, y, z), z, rec.n(8));
         break;
       case 'cta': {
         // Inviting loop: circling sparkles, rising motes and slow ring pulses for ~2.8 s.
@@ -308,8 +342,8 @@ export class Effects implements FxApi {
     const x = pos.x;
     const z = pos.z;
     // Bursts erupt from the chute mouth; rings sit on top of its guard walls.
-    const oy = Math.max(originY(x, pos.y, z), 0.02);
-    const ry = inChute(x, z) ? MOUTH_Y : oy + 0.01;
+    const oy = Math.max(this.originY(x, pos.y, z), 0.02);
+    const ry = this.inChute(x, z) ? this.mouthY : oy + 0.01;
     const tierPal = this.pal.tiers[tierName];
     const tc = tierPal.get(0, this.tierRgb);
     // Every tier: glow, sparkle burst, confetti cannon and the theme motif.

@@ -156,6 +156,20 @@ export class ParticlePool {
   readonly trailEvents = new Float32Array(MAX_TRAIL_EVENTS * TRAIL_EVENT_STRIDE);
   trailEventCount = 0;
 
+  /** The floor hole particles fall through into the bin (classic: the chute, open towards the glass). */
+  private holeXMin = -Infinity;
+  private holeXMax = CHUTE_X;
+  private holeZMin = CHUTE_Z;
+  private holeZMax = Infinity;
+
+  /** The machine's floor hole (an edge on the glass is left open, as the chute's). */
+  setHole(xMin: number, xMax: number, zMin: number, zMax: number): void {
+    this.holeXMin = xMin <= -FIELD.halfWidth + 1e-6 ? -Infinity : xMin;
+    this.holeXMax = xMax >= FIELD.halfWidth - 1e-6 ? Infinity : xMax;
+    this.holeZMin = zMin <= -FIELD.depth + 1e-6 ? -Infinity : zMin;
+    this.holeZMax = zMax >= -1e-6 ? Infinity : zMax;
+  }
+
   constructor(capacity: number) {
     this.capacity = capacity;
     const f = () => new Float32Array(capacity);
@@ -358,7 +372,7 @@ export class ParticlePool {
           if (y > CEILING_Y) {
             y = CEILING_Y;
             vy = -Math.abs(vy) * 0.2;
-          } else if (y < FLOOR_Y && y > -0.03 && !(x < CHUTE_X && z > CHUTE_Z)) {
+          } else if (y < FLOOR_Y && y > -0.03 && !(x > this.holeXMin && x < this.holeXMax && z > this.holeZMin && z < this.holeZMax)) {
             // Landed: lie on the floor (confetti settles flat, sparks die out).
             y = FLOOR_Y;
             if (vy < 0) vy = 0;

@@ -285,6 +285,15 @@ export class ContactShadows {
     }
   }
 
+  /** The rectangle without floor (the machine's prize hole): never darkened. */
+  setHole(hole: { minX: number; maxX: number; minZ: number; maxZ: number }): void {
+    const u = this.displayMaterial.uniforms.uHole!.value as number[];
+    u[0] = hole.minX;
+    u[1] = hole.minZ;
+    u[2] = hole.maxX;
+    u[3] = hole.maxZ;
+  }
+
   setStyle(color: Color, opacity: number): void {
     (this.displayMaterial.uniforms.uColor!.value as Color).copy(color);
     this.displayMaterial.uniforms.uOpacity!.value = opacity;
