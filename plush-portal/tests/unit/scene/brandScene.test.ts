@@ -18,7 +18,7 @@ import {
 } from '../../../src/scene/brandScene';
 import { JACKPOT_STROBE_HZ, SHAPE } from '../../../src/scene/fx/constants';
 import { ThemePalettes, type Palette, type Rgb } from '../../../src/scene/fx/palette';
-import { BrandWall } from '../../../src/scene/ledWall';
+import { BrandWall, lendWallLogo, wallLogoLent } from '../../../src/scene/ledWall';
 import { THEMES } from '../../../src/themes/themes';
 import { internals, makeFx, run } from '../fx/helpers';
 
@@ -139,12 +139,15 @@ describe('GPU theme colours (brand kit)', () => {
     expect(JACKPOT_STROBE_HZ).toBe(2);
   });
 
-  it('light effects keep away from the logo (keep-out on the additive batch only)', () => {
+  it('light effects and confetti keep away from the logo (keep-out on both sprite batches)', () => {
     const fx = makeFx({ theme: 'gpu' });
     const add = internals(fx).addBatch.material.uniforms;
     const paper = internals(fx).normBatch.material.uniforms;
     expect(add.uKeepOutOn!.value).toBe(1);
-    expect(paper.uKeepOutOn!.value).toBe(0);
+    // Confetti bits used to fly across the glyphs at the win (review screenshot): they fade too.
+    expect(paper.uKeepOutOn!.value).toBe(1);
+    expect((paper.uKeepOut!.value as { toArray(): number[] }).toArray()).toEqual((add.uKeepOut!.value as { toArray(): number[] }).toArray());
+    expect(paper.uKeepOutZ!.value).toBe(add.uKeepOutZ!.value);
     const kit = brandForTheme('gpu')!;
     const rects = logoKeepOut(THEMES.gpu);
     expect(rects).toHaveLength(kit.hostLogo ? 2 : 1);
@@ -157,7 +160,9 @@ describe('GPU theme colours (brand kit)', () => {
       expect(k.yMax).toBeGreaterThanOrEqual(pad.cy + pad.padH / 2);
     });
     expect(logoKeepOut(THEMES.sakura)).toEqual([]);
-    expect(internals(makeFx({ theme: 'sakura' })).addBatch.material.uniforms.uKeepOutOn!.value).toBe(0);
+    const sakura = internals(makeFx({ theme: 'sakura' }));
+    expect(sakura.addBatch.material.uniforms.uKeepOutOn!.value).toBe(0);
+    expect(sakura.normBatch.material.uniforms.uKeepOutOn!.value).toBe(0);
   });
 });
 
@@ -292,7 +297,7 @@ describe('LED wall animation', () => {
 
   it('never draws over a logo: the shader blacks out both pads', () => {
     const wall = new BrandWall(BRAND_KITS.gtc, 256);
-    expect(wall.ledWall.fragmentShader).toMatch(/min\(\s*dPad,\s*dHost\s*\)/);
+    expect(wall.ledWall.fragmentShader).toMatch(/min\(\s*mix\(\s*1\.0,\s*dPad,\s*uPadOn\s*\),\s*dHost\s*\)/);
     const pad = wall.ledWall.uniforms.uPad!.value as { x: number; y: number; z: number; w: number };
     const p = wall.logoPlacement();
     expect(pad.x).toBeCloseTo(p.cx - LED_WALL.xMin, 9);
@@ -300,5 +305,39 @@ describe('LED wall animation', () => {
     expect(pad.z).toBeCloseTo(p.padW / 2, 9);
     expect(pad.w).toBeCloseTo(p.padH / 2, 9);
     wall.dispose();
+  });
+
+  it('lends its event logo to a screen that shows it over the field, and takes it back', () => {
+    const wall = new BrandWall(BRAND_KITS.gtc, 256);
+    const other = new BrandWall(BRAND_KITS.gtc, 256);
+    wall.update(0, 0, false);
+    expect(wallLogoLent()).toBe(false);
+    expect(wall.logo.visible).toBe(true);
+    expect(at(wall, 'uPadOn')).toBe(1);
+    // The attract call to action (with its own logo plate) is up: no logo and no black pad behind it,
+    // no halo or win pulses around an empty pad; the host mark is not affected.
+    const end = lendWallLogo();
+    const end2 = lendWallLogo();
+    for (let i = 1; i <= 30; i++) wall.update(i / 30, 2.4, false);
+    other.update(0, 0, false);
+    expect(wallLogoLent()).toBe(true);
+    expect(wall.logo.visible).toBe(false);
+    expect(other.logo.visible).toBe(false);
+    expect(at(wall, 'uPadOn')).toBe(0);
+    expect(wall.hostLogo?.visible ?? true).toBe(true);
+    expect(wall.ledWall.fragmentShader).toMatch(/halo = exp\([^;]*\* uPadOn;/);
+    expect(wall.ledWall.fragmentShader).toMatch(/uRingAmp > 0\.0 && uPadOn > 0\.5/);
+    // Loans are counted: the logo comes back once every screen has given it back.
+    end();
+    end();
+    wall.update(2, 0, false);
+    expect(wall.logo.visible).toBe(false);
+    end2();
+    wall.update(2.1, 0, false);
+    expect(wallLogoLent()).toBe(false);
+    expect(wall.logo.visible).toBe(true);
+    expect(at(wall, 'uPadOn')).toBe(1);
+    wall.dispose();
+    other.dispose();
   });
 });

@@ -232,12 +232,16 @@ function Tile({ view, size }: { view: RewardView; size: number }) {
 export function RewardInstruction({ view }: { view: RewardView }) {
   const t = useT();
   if (view.state === 'unavailable') return null;
+  // A public demo copy's code is not redeemable (its label says so): the line must not promise a prize.
+  // A loopback-only code has no QR phones could open: the visitor shows the code to staff instead.
   const { key, params } =
     view.state === 'issuing'
       ? { key: 'reward.issuing', params: undefined }
-      : view.localOnly
-        ? { key: 'reward.instr.local', params: undefined }
-        : instructionKey(view.options, view.discountText, false);
+      : view.state === 'demoBuild'
+        ? { key: 'reward.instr.demo', params: undefined }
+        : view.localOnly
+          ? { key: 'reward.instr.local', params: undefined }
+          : instructionKey(view.options, view.discountText, false);
   return (
     <p className="pp-reward-instr" data-testid="reward-instruction">
       {t(key, params)}

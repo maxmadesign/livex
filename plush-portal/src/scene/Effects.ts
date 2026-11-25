@@ -166,9 +166,13 @@ export class Effects implements FxApi {
     this.rec.pal = this.pal;
     const brightness = themeBrightness(theme);
     this.addBatch.setCoverGain(coverGainOf(brightness));
-    // A brand kit's logo on the back wall: light passes around it, never over it (paper confetti
-    // is a physical object like the toys and may still fly in front of it).
-    this.addBatch.setKeepOut(logoKeepOut(theme), WALL_Z + 0.008);
+    // A brand kit's logo on the back wall: light passes around it, never over it. The confetti
+    // ("data bits") does the same: at the win, the moment the logo is looked at most, bits flying
+    // across the glyphs cut into the letters, so they fade out in front of the logo and its clear
+    // space too. The claw and the toys, which really are in front of the wall, still cover it.
+    const keepOut = logoKeepOut(theme);
+    this.addBatch.setKeepOut(keepOut, WALL_Z + 0.008);
+    this.normBatch.setKeepOut(keepOut, WALL_Z + 0.008);
     this.addBatch.setWhiteCores(!this.pal.rainbow);
     this.normBatch.setWhiteCores(!this.pal.rainbow);
     this.light.brightness = brightness;

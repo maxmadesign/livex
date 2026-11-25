@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { brandForTheme, type BrandKit } from '../brand';
 import type { ThemeId } from '../core/types';
 import { requestImmersive } from '../layout/phone';
 import { hasCoarsePointer, type HudLayout } from '../layout/solve';
+import { lendWallLogo } from '../scene/ledWall';
 import type { Settings } from '../settings/spec';
 import { BrandLogo } from './BrandLogo';
 import { useApp, useSettings, useT, useUi } from './context';
@@ -176,12 +177,18 @@ export function AttractOverlay({ layout }: { layout: HudLayout }) {
   const themeId = useUi((s) => s.themeId);
   const calibrating = useUi((s) => s.tracker.calibration.phase !== 'idle');
   const rewards = useSettings((s) => s.rewards);
-  // Phones: the compact calibration card (src/ui/CalibrationOverlay.tsx) sits where the call to
-  // action is, so the call to action steps aside while a calibration (or its result card) is shown.
-  const shown = (phase === 'ATTRACT' || demo) && modal === null && !themeBusy && !(layout.controls && calibrating);
+  // The calibration card (src/ui/CalibrationOverlay.tsx) sits where the call to action is in every
+  // layout (centred in the free zone), so the call to action and the event logo above it step aside
+  // while a calibration (or its result card) is shown, instead of peeking out around the card.
+  const shown = (phase === 'ATTRACT' || demo) && modal === null && !themeBusy && !calibrating;
   // The call to action grows with its text (a two-line sub-line); the brand block sits above it as drawn.
   const wrapRef = useRef<HTMLDivElement>(null);
   const wrapHeight = useHeight(wrapRef, shown);
+  // The call to action covers the middle of the play field, where the LED wall carries the event
+  // logo: while it is up the wall lends its logo to this screen (src/scene/ledWall.ts), so no copy
+  // of the logo peeks out half covered by the headline, the button and its glow.
+  const lend = shown && brandForTheme(themeId) !== null;
+  useEffect(() => (lend ? lendWallLogo() : undefined), [lend]);
   if (!shown) return null;
   const score = scoring ? scoreHudRect(layout) : null;
   const { cx, cy, w, h } = ctaGeometry(layout, score);

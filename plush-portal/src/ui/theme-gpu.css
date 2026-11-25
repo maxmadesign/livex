@@ -26,8 +26,10 @@
   --g-radius: calc(var(--u) * 10);
   --g-shadow: rgba(0, 0, 0, 0.55);
   /* Brand typeface (or its open fallback) for Latin text; Chinese and Japanese glyphs fall through
-     to the existing CJK fonts (the brand stack lists no generic family, src/brand/fonts.ts). */
-  --font-display: var(--font-brand, "Inter Variable"), "ZCOOL KuaiLe", "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yuanti SC", system-ui, sans-serif;
+     to the existing CJK fonts (the brand stack lists no generic family, src/brand/fonts.ts). Titles in
+     Chinese use the plain sans of the body too: the hand-drawn ZCOOL KuaiLe of the pastel themes made
+     the win card's "抓到啦！", "新纪录！" and "传说" look like a toy shop next to the brand sans. */
+  --font-display: var(--font-brand, "Inter Variable"), "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "M PLUS Rounded 1c", "Hiragino Sans", system-ui, sans-serif;
   --font-body: var(--font-brand, "Inter Variable"), "Noto Sans SC", "M PLUS Rounded 1c", "Hiragino Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   color-scheme: dark;
 }
@@ -144,6 +146,13 @@ html:has(.pp-root[data-theme="gpu"]) .pp-root[data-frame="simulate916"][data-let
 
 /* -------------------------------------------------------------------- guide */
 .pp-root[data-theme="gpu"] .pp-momo { filter: drop-shadow(0 calc(var(--u) * 8) calc(var(--u) * 8) rgba(0, 0, 0, 0.5)); }
+/* Momo's face (src/ui/Icons.tsx draws it in plum and pink for the pastel themes): black eyes and
+   mouth, a green tongue and a black ground shadow, so the mascot keeps to the palette too. CSS
+   wins over the SVG presentation attributes it matches. */
+.pp-root[data-theme="gpu"] .pp-momo svg [fill="#3a2030"], .pp-root[data-theme="gpu"] .pp-momo svg [fill="#7a3550"] { fill: #000; }
+.pp-root[data-theme="gpu"] .pp-momo svg [stroke="#3a2030"], .pp-root[data-theme="gpu"] .pp-momo svg [stroke="#7a3550"] { stroke: #000; }
+.pp-root[data-theme="gpu"] .pp-momo svg [fill="#ff9db5"] { fill: var(--g-green); }
+.pp-root[data-theme="gpu"] .pp-momo svg [fill="rgba(60,20,40,0.18)"] { fill: rgba(0, 0, 0, 0.35); }
 .pp-root[data-theme="gpu"] .pp-bubble {
   border-radius: calc(var(--u) * 12);
   background: #000;
@@ -178,7 +187,7 @@ html:has(.pp-root[data-theme="gpu"]) .pp-root[data-frame="simulate916"][data-let
 .pp-curtain[data-to="gpu"], .pp-root[data-theme="gpu"] .pp-curtain {
   background: rgba(0, 0, 0, 0.9);
   color: #fff;
-  font-family: var(--font-brand, "Inter Variable"), "ZCOOL KuaiLe", "M PLUS Rounded 1c", system-ui, sans-serif;
+  font-family: var(--font-brand, "Inter Variable"), "Noto Sans SC", "M PLUS Rounded 1c", system-ui, sans-serif;
   letter-spacing: 0.04em;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);

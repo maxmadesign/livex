@@ -60,7 +60,10 @@ describe('GPU theme UI in the brand palette', () => {
   });
 
   it('uses only palette colours in its stylesheet: no lime, cyan or other hues', () => {
-    const css = read('src/ui/theme-gpu.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Attribute selectors name colours the pastel markup uses (Momo's face) in order to replace them.
+    const css = read('src/ui/theme-gpu.css')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\[(fill|stroke)="[^"]*"\]/g, '[$1]');
     const hexes = [...css.matchAll(/#[0-9a-f]{3,8}\b/gi)].map((m) => {
       const h = m[0].toLowerCase();
       return h.length === 4 ? `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}` : h.slice(0, 7);
@@ -70,6 +73,22 @@ describe('GPU theme UI in the brand palette', () => {
     const rgbs = [...css.matchAll(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g)].map((m) => `#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`);
     for (const hex of rgbs) expect(PALETTE.has(hex), hex).toBe(true);
     expect(css).not.toMatch(/\b(lime|cyan|aqua|yellow|orange|pink|purple|magenta|red|blue)\b/i);
+  });
+
+  it('dresses Momo and the Chinese titles in the brand look too', () => {
+    // Every literal colour of Momo's face (src/ui/Icons.tsx: plum eyes and mouth, pink tongue, plum
+    // shadow) is replaced in the GPU theme, unless it already is white.
+    const icons = read('src/ui/Icons.tsx');
+    const momo = icons.slice(icons.indexOf('export function Momo'));
+    const literals = [...new Set([...momo.matchAll(/(?:fill|stroke)="(#[0-9a-f]{3,6}|rgba?\([^"]*\))"/gi)].map((m) => m[1]!))].filter((c) => !/^#fff(fff)?$/i.test(c));
+    expect(literals.length).toBeGreaterThan(2);
+    const css = read('src/ui/theme-gpu.css');
+    for (const colour of literals) expect(css, colour).toMatch(new RegExp(`\\.pp-momo svg \\[(fill|stroke)="${colour.replace(/[()]/g, '\\$&')}"\\]`));
+    // The hand-drawn ZCOOL KuaiLe of the pastel themes is not a display face of the brand theme.
+    const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const root = code.slice(0, code.indexOf('}'));
+    expect(root).toMatch(/--font-display:[^;]*"Noto Sans SC"/);
+    expect(root).not.toContain('ZCOOL');
   });
 
   it('never filters, animates or tints a logo; light effects stay behind it', () => {

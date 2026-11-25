@@ -1,22 +1,23 @@
-import { ACTIVE_BRAND, type BrandId } from '../../brand';
+import { ACTIVE_BRAND } from '../../brand';
 
 /**
  * GPU theme copy that depends on the brand kit of this build (src/brand): the GTC booth, or the
  * neutral GPU Party of public demo copies. Event and host names come from the kit ({event}).
  */
-const GPU_KIT: Record<BrandId, { tagline: string; welcome: string; sub: string }> = {
-  gtc: {
-    tagline: 'GTC booth claw machine with GPU plush',
-    welcome: 'Welcome to {event}',
-    sub: 'Free play · win a GPU plush',
-  },
-  neutral: {
-    tagline: 'Cuddly chips and graphics cards in neon green',
-    welcome: 'Welcome to the {event}!',
-    sub: 'Free play · win cute plushies',
-  },
+type GpuKitCopy = { tagline: string; welcome: string; sub: string };
+const GTC_COPY: GpuKitCopy = {
+  tagline: 'GTC booth claw machine with GPU plush',
+  welcome: 'Welcome to {event}',
+  sub: 'Free play · win a GPU plush',
 };
-const kit = GPU_KIT[ACTIVE_BRAND.id];
+const NEUTRAL_COPY: GpuKitCopy = {
+  tagline: 'Cuddly chips and graphics cards in neon green',
+  welcome: 'Welcome to the {event}!',
+  sub: 'Free play · win cute plushies',
+};
+// The flag is compared literally first, so a VITE_BRAND=neutral build drops the GTC copy while
+// bundling (see gpu.ts KIT_STRINGS); ACTIVE_BRAND keeps other spellings correct at run time.
+const kit = import.meta.env.VITE_BRAND === 'neutral' || ACTIVE_BRAND.id === 'neutral' ? NEUTRAL_COPY : GTC_COPY;
 
 /** English UI strings (HUD, dialogs, toasts). The zh / ja files must provide the same keys. */
 export const uiEn: Record<string, string> = {
@@ -98,6 +99,8 @@ export const uiEn: Record<string, string> = {
   'reward.instr.prize': 'Scan to collect your prize at the booth',
   'reward.instr.swag': 'Scan to get your swag discount',
   'reward.instr.swag.custom': 'Scan to get {discount}',
+  // Public demo copies (VITE_REWARDS_DEMO): the QR opens an example page, nothing can be claimed.
+  'reward.instr.demo': 'Demo only: the QR opens an example page',
   'reward.instr.phone.both': 'Open the claim page to collect your prize or get a swag discount',
   'reward.instr.phone.both.custom': 'Open the claim page to collect your prize or get {discount}',
   'reward.instr.phone.prize': 'Open the claim page to collect your prize at the booth',
