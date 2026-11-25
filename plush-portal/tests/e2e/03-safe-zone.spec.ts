@@ -19,6 +19,9 @@ async function zoneOf(page: Page, ids: string[]): Promise<Record<string, string>
 
 test.describe('3. portrait86 interactive safe zone (normalised Y 0.25–0.75)', () => {
   test('1080×1920: HUD, tutorial, every settings tab, theme picker, collection and win card stay inside', async ({ page }) => {
+    // Eight settings tabs, the theme picker, the collection and a win at 1080 × 1920 on software GL:
+    // 4.3-5.4 min on this shared 4-CPU box at load 9-10; at load 17-20 two runs ran past 7 min.
+    test.setTimeout(900_000);
     await page.setViewportSize({ width: 1080, height: 1920 });
     await boot(page, { display: 'portrait86', tutorial: true });
     expect((await state(page)).profile).toBe('portrait86');
