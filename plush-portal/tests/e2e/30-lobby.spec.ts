@@ -225,6 +225,8 @@ test.describe('30. machine lobby and session UI', () => {
     expect((await state(page)).phase).toBe('READY');
     await expect(page.getByTestId('grab')).toBeDisabled();
     await expect(page.getByTestId('stick')).toHaveAttribute('aria-disabled', 'true');
+    // Nor does Momo's idle hint ("move the claw whenever you're ready") come up under the card.
+    expect(await plush(page, (p) => p.game.director.allowHint())).toBe(false);
     // The entry times out after 30 s of wall clock; software rendering at 1080 × 1920 can take that
     // long for a few clicks, so the spec moves the deadline out (the timeout has its unit test).
     await plush(page, (p) => {
