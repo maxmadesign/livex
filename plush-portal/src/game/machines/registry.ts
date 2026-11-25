@@ -11,6 +11,7 @@
  */
 import type { RoundPhase } from '../../core/types';
 import type { RoundParams } from '../RoundController';
+import { bridgeModule } from './bridge';
 import { classicModule } from './classic';
 import { MACHINE_IDS, type GenreId, type MachineId } from './ids';
 import type { ClawScale, GenreModule, GenreParams, MachineDef, MachineSettings, ResolvedMachine, SessionRule } from './types';
@@ -78,25 +79,6 @@ function pendingGenre<G extends GenreId>(genre: G, spec: PendingSpec<G>): GenreM
 
 const ITEM_PHASES: readonly RoundPhase[] = ['READY', 'AIMING', 'DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING'];
 
-/** Defaults of docs/design/machines.md, section 3.1 (WS-B tunes them in bridge.ts). */
-const BRIDGE_DEFAULTS: GenreParams['bridge'] = {
-  centerX: -0.2,
-  centerZ: -0.22,
-  gap: 0.15,
-  barRadius: 0.012,
-  barY: 0.1,
-  barFriction: 0.35,
-  box: [0.24, 0.1, 0.13],
-  boxMass: 0.4,
-  boxFriction: 0.6,
-  startJitter: 0.01,
-  startYawDeg: 4,
-  liftDelta: 0.08,
-  triesPerBox: 0,
-  controls: 'joystick',
-  claw: { moveSpeed: 0.9, descendSpeed: 0.8, liftSpeed: 0.6, clawForce: 0.8, gripAssist: 0 },
-};
-
 /** Defaults of section 3.2 (WS-C tunes them in shelf.ts). */
 const SHELF_DEFAULTS: GenreParams['shelf'] = {
   shelfY: 0.16,
@@ -125,16 +107,7 @@ const RUSH_DEFAULTS: GenreParams['rush'] = {
 
 export const GENRES: { readonly [G in GenreId]: GenreModule<G> } = {
   classic: classicModule,
-  bridge: pendingGenre('bridge', {
-    defaults: BRIDGE_DEFAULTS,
-    presentation: 'prize',
-    // A push during the descent is physics too (section 3.0).
-    awardPhases: ['DESCENDING', 'CLOSING', 'LIFTING', 'TRANSPORTING', 'RELEASING', 'SETTLING'],
-    fromSettings: (s) => ({ controls: s.bridge.controls, triesPerBox: s.bridge.triesPerBox, gap: s.bridge.gap, boxMass: s.bridge.boxMass }),
-    session: () => ({ kind: 'open' }),
-    claw: (p) => p.claw,
-    controls: (p) => p.controls,
-  }),
+  bridge: bridgeModule,
   shelf: pendingGenre('shelf', {
     defaults: SHELF_DEFAULTS,
     presentation: 'items',

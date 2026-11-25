@@ -38,15 +38,20 @@ describe('machine registry', () => {
   });
 
   it('gates the machines whose genre modules have not landed: unavailable, never resolved for players', () => {
-    for (const id of ['bridge', 'shelf', 'rush'] as const) {
-      const def = machineDef(id)!;
+    for (const def of MACHINES.filter((m) => isPendingGenre(GENRES[m.genre]))) {
+      const id = def.id;
       expect(def.available, id).toBe(false);
-      expect(isPendingGenre(GENRES[def.genre]), id).toBe(true);
       expect(isPlayable(def), id).toBe(false);
       expect(resolveMachine(id).def.id).toBe('classic');
       // Not even tests can build a pending genre: there is no physics for it yet.
       expect(resolveMachine(id, undefined, { includeUnavailable: true }).def.id).toBe('classic');
       expect(() => GENRES[def.genre].geometry(GENRES[def.genre].defaults as never)).toThrow(/not implemented yet/);
+    }
+    // A genre that has landed but whose gates have not passed yet: tests and sweeps can build it, players never get it.
+    for (const def of MACHINES.filter((m) => !m.available && !isPendingGenre(GENRES[m.genre]))) {
+      expect(isPlayable(def), def.id).toBe(false);
+      expect(resolveMachine(def.id).def.id).toBe('classic');
+      expect(resolveMachine(def.id, undefined, { includeUnavailable: true }).def.id).toBe(def.id);
     }
     expect(resolveMachine('pinball').def.id).toBe('classic');
     expect(resolveMachine(null).def.id).toBe('classic');
