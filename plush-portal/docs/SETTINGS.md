@@ -174,6 +174,7 @@ Sections: Quality · 3D resolution · Detail · Effects & light show · Image. A
 | Decor particles | `graphics.particles` | 60 | 0 … 300 (step 10) | live |
 | Effects intensity | `graphics.fxIntensity` | 1 | 0 … 1.5 (step 0.05) | live |
 | Light show | `graphics.lightShow` | on | on / off | live |
+| Light from your position | `graphics.viewerLight` | on (off in the Safe preset) | on / off (a small light at the player's eye shines into the cabinet and moves with the viewpoint; its shadow follows *Shadows*, none on Off / Low; [PERFORMANCE.md](PERFORMANCE.md#viewer-light)) | live |
 | Bloom | `graphics.bloom` | 0.25 | 0 … 1 (step 0.05) | live |
 | Exposure | `graphics.exposure` | 1 | 0.6 … 1.6 (step 0.02) | live |
 | Tone mapping | `graphics.toneMapping` | `neutral` | `aces` · `agx` · `neutral` | live |
@@ -271,6 +272,7 @@ Tracking (shared by all presets):
 | Setting | Path | Default | Range / options | Applies |
 | --- | --- | --- | --- | --- |
 | Head tracking | `camera.enabled` | on | on / off | live |
+| Drag to peek | `camera.dragPeek` | on | on / off (drag on the 3D view to look around while no face is tracked; [DISPLAYS.md](DISPLAYS.md#depth-the-arcade-row-the-glass-and-drag-to-peek)) | live |
 | Camera | `camera.deviceId` | *(empty)* | text ≤ 256 (never exported) | live |
 | Follow smoothing | `camera.smoothMs` | 70 | 0 … 400 (step 5) ms | live |
 | Jitter filter cutoff | `camera.filterMinCutoff` | 1.4 | 0.2 … 6 (step 0.1) Hz | live |
@@ -442,11 +444,12 @@ how they were tuned, is in [PHYSICS.md](PHYSICS.md).
 | Decor particles | 20 | 60 | 150 | 300 |
 | Effects intensity | 0.5 | 1 | 1.2 | 1.5 |
 | Light show | off | on | on | on |
+| Light from your position | off | on | on | on |
 
 `?quality=safe|medium|high|ultra` applies one at launch. A fresh installation
 starts with exactly the Medium values, except on a phone: the first run with the phone preset on a touch screen
-applies Safe (unless `?quality=` is given). Stored data from before *Pixel density cap*, *Effects intensity* and
-*Light show* existed takes those values from its stored preset (`GRAPHICS_PRESET_ADDITIONS` in `src/settings/spec.ts`).
+applies Safe (unless `?quality=` is given). Stored data from before *Pixel density cap*, *Effects intensity*,
+*Light show* and *Light from your position* existed takes those values from its stored preset (`GRAPHICS_PRESET_ADDITIONS` in `src/settings/spec.ts`).
 
 **Display presets** are described in [DISPLAYS.md](DISPLAYS.md).
 

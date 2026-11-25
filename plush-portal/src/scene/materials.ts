@@ -27,9 +27,12 @@ import {
   makeMatTexture,
   makePatternTexture,
   makeQuiltNormal,
+  makeRowSignTexture,
   makeScratchTexture,
+  makeShadeTexture,
   makeSignTexture,
   makeStippleNormal,
+  makeVeilTexture,
   textureSize,
   type TextureTier,
 } from './textures';
@@ -144,6 +147,17 @@ export class CabinetMaterials {
   readonly brand: BrandWall | null;
   /** Emissive strip materials, one per LED colour of the theme. */
   readonly leds: MeshBasicMaterial[];
+  /** Fluorescent light tubes under the ceilings (unlit, bright enough to bloom a little). */
+  readonly tube: MeshBasicMaterial;
+  /**
+   * Haze behind a neighbouring machine's front glass (src/scene/arcadeRow.ts): a tinted, partly
+   * transparent pane that makes the machines beside ours read as further away and less lit.
+   */
+  readonly veil: MeshBasicMaterial;
+  /** Baked corner occlusion strips (darken inside corners where Medium has no ambient occlusion). */
+  readonly shade: MeshBasicMaterial;
+  /** Lit header signs of the neighbouring machines (two cells of one texture). */
+  readonly rowSign: MeshBasicMaterial;
   /** The braid normal map of the cable (null below High). */
   readonly cableNormal: Texture | null;
   private readonly ledBase: Color[];
@@ -309,6 +323,15 @@ export class CabinetMaterials {
 
     this.ledBase = cab.led.map((hex) => new Color(hex));
     this.leds = this.ledBase.map((c) => track(new MeshBasicMaterial({ color: c.clone().multiplyScalar(1.6) })));
+
+    /* Arcade row and depth cues (src/scene/arcadeRow.ts): light tubes, neighbour haze, corner shading, signs. */
+    this.tube = track(new MeshBasicMaterial({ color: new Color(parts.diffuser).multiplyScalar(2.1) }));
+    // Light themes fade the neighbours towards a dusky version of their backdrop; dark themes (and the
+    // brand kit, whose backdrop is black) towards their own darkest colour.
+    const veilTint = dark ? new Color(theme.backdrop.bottom).multiplyScalar(0.7) : new Color(theme.backdrop.bottom).lerp(new Color('#3a3346'), 0.6);
+    this.veil = track(new MeshBasicMaterial({ color: veilTint, map: tex(makeVeilTexture()), transparent: true, opacity: dark ? 0.5 : 0.42, depthWrite: false }));
+    this.shade = track(new MeshBasicMaterial({ color: '#000000', map: tex(makeShadeTexture()), transparent: true, opacity: dark ? 0.55 : 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    this.rowSign = track(new MeshBasicMaterial({ map: tex(makeRowSignTexture(theme, ['LUCKY', 'PLUSH'], font, printSize)), color: new Color('#ffffff').multiplyScalar(dark ? 1.35 : 1.25) }));
   }
 
   setGlassQuality(quality: GlassQuality): void {

@@ -16,6 +16,7 @@ configuration file can serve a desk, a 32" kiosk, an 86" wall and a phone.
 - [What the solver guarantees](#what-the-solver-guarantees)
 - [Four different "sizes"](#four-different-sizes)
 - [Window ↔ cabinet mapping](#window--cabinet-mapping)
+- [Depth: the arcade row, the glass and drag-to-peek](#depth-the-arcade-row-the-glass-and-drag-to-peek)
 - [Simulated 9:16 screen](#simulated-916-screen)
 - [Installing on an 86" portrait display](#installing-on-an-86-portrait-display)
 - [32" portrait display](#32-portrait-display)
@@ -187,8 +188,97 @@ The screen is treated as a pane of glass in the front of the cabinet
 - The frustum is then `left/right = near × (∓W/2 − ex) / ez`, `bottom/top = near × (∓H/2 − ey) / ez`
   (`src/perspective/offAxis.ts`). The camera does not rotate towards the window centre.
 
-Without tracking the eye is the preset's **reference eye**. Tracking,
-calibration, filtering and loss handling are in [CALIBRATION.md](CALIBRATION.md).
+Without tracking the eye is the preset's **reference eye** (or wherever the player drags it, see
+below). Tracking, calibration, filtering and loss handling are in [CALIBRATION.md](CALIBRATION.md).
+
+**Light from your position.** The same eye also carries a small light (*Graphics → Light from your
+position*, on except in the Safe preset): it shines through the glass into the middle of the play
+field and the claw and the toys throw soft shadows onto the mat and the back wall. When the eye moves
+— head tracking, drag-to-peek or the attract sway — the light moves with it, a little above the eye
+and a little further out to the side, so the shadows visibly slide the other way. It works the same
+in all four presets (it is placed in cabinet space from the eye after `eyeToWorld`, so the physical
+scale of the screen does not matter). Details and costs: [PERFORMANCE.md](PERFORMANCE.md#viewer-light).
+
+## Depth: the arcade row, the glass and drag-to-peek
+
+Three things make the screen read as a window into a deep box rather than a picture of one. All
+of them are presentation only: nothing here has a collider, and none of it can change a round.
+
+**The arcade row** (`src/scene/arcadeRow.ts`). Our machine stands between two neighbouring claw
+machines, each separated from ours by a lacquered pillar (12.4 cm wide, its front face 3 mm behind
+the glass, with an accent inlay, chrome beads and a light line). Each neighbour has its own front
+glass (3.6 cm deeper than the screen), side glass, play floor, back wall in the theme's second print,
+a ceiling with diffuser and two light tubes, gantry rails with a bridge and trolley, a claw waiting
+with open fingers, rear corner light strips, a lit sign high on its back wall ("LUCKY" on the left,
+"PLUSH" on the right), a lower body with a coin plate, and a small pile of the theme's plush (the
+display toys, `pileSlots`). A tinted haze just behind each neighbour's glass (`CabinetMaterials.veil`,
+darker towards floor and ceiling) makes them read as further away and less lit than ours.
+
+| Screen | Where the neighbours are | Plush per side |
+| --- | --- | --- |
+| Landscape (desktop, phone sideways) | Where the display bays used to be: the pillar and roughly half of each neighbour are in view straight on, more of the far one when the eye moves sideways | 6 (3 on the Safe tier) |
+| Portrait 9:16 (32", 86", simulated) | Just outside the window edges: seen through our side glass, at the back corners at the reference eye (86") and properly once the eye moves sideways (a full peek shows the neighbour's claw) | 2 |
+
+Cost on Medium, measured on 2026-11-25 (production build, headless Chromium with SwiftShader, device
+pixel ratio 1, a player round in READY, automatic optimiser off; whole frame, all passes, the same
+frame before and after this change; not a GPU measurement):
+
+| Screen | Draw calls before → after | Triangles before → after |
+| --- | --- | --- |
+| desktop 1280 × 720, Sakura | 130 → 139 | 228 443 → 247 007 (toys 103 972 → 119 970, cabinet 35 222 → 37 716) |
+| portrait32 1080 × 1920, Cosmic | 120 → 129 | 297 972 → 315 342 (toys 176 423 → 192 423, cabinet 30 998 → 40 210) |
+
+The row's static parts join the cabinet's existing material buckets (the new draws are the light
+tubes, the haze, the corner shading, the signs, the claw caps and the extra plush); its boxes use one
+bevel segment. Nothing of the row casts a shadow.
+
+The geometry is a fixed set of numbers (`ROW`); `revealedX()` gives how far past an edge an eye can
+see at a given depth, and `tests/unit/scene/arcadeRow.test.ts` checks the cases above for the default
+presets. Colours come from the theme (the GPU Party row uses only the kit palette: black, greys,
+white and the brand green).
+
+**Ceiling, floor and corners.** Every machine has two fluorescent tubes under its ceiling, the
+diffuser in a chrome frame and brackets that hang the gantry rails from the ceiling: a low eye looks
+up past the window's top edge into them (on portrait screens they are in view straight on). A high
+eye looks down onto the floor and into the prize hole, whose inner edge has a light lip. Inside
+corners (floor and ceiling along the back wall, the back corners, the top of the prize shaft) carry
+baked occlusion strips (`CabinetMaterials.shade`), so the box reads deep on Medium, which has no
+ambient occlusion.
+
+**The front glass** (`src/scene/glass.ts`) lies exactly in the screen plane. Its two soft reflection
+streaks, dust specks, a wiped fingerprint or two, micro-scratches and a thin glint where the pane
+meets the frame are fixed to the pane, so they stay put on the screen while the cabinet behind them
+shifts with the eye. It covers only the glass above the floor line, keeps the middle of the view
+clear, only ever adds light, and the DOM HUD is always drawn above it. Strength by glass quality:
+off (Safe), 0.045 (Medium), 0.07 (High, Ultra); dust and scratch maps from the 1K texture tier up.
+
+**Drag-to-peek** (`src/app/PeekDrag.ts`, *Settings → Camera & Parallax → Drag to peek*,
+`camera.dragPeek`, on by default). While no tracked face drives the view — camera off, denied, no
+face found, not started — dragging on the 3D view moves the eye; on release it springs back.
+
+- Only a press that starts on the 3D view counts. The HUD sits above the canvas, so a press on the
+  joystick, a button, the menu or a dialog never peeks, whatever the finger does next.
+- The content behind the glass follows the finger: drag right and the back of the machine slides
+  right (the eye moves right, the left neighbour comes into view); drag up and the eye rises (you look
+  down onto the floor). The peek grows linearly with the drag up to three quarters of the limit (a
+  drag of about 32 % of the view's shorter side) and then eases towards it; the limit is 85 % of the
+  preset's `view.maxOffset` (the same safe limits as head tracking).
+- Release: a spring back to the reference eye (ω = 10 /s, ζ = 0.7: about 4 % overshoot, settled in
+  about half a second) with half of the finger's last speed as inertia. With reduced motion there is
+  no inertia and the spring is critically damped and quicker (ω = 18 /s, no overshoot).
+- It moves the viewpoint only. The claw, the simulation and the round never see it; *Settings →
+  Camera & Parallax* shows the view source "Dragging to peek (not the camera)" meanwhile.
+- A face found while dragging takes the view over with the usual cross-fade, starting from the
+  dragged view (no jump); the drag is dropped until the finger lifts.
+- A one-time hint, "Drag to peek inside", appears just above the floor line, centred on the cabinet,
+  about a second into a player round when no face is tracked; it goes after about 6.5 s or at the
+  first peek. Desktop and phone remember that it was shown; the kiosk presets show it again to each
+  new visitor (after attract mode). It is not a control, it sits below every HUD layer, and on the 86"
+  preset it lies above the floor line, clear of the controls in the reach band.
+
+End-to-end check: `tests/e2e/28-peek.spec.ts` (a drag on the canvas changes the projection, reports
+the `drag` source, leaves the claw alone and returns to neutral after release; a drag that starts on a
+HUD control does nothing; `camera.dragPeek` off disables it).
 
 ## Simulated 9:16 screen
 

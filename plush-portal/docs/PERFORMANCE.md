@@ -46,6 +46,7 @@ Graphics* or with `?quality=`. **Engineering defaults, not measured guarantees.*
 | Bloom | off | 0.25 | 0.30 | 0.30 |
 | Decor particles | 20 | 60 | 150 | 300 |
 | Effects intensity / light show | 0.5 / off | 1.0 / on | 1.2 / on | 1.5 / on |
+| Viewer light (*Light from your position*) | off | on: one spot light, 1024² PCF shadow map redrawn only when the eye or a toy / the claw moved | on: 2048² soft shadow (VSM) | as High |
 
 The "intended for" row is the design intent behind each tier, nothing more.
 Cabinet and claw tessellation (bevel segments, radial segments) and the small
@@ -74,6 +75,7 @@ grip rules, number of toys, HUD layout and HUD resolution. See
 | Decor particles | Particle update on the CPU and their draw. |
 | Effects (celebrations, light show) | 2 draw calls and one shared shader program per render target, no textures; about 260 KB of GPU buffers and 0.65 MB of CPU pools. Particle scale per tier 0.26 / 1 / 2.08 / 3.94 (× 0.4 with reduced motion). Drawn only in the main view, never in reflection captures or override passes (figures from the effects review). |
 | Frame-rate target 30 | Skips frames to hold 30 fps; the simulation is unaffected. |
+| Viewer light | One more light in every lit shader (a spot light: one cone test and one shadow lookup per fragment). Its shadow map is a depth pass over the shadow casters (toys with their coarse shadow mesh, the claw) at 1024² (Medium) or 2048² VSM (High, which also draws every receiver), done in the same pre-pass as the key light's, and only on frames where the eye or a caster moved (`Stage.poseSignature`): a resting machine viewed from a still eye redraws nothing. |
 | Head tracking | Face inference runs in a worker when possible, at *Tracking rate* (default 18 Hz) and *Camera resolution* (default 480p). It competes for CPU and, with the GPU delegate, for GPU time. |
 
 ## Internal resolution
@@ -117,6 +119,28 @@ rim where toys touch the mat and a faint, wide shadow under the descending claw:
 the toys and the claw are rendered from below into a height-coded map, blurred
 and laid over the mat (never over the chute opening).
 
+<a id="viewer-light"></a>**Viewer light** (`src/scene/viewerLight.ts`, setting *Graphics → Light from your
+position*, `graphics.viewerLight`). The player stands in front of the glass like someone in the
+arcade, and a small light where they are shines in: one `SpotLight` aimed at the middle of the play
+field, warm white (neutral white in the GPU / brand-kit theme), with a wide soft edge (full strength
+within 0.62 m of the field's centre, gone at 1.45 m). It follows the same filtered eye the off-axis
+camera uses — head tracking, drag-to-peek, the attract sway or the reference eye — in every layout,
+so it is exactly as smooth as the view and never jitters on its own. It is not *exactly* at the eye:
+a light at the eye throws every shadow straight behind its caster, where that eye cannot see it. It
+sits a little above the eye (`VIEWER_LIFT` 0.2 of its distance to the field, about 11°) and leads it
+sideways (`VIEWER_LEAD` 1.7× the eye's distance from the window's centre line), so the shadows of the
+claw and the toys peek out below them and visibly slide over the mat and the back wall, the other
+way, when the player moves. The light reaching the field's centre is the same at every viewing
+distance (decay 1, normalised there: 1.1, against the key light's 2.4–3.1). While it is on, the
+unshadowed fill is lowered (sky / ground light × 0.6, studio environment × 0.8) so the scene keeps its
+brightness instead of washing out. Shadow per tier: none on *Shadows* Off / Low; 1024² PCF on Medium;
+2048² VSM, wider blur on High and Ultra. The map is drawn in the key light's pre-pass with the toys'
+coarse shadow meshes, and only when the eye or a caster moved: the toys' and the claw's poses are
+compared, rounded to half a millimetre, so resting toys do not redraw it. The Safe preset turns the
+light off (it costs every lit fragment on a phone); stored settings without the key take it from
+their preset. With reduced motion it still follows the eye (the eye itself is what reduced motion
+calms). Presentation only: no collider, nothing the simulation reads.
+
 **Materials** (`src/scene/materials.ts`, procedural maps in
 `src/scene/textures.ts` / `src/scene/texgen.ts`, all generated at run time):
 
@@ -142,6 +166,7 @@ environment and shadow targets:
 | Cabinet textures (GPU theme, measured before the brand kit; Medium is now 37.5 MB) | 8.7 MB | 40.7 MB | 78.0 MB | 222 MB (89 MB of it the 4K back wall) |
 | Studio environment (half-float cube + mips; the generator keeps a source cube of the same size up to 512) | ≈ 4 (+ 4) MB | ≈ 4 (+ 4) MB | ≈ 17 (+ 17) MB, + 17 MB capture | ≈ 17 (+ 17) MB, + 17 MB live capture (static reflections: ≈ 67 MB, no capture) |
 | Key-light shadow map | 4 MB depth | 17 MB depth | ≈ 200 MB (VSM: two RG16F targets + depth) | as High |
+| Viewer-light shadow map | — (light off) | 4 MB depth | ≈ 50 MB (VSM, 2048²) | as High |
 
 **GPU theme (brand kit)** (`pattern: 'circuit'`). Printed-circuit wallpaper and
 the server-hall backdrop, now in the NVIDIA palette only. The back wall of the
@@ -517,6 +542,36 @@ robot lost the collider of a wind-up key that its generated model does not have,
 grabs from behind can no longer catch an invisible handle. The other characters of these themes
 moved by up to ±12 points at 4.5 cm (the pile around them changed); centred grabs stayed at
 96–100 %. The headless tests in `tests/unit/game` (fixed seeds, real assets) pass.
+
+### Viewer light (round 4)
+
+Method: production build served by the API server, headless Chromium (SwiftShader, no GPU),
+`?debug=1&camera=off&seed=7&display=desktop&theme=sakura&quality=medium` at 1280 × 720, device pixel
+ratio 1, a player round in READY with the claw at home, automatic optimiser switched off after boot.
+Each case is one `Stage.render` timed between two 1-pixel read-backs (which make the browser finish
+the queued GPU work); the four cases took turns frame by frame, six frames each, because the frame
+time of the loaded software rasteriser drifted by a factor of two within minutes (1-minute load
+average 15–23 from other jobs on the same four cores). Draw calls and triangles count every pass of
+the frame, read from `renderer.info`.
+
+| Case | Draw calls | Triangles | Viewer-light map drawn | Frame, median (min) |
+| --- | --- | --- | --- | --- |
+| Light off, eye still | 139 | 246 983 | — | 3.84 s (3.29 s) |
+| Light on, eye still | 139 | 246 983 | 0 of 6 frames | 3.78 s (2.89 s) |
+| Light on, eye moving | 169 | 324 573 | 6 of 6 frames | 5.18 s (3.15 s) |
+| Light off, eye moving | 139 | 246 983 | — | 4.40 s (2.35 s) |
+
+So: with a still eye and resting toys the light costs no draw call and no triangle (its map is not
+redrawn) and no measurable time; a frame that redraws its 1024² map adds 30 draw calls and about
+78 000 triangles (the toys' coarse shadow meshes and the claw) and was 0.8–1.3 s slower here, which
+is within the noise of this machine. What it costs on real integrated graphics (one more light in
+every lit fragment, one small depth pass while the player moves) was **not measured**. The proof
+screenshots (eye left, right, high and low, desktop and portrait32, Sakura and GPU Party) show the
+claw's shadow on the back wall sliding the other way as the eye moves; on the GPU Party theme the back
+wall is the LED screen, which is unlit, so its shadows land on the mat and the toys only. Checked
+the same way on the other tiers (800 × 450): High draws the 2048² soft map (291 draw calls, 2.26 M
+triangles in a still frame, the High tier's own cost), Safe leaves the light off (118 calls); no
+console errors or shader compile errors in any of these runs.
 
 ### Not measured
 

@@ -62,6 +62,7 @@ export function GraphicsTab() {
       <Section title={t('sec.graphics.fx')} />
       <Field path="graphics.fxIntensity" percent />
       <Field path="graphics.lightShow" />
+      <Field path="graphics.viewerLight" />
       <Section title={t('sec.graphics.post')} />
       <Field path="graphics.bloom" percent />
       <Field path="graphics.exposure" />

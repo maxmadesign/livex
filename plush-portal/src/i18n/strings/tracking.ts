@@ -55,6 +55,7 @@ export const trackingStrings: StringTable = {
     'tracking.source.returning': 'Returning to centre',
     'tracking.source.reacquire': 'Catching up',
     'tracking.source.test': 'Test sliders (not the camera)',
+    'tracking.source.drag': 'Dragging to peek (not the camera)',
 
     'tracking.backend.worker-gpu': 'Background thread · GPU',
     'tracking.backend.worker-cpu': 'Background thread · CPU',
@@ -182,6 +183,7 @@ export const trackingStrings: StringTable = {
     'tracking.source.returning': '正在回到中心',
     'tracking.source.reacquire': '正在跟上',
     'tracking.source.test': '测试滑块（非摄像头）',
+    'tracking.source.drag': '拖动窥视（非摄像头）',
 
     'tracking.backend.worker-gpu': '后台线程 · GPU',
     'tracking.backend.worker-cpu': '后台线程 · CPU',
@@ -304,6 +306,7 @@ export const trackingStrings: StringTable = {
     'tracking.source.returning': '中央へ戻っています',
     'tracking.source.reacquire': '追従を再開中',
     'tracking.source.test': 'テスト用スライダー（カメラではありません）',
+    'tracking.source.drag': 'ドラッグでのぞき見（カメラではありません）',
 
     'tracking.backend.worker-gpu': 'バックグラウンド · GPU',
     'tracking.backend.worker-cpu': 'バックグラウンド · CPU',

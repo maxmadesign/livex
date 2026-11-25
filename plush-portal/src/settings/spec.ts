@@ -458,6 +458,12 @@ export const settingsSpec = {
     fxIntensity: num(1, 0, 1.5, 0.05),
     /** Moving light show on wins and in attract mode. */
     lightShow: bool(true),
+    /**
+     * A small light at the player's eye shines into the cabinet and moves with the viewpoint, so the
+     * shadows of the claw and the toys shift as the player moves (src/scene/viewerLight.ts). Its
+     * shadow follows *Shadows* (none on Off / Low); the Safe preset turns the light off.
+     */
+    viewerLight: bool(true),
     exposure: num(1, 0.6, 1.6, 0.02),
     toneMapping: en('neutral', ['aces', 'agx', 'neutral'] as const),
     dof: bool(false),
@@ -526,6 +532,11 @@ export const settingsSpec = {
   camera: {
     /** Head Tracking / Window Perspective. */
     enabled: bool(true),
+    /**
+     * Drag-to-peek: while no tracked face drives the view (camera off, denied, no face, not started),
+     * dragging on the 3D view moves the viewpoint and it springs back on release (src/app/PeekDrag.ts).
+     */
+    dragPeek: bool(true),
     deviceId: str('', 256, 'live', true),
     resolution: en('480p', ['360p', '480p', '720p'] as const),
     inferenceHz: num(18, 5, 30, 1, 'live', 'Hz'),
@@ -583,10 +594,10 @@ export type CameraSettings = Settings['camera'];
  * highlighted preset stays true). Keys added to the presets later go here as well.
  */
 export const GRAPHICS_PRESET_ADDITIONS = {
-  safe: { fxIntensity: 0.5, lightShow: false, maxDpr: 1.25 },
-  medium: { fxIntensity: 1, lightShow: true, maxDpr: 2 },
-  high: { fxIntensity: 1.2, lightShow: true, maxDpr: 3 },
-  ultra: { fxIntensity: 1.5, lightShow: true, maxDpr: 3 },
+  safe: { fxIntensity: 0.5, lightShow: false, maxDpr: 1.25, viewerLight: false },
+  medium: { fxIntensity: 1, lightShow: true, maxDpr: 2, viewerLight: true },
+  high: { fxIntensity: 1.2, lightShow: true, maxDpr: 3, viewerLight: true },
+  ultra: { fxIntensity: 1.5, lightShow: true, maxDpr: 3, viewerLight: true },
 } as const satisfies Record<Exclude<GraphicsSettings['preset'], 'custom'>, Partial<GraphicsSettings>>;
 
 /** Fills preset-owned graphics keys missing from older data with the stored preset's values. */

@@ -66,6 +66,7 @@ export function CameraTab() {
     <>
       <Section title={t('sec.camera.main')} />
       <Field path="camera.enabled" />
+      <Field path="camera.dragPeek" />
       <p className="pp-note">{t('camera.privacy')}</p>
       <Section title={t('sec.camera.status')} />
       <dl className="pp-kv" data-testid="camera-status" data-state={shown}>

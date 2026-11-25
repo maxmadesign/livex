@@ -215,6 +215,8 @@ export const uiEn: Record<string, string> = {
   'perf.na': 'not available',
   'perf.auto': 'Auto',
 
+  'peek.hint': 'Drag to peek inside',
+
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.apply': 'Apply',

@@ -9,6 +9,7 @@ export { createFaceTracker } from './FaceTracker';
 export type {
   CalibrationEvent,
   CalibrationOutcome,
+  DragSource,
   FaceTracker,
   FaceTrackerDeps,
   PhysicalWindow,

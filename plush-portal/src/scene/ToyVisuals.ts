@@ -577,7 +577,7 @@ export class ToyVisuals {
     return v ? out.copy(v.root.position) : null;
   }
 
-  /** Static display toys in the side bays (landscape). */
+  /** Static display toys: the plush piles of the neighbouring machines (src/scene/arcadeRow.ts). */
   setDisplay(slots: readonly DisplaySlot[], assets: readonly PlushAsset[]): void {
     for (const m of this.display) m.removeFromParent();
     this.display.length = 0;
@@ -587,7 +587,7 @@ export class ToyVisuals {
     if (assets.length === 0) return;
     const perAsset = new Map<string, PlushMaterial>();
     slots.forEach((slot, i) => {
-      const asset = assets[i % assets.length]!;
+      const asset = assets[(slot.pick ?? i) % assets.length]!;
       const loaded = this.library.get(asset.id);
       if (!loaded) return;
       let material = perAsset.get(asset.id);
@@ -605,7 +605,8 @@ export class ToyVisuals {
       }
       const mesh = new Mesh(loaded.lods[displayLod(loaded)]!, material);
       mesh.position.set(slot.x, slot.y, slot.z);
-      mesh.rotation.y = slot.yaw;
+      mesh.rotation.set(slot.pitch ?? 0, slot.yaw, slot.roll ?? 0, 'YXZ');
+      mesh.scale.setScalar(slot.scale ?? 1);
       mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
@@ -653,7 +654,7 @@ function visualTriangles(v: ToyVisual): number {
   return (index ? index.count / 3 : 0) + (v.shell && shellIndex ? (shellIndex.count / 3) * v.shell.count : 0);
 }
 
-/** Display-bay toys are small and static: the LOD closest to ~5k triangles (LOD1 of a procedural model). */
+/** Display toys are small and static: the LOD closest to ~5k triangles (LOD1 of a procedural model). */
 function displayLod(loaded: LoadedPlush): number {
   const lods = loaded.lods;
   let best = Math.min(1, lods.length - 1);

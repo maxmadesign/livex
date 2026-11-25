@@ -127,6 +127,13 @@ export interface TrackerDiagnostics {
   lastBaseline: { eye: Vec3; yawDeg: number; pitchDeg: number; samples: number; spread: BaselineResult['spread'] } | null;
 }
 
+/**
+ * Drag-to-peek source (src/app/PeekDrag.ts), asked once per rendered frame: `nowMs` is the frame
+ * time, `driven` is true while a tracked face or the test viewpoint drives the view. Returns the
+ * offset from the viewpoint (window space, metres), or null when the view is not being peeked.
+ */
+export type DragSource = (nowMs: number, driven: boolean) => Readonly<Vec3> | null;
+
 export interface FaceTracker extends TrackerPort {
   /** Applies settings. Cheap; restarts the camera / backend only when a relevant field changed. */
   configure(config: TrackerConfig): void;
@@ -136,6 +143,8 @@ export interface FaceTracker extends TrackerPort {
   diagnostics(): TrackerDiagnostics;
   /** Selects the display preset whose head-direction baseline (`camera.headBaseline.<id>`) is used. */
   setActiveProfile(profile: DisplayProfileId): void;
+  /** Drag-to-peek offset provider, or null to remove it. */
+  setDragSource(source: DragSource | null): void;
 }
 
 const RAD2DEG = 180 / Math.PI;
@@ -231,6 +240,7 @@ class FaceTrackerImpl implements FaceTracker {
   private readonly selector = new PrimarySelector();
   private readonly filter = new MeasurementFilter();
   private readonly controller = new ViewpointController();
+  private dragSource: DragSource | null = null;
   private readonly collector = new CalibrationCollector();
   private calibrationResolve: ((outcome: CalibrationOutcome) => void) | null = null;
   private calibrationPromise: Promise<CalibrationOutcome> | null = null;
@@ -834,12 +844,21 @@ class FaceTrackerImpl implements FaceTracker {
   /* -------------------------------------------------------------- viewpoint */
 
   sampleEye(nowMs: number, out: Vec3): ViewSource {
+    // Drag-to-peek: asked every frame whether the view is being dragged; never while a face (or the
+    // test viewpoint) drives it.
+    if (this.dragSource) this.controller.setDrag(this.dragSource(nowMs, this.controller.isLive || this.testOffset !== null));
     const source = this.controller.sample(nowMs, out);
     if (source !== this.statusValue.viewSource) this.patch({ viewSource: source });
     // The countdown advances with the render loop (cheap; the status only changes once a second).
     const phase = this.session.phase;
     if (phase === 'countdown' || phase === 'capturing' || phase === 'done') this.tickSession(nowMs);
     return source;
+  }
+
+  /** Drag-to-peek (src/app/PeekDrag.ts): see {@link DragSource}. */
+  setDragSource(source: DragSource | null): void {
+    this.dragSource = source;
+    if (!source) this.controller.setDrag(null);
   }
 
   setTestViewpoint(offset: Vec3 | null): void {

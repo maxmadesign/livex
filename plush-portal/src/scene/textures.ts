@@ -748,6 +748,182 @@ export function makeBackdropTexture(theme: ThemeDef, size: number): Texture {
   return finish(c, true, true);
 }
 
+/**
+ * Lit header signs of the two neighbouring machines (src/scene/arcadeRow.ts): one 1024 × 256 cell
+ * per sign, stacked (top cell = left neighbour). Theme colours only; on a brand-dressed theme the
+ * sign is black with brand-green type and rule (sceneInk), so it stays inside the kit's palette.
+ */
+export function makeRowSignTexture(theme: ThemeDef, words: readonly [string, string], font: string, size: number): Texture {
+  const W = Math.max(256, Math.min(1024, size));
+  const H = W / 4;
+  const { c, g } = canvas(W, H * 2);
+  const ink = sceneInk(theme);
+  const cab = theme.cabinet;
+  // The circuit (GPU) theme keeps to its cabinet colours: black face, green rule and type.
+  const kit = cab.pattern === 'circuit';
+  const dark = kit || cab.pattern === 'cosmos';
+  const s = W / 1024;
+  const rng = makeRng(311 + theme.id.length);
+  words.forEach((word, i) => {
+    const y0 = i * H;
+    // Light box face: a soft vertical gradient, brighter in the middle like a lit diffuser.
+    const face = kit ? cab.fascia : i === 0 ? ink.primary : ink.accent;
+    const lineColour = kit ? cab.frameAccent : '#ffffff';
+    g.fillStyle = face;
+    g.fillRect(0, y0, W, H);
+    if (!kit) {
+      const grad = g.createLinearGradient(0, y0, 0, y0 + H);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, y0, W, H);
+    }
+    // Inner rule and a row of bulbs along the top and bottom edges.
+    g.strokeStyle = lineColour;
+    g.globalAlpha = kit ? 1 : 0.75;
+    g.lineWidth = 6 * s;
+    g.beginPath();
+    g.roundRect(18 * s, y0 + 18 * s, W - 36 * s, H - 36 * s, 34 * s);
+    g.stroke();
+    g.globalAlpha = 1;
+    const bulbs = 22;
+    for (let k = 0; k < bulbs; k++) {
+      const bx = (40 + (k / (bulbs - 1)) * (W / s - 80)) * s;
+      for (const by of [y0 + 9 * s, y0 + H - 9 * s]) {
+        g.fillStyle = kit ? cab.led[k % cab.led.length]! : k % 2 === 0 ? '#ffffff' : ink.accent2;
+        g.beginPath();
+        g.arc(bx, by, 4.5 * s, 0, 6.28);
+        g.fill();
+      }
+    }
+    // Small motifs either side of the word.
+    for (const side of [-1, 1]) {
+      const mx = W / 2 + side * 380 * s;
+      const my = y0 + H / 2;
+      if (kit) {
+        g.fillStyle = cab.frameAccent;
+        g.fillRect(mx - 18 * s, my - 18 * s, 36 * s, 36 * s);
+        g.fillStyle = cab.fascia;
+        g.fillRect(mx - 9 * s, my - 9 * s, 18 * s, 18 * s);
+      } else {
+        g.fillStyle = i === 0 ? ink.accent2 : '#ffffff';
+        star(g, mx, my, 30 * s, rng() * 0.5, 5, 0.5);
+      }
+    }
+    g.fillStyle = kit ? cab.frameAccent : dark ? '#ffffff' : ink.onPrimary;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `700 ${Math.round(132 * s)}px ${font}`;
+    if (!kit) {
+      g.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      g.shadowBlur = 10 * s;
+      g.shadowOffsetY = 5 * s;
+    }
+    g.fillText(word, W / 2, y0 + H / 2 + 6 * s, W - 220 * s);
+    g.shadowColor = 'transparent';
+    g.shadowBlur = 0;
+    g.shadowOffsetY = 0;
+  });
+  return finish(c, true, false);
+}
+
+/**
+ * Haze behind a neighbour's front glass (white; the material tints it): alpha rises towards the
+ * floor and the ceiling, where a real cabinet is lit least, and stays lighter in the middle band.
+ */
+export function makeVeilTexture(): Texture {
+  const { c, g } = canvas(16, 256);
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, 'rgba(255,255,255,0.78)');
+  grad.addColorStop(0.16, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.4)');
+  grad.addColorStop(0.86, 'rgba(255,255,255,0.58)');
+  grad.addColorStop(1, 'rgba(255,255,255,0.85)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 16, 256);
+  const t = finish(c, true, false);
+  t.generateMipmaps = false;
+  t.minFilter = LinearFilter;
+  return t;
+}
+
+/**
+ * Baked corner occlusion: black, alpha falling off from u = 0 (the corner) to u = 1, so a strip laid
+ * along an inside corner darkens it the way ambient occlusion would.
+ */
+export function makeShadeTexture(): Texture {
+  const { c, g } = canvas(128, 4);
+  const grad = g.createLinearGradient(0, 0, 128, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,1)');
+  grad.addColorStop(0.25, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.6, 'rgba(0,0,0,0.16)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 4);
+  const t = finish(c, true, false);
+  t.generateMipmaps = false;
+  t.minFilter = LinearFilter;
+  return t;
+}
+
+/**
+ * Dust, specks and faint fingerprint smudges on the front glass (src/scene/glass.ts). One channel
+ * (R) of brightness on black: the glass shader adds it where light grazes the pane. Tiles.
+ */
+export function makeDustTexture(size: number, seed = 23): Texture {
+  const { c, g } = canvas(size);
+  g.fillStyle = '#000000';
+  g.fillRect(0, 0, size, size);
+  const rng = makeRng(seed);
+  const u = size / 512;
+  g.globalCompositeOperation = 'lighter';
+  // Smudges: soft overlapping ovals with a few ridges, like a wiped fingerprint.
+  for (let i = 0; i < 5; i++) {
+    const x = rng() * size, y = rng() * size, r = (16 + rng() * 22) * u;
+    for (const dx of [-size, 0, size])
+      for (const dy of [-size, 0, size]) {
+        const rg = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+        rg.addColorStop(0, 'rgba(70,0,0,0.5)');
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg;
+        g.beginPath();
+        g.ellipse(x + dx, y + dy, r, r * 0.72, rng() * 3.1, 0, 6.28);
+        g.fill();
+        g.strokeStyle = 'rgba(40,0,0,0.6)';
+        g.lineWidth = 1.2 * u;
+        for (let k = 1; k < 5; k++) {
+          g.beginPath();
+          g.ellipse(x + dx, y + dy, r * k * 0.2, r * k * 0.15, 0.4, 0, 6.28);
+          g.stroke();
+        }
+      }
+  }
+  // Specks of dust: tiny bright dots, most of them faint.
+  for (let i = 0; i < 260; i++) {
+    const x = rng() * size, y = rng() * size;
+    const r = (0.5 + Math.pow(rng(), 3) * 1.6) * u;
+    const v = Math.round(90 + rng() * 165);
+    g.fillStyle = `rgb(${v},0,0)`;
+    g.beginPath();
+    g.arc(x, y, r, 0, 6.28);
+    g.fill();
+  }
+  // A few short lint fibres.
+  g.lineCap = 'round';
+  for (let i = 0; i < 12; i++) {
+    const x = rng() * size, y = rng() * size, len = (4 + rng() * 10) * u, a = rng() * 6.28;
+    g.strokeStyle = `rgb(${Math.round(80 + rng() * 80)},0,0)`;
+    g.lineWidth = 0.8 * u;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.quadraticCurveTo(x + Math.cos(a + 0.8) * len * 0.6, y + Math.sin(a + 0.8) * len * 0.6, x + Math.cos(a) * len, y + Math.sin(a) * len);
+    g.stroke();
+  }
+  g.globalCompositeOperation = 'source-over';
+  return finish(c, false);
+}
+
 /** Soft radial sprite used for particles and the aim reticle glow. */
 export function makeGlowTexture(): Texture {
   const { c, g } = canvas(128);
