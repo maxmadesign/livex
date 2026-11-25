@@ -2,6 +2,8 @@
 
 > **中文简介** — PLUSH PORTAL 是一个在浏览器中运行的卡通 3D 抓娃娃机。爪子、绳索、娃娃全部由 Rapier 物理引擎以 120 Hz 固定步长真实模拟，抓取结果只取决于真实接触，没有隐藏的中奖概率。内置五个主题（樱花萌宠 / 动画伙伴 / 梦幻海洋 / 宇宙街机 / 显卡派对）共 31 个原创毛绒角色，每个角色都有用 Higgsfield 生成的高细节贴图模型；带稀有度、连击和积分系统；无人操作时自动回到演示模式并显示“点击开始”。音乐、音效和每个角色自己的声音来自 Higgsfield 生成的录音（加载失败时使用项目内合成的备用音频）。支持桌面横屏、32 寸竖屏、86 寸竖屏和手机四种显示预设（86 寸预设把操作面板和所有对话框放在屏幕中部 25%–75% 的安全区内；在非 9:16 的窗口里，竖屏预设会在居中的 9:16 区域内模拟真实屏幕），默认开启基于摄像头头部追踪的“窗口透视”（离轴投影，带倒计时校准），并带有 AI 向导 Momo（通过服务端代理调用 OpenAI，密钥来自 `.env`，也可在设置中替换；没有密钥时自动使用本地台词）。摄像头画面与人脸关键点只在本机处理，不上传、不保存。
 >
+> 除经典抓娃娃机外，柜体还可以变成另外三台机器：摇摇桥（把架在两根杆上的奖品箱一点点推下去）、翻落货架（5 次机会把货架上的零食盒推进出口，掉落 5 盒得奖）和闪耀冲刺（75 秒限时抓宝石，总价值达到 700 得奖，并有本机前 10 名排行榜）。玩家在机器大厅中切换；奖品同样只由物理结果决定，每个奖品只有一个领奖码，演示回合永远不发码。
+>
 > 本仓库没有在真实的 7840HS / 780M 主机、32 寸或 86 寸实体屏、真实手机、真实摄像头前的真人上做过验收，也没有人实际听过音频，详见下文“Verified here / needs real hardware”。
 
 PLUSH PORTAL is a browser claw machine: a cartoon 3D cabinet full of soft plush
@@ -37,6 +39,14 @@ centre of mass physically passes the prize chute sensor.
   points); first catches, clean grabs and win streaks (×1.5 / ×2 / ×3) add more; the effects, light show and win
   sound escalate with the tier. Best session and lifetime points are kept on the device. Presentation only — the
   physics decides every round.
+- **Four machines in one cabinet.** Besides the classic claw (*Plush Classic*), players pick in the **machine
+  lobby** (the MACHINES button): **Tippy Bridge** (a printed prize box across two bars over a pit: lift one end
+  per try until it drops through), **Tumble Shelf** (5 tries to knock snack boxes off a shelf; 5 boxes in one
+  session win a plush) and **Sparkle Rush** (a 75 s run grabbing gems and coins; a gem value of 700 wins a plush,
+  a local top-10 board with three initials). The three show a session HUD (tries, clock, progress); every machine
+  keeps its own points and best score; one machine a day earns ×1.5 points (*today's pick*); machines can unlock
+  with collected prizes. The physics decides every outcome on every machine, and every prize gets exactly one
+  claim code ([docs/machines/](docs/machines/), [REWARDS.md](docs/REWARDS.md#which-machine-gives-what)).
 - **Idle reset and a self-playing attract mode.** After `system.idleSeconds` (default 60 s) without input the
   machine resets (dialogs closed, session cleared) and plays clearly labelled demo rounds with a large
   **TAP TO PLAY** call to action; a tap takes over at once.
@@ -106,11 +116,12 @@ Outbound calls honour `HTTPS_PROXY` / `NO_PROXY` and `NODE_EXTRA_CA_CERTS` / `SS
 | `?quality=` | `safe` \| `medium` \| `high` \| `ultra` | Applies a graphics preset. |
 | `?camera=off` | | Never asks for the camera in this session. |
 | `?seed=` | integer | Fixed toy layout (repeatable tests). |
+| `?machine=` | `classic` \| `bridge` \| `shelf` \| `rush` | The home machine for this page load: attract mode plays it and the idle reset returns to it. Never saved; an unknown value is ignored, and *Settings → Game → Machines → Home machine* applies again on the next load. |
 | `?debug=1` | | Exposes `window.__plush` (state, fast-forward, log, score, attract) for tests and tools. Every call except `attract()` counts as player input for the idle reset. |
 | `?debug=1&insets=` | `top,right,bottom,left` (CSS px) | Pretends the screen has cut-outs (notch, home indicator) — Playwright cannot emulate them. |
 | `?models=procedural` | | Draws the procedural models instead of the textured AI-generated ones (comparison, troubleshooting). |
 
-Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
+Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh` (add `&machine=rush` to open on Sparkle Rush).
 
 ### GTC booth in five steps
 
@@ -125,6 +136,11 @@ Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
    network*. **Preview card**, then scan its QR code with a phone to confirm the page opens.
 5. Staff redeem codes on `http://127.0.0.1:8787/staff/rewards` (on the kiosk, or anywhere with the admin token).
 
+All four machines are offered in the lobby by default, and each gives claim codes in the GPU theme: one per
+won plush or bridge box, one per Tumble Shelf session or Sparkle Rush run that reaches its prize line
+([docs/REWARDS.md](docs/REWARDS.md#which-machine-gives-what)). To run a single machine, set *Settings → Game →
+Machines → Home machine* (or add `&machine=…` to the URL in step 3) and switch *Machine lobby* off.
+
 ## Controls
 
 | Input | Action |
@@ -133,6 +149,10 @@ Kiosk example: `http://127.0.0.1:8787/?display=portrait86&lang=zh`.
 | Arrow keys or `W` `A` `S` `D` | Move the claw |
 | Big button, `Space` or `Enter` | **START** → **GRAB** → **PLAY AGAIN** |
 | **TAP TO PLAY** (attract mode) | Same as START: stops the demo and starts a round |
+| **MACHINES** (control panel menu) | Opens the machine lobby between tries: ◀ ▶ (or arrow keys, a swipe) to browse, PLAY / `Enter` to switch, `Esc` to close |
+| **Call staff** (Tippy Bridge) | Puts a stuck box back on the bars (never a win) |
+| Buttons **1** and **2** (Tippy Bridge, *Two buttons* controls) | Hold 1 to move right, then hold 2 to move back; letting go of 2 drops the claw |
+| ▲ ▼ ◀ ▶, letters, `Enter` (Sparkle Rush top-10 run) | Enter three initials |
 | `F` | Toggle full screen |
 | `Esc` | Close the open dialog (settings: same as Cancel) |
 
@@ -155,6 +175,7 @@ open dialogs close, the session score is cleared and the field is restocked.
 | --- | --- | --- |
 | Physics & rules | 120 Hz fixed step, cable as a one-sided spring, motorised fingers, real contacts, slip reasons, idempotent prize award. | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PHYSICS.md](docs/PHYSICS.md) |
 | Points & attract mode | Rarity tiers, scoring, combos, idle reset, demo rounds, call to action. | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/SETTINGS.md](docs/SETTINGS.md#1-game) |
+| Machines | Plush Classic, Tippy Bridge, Tumble Shelf, Sparkle Rush: the lobby, sessions (open, 5 tries, 75 s), session prizes with one claim code, the Sparkle Rush top 10 with initials, today's pick ×1.5, unlock by prizes, attract mode on the home machine (optionally visiting every machine), `?machine=`. Classic is bit-identical to before (golden trace). | [docs/machines/](docs/machines/), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#machines), [docs/SETTINGS.md](docs/SETTINGS.md#machines), [docs/design/machines.md](docs/design/machines.md) |
 | Characters & assets | Procedural SDF modelling → GLB (meshopt) + `manifest.json` (collision proxies, mass, fallback); textured AI-generated models imported with `npm run assets:import`; any character slot also accepts an ordinary `.glb`, through the manifest or by in-app import. | [docs/ASSETS.md](docs/ASSETS.md) |
 | Display presets | Normalised layout solver, safe zone, panel anchor, per-preset settings, phone layout, simulated 9:16 screen. | [docs/DISPLAYS.md](docs/DISPLAYS.md) |
 | Window Perspective | Off-axis frustum from the tracked eye position; countdown calibration, head-turn effect, distance calibration. | [docs/CALIBRATION.md](docs/CALIBRATION.md), [docs/DISPLAYS.md](docs/DISPLAYS.md) |
@@ -221,14 +242,22 @@ Settings on this machine is ignored) and a fresh temporary `PLUSH_DATA_DIR`. `PL
 Run one spec with `npx playwright test tests/e2e/<file>`. Coverage and the last recorded
 results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 
+Machines have two more headless checks (Node, no browser):
+
+```bash
+npx tsx tools/dev/golden-classic.ts --check              # classic replays its recorded trace bit for bit
+npx tsx tools/dev/machine-sweep.ts --machine bridge      # fairness gates of a machine (bridge | shelf | rush),
+                                                         # --difficulty all, --perf; exit 1 on a failed gate
+```
+
 ## Project layout
 
 | Path | Contents |
 | --- | --- |
 | `index.html`, `src/main.tsx` | Entry point |
-| `src/app/` | Composition root (`Game.ts`), bootstrap, UI store, launch parameters, presets, automatic optimiser, demo pilot |
+| `src/app/` | Composition root (`Game.ts`), bootstrap, UI store, launch parameters, presets, automatic optimiser, demo pilot; `MachineDirector` and `MachinePilot` (machines) |
 | `src/core/` | Shared types, event emitter, maths, the audio / guide / tracker port contracts |
-| `src/game/` | `GameCore`, round state machine, round controller, toy field, rarity, scoring, idle timer and attract director — no DOM, no rendering |
+| `src/game/` | `GameCore`, round state machine, round controller, toy field, rarity, scoring, idle timer and attract director — no DOM, no rendering; `machines/`: the machine registry, the bridge, shelf and rush genres, play sessions, today's pick |
 | `src/physics/` | Rapier world, claw rig, grip monitor, field dimensions |
 | `src/plush/` | Manifest types, GLB loading (textured and procedural models), plush material and deformation, custom model import |
 | `src/scene/` | Renderer and post-processing (`Stage`), environment lighting, contact shadows, cabinet, claw and toy visuals, procedural textures; `fx/` particles, aura and light show |
@@ -237,7 +266,7 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
 | `src/tracking/` | Camera, MediaPipe inference (worker or main thread), eye and head-direction estimation, filtering, countdown and distance calibration, phone capture policy |
 | `src/layout/` | HUD layout solver (incl. phones), 9:16 frame, safe-area insets, phone behaviour |
 | `src/settings/` | Settings specification, store and migrations |
-| `src/ui/` | React HUD, score HUD, attract call to action, calibration overlay, dialogs and the settings dialog |
+| `src/ui/` | React HUD, score HUD, attract call to action, calibration overlay, dialogs and the settings dialog; `machines/`: lobby, session HUD, try toast, session card, initials entry |
 | `src/audio/` | Web Audio engine, studio play-lists and moments, fallback synthesiser |
 | `src/ai/` | Guide director, prompt, local lines (incl. the GTC booth-host pools), speech, cache, key client |
 | `src/brand/` | Brand kits (GTC, neutral), NVIDIA palette, logo / font slots, the brand-file listing |
@@ -265,7 +294,9 @@ results are in [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md).
   inference worker refuses every request to another origin.
 - **AI guide**: only game facts leave the device (event type, theme, toy name,
   result, language) and only to your own API server, which forwards them to OpenAI when a key is configured.
-- **Storage**: settings, the prize collection and the best / lifetime points live in `localStorage`;
+- **Storage**: settings, the prize collection, the best / lifetime points and the machines' top-10 boards (three
+  initials a player typed, a score and a time — no other personal data, never sent anywhere, not even to the
+  guide) live in `localStorage`;
   imported custom models live in IndexedDB. Nothing of this is sent to a server. A replacement OpenAI key typed in
   the settings is the one exception that goes to *your* API server (once), which keeps it in `.data/secrets.json`.
 - **Exports**: the configuration export contains settings only — no keys, no
@@ -299,6 +330,8 @@ What it **cannot** show, and what is therefore **not verified**:
 | Look of the textured models, effects and lighting on a real GPU | Screenshots from software rendering only; whole-frame triangle counts at Medium are about twice the procedural models'. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md), [docs/ASSETS.md](docs/ASSETS.md) |
 | Touch input on real touch hardware, audio output devices, Safari and Firefox | Only Chromium with synthetic pointer and touch events was used. | Manual pass |
 | The official GTC / NVIDIA artwork in the game | None is in the repository; only the original placeholder and stand-in files in tests were drawn. A logo of a very different shape is covered by the placement maths, not by a render. | Drop the files in ([docs/BRAND.md](docs/BRAND.md)) and check *Settings → Themes* and each screen |
+| Whether Tippy Bridge, Tumble Shelf and Sparkle Rush are fair and fun for real players | The prize rates and tries per prize come from headless sweeps of an attract pilot with 2 cm aim noise (the gates in [docs/machines/](docs/machines/)), not from people. Unit tests check the rules, sessions, session prizes and codes; the e2e specs `29-machines-glue` and `30-lobby` drove the machines in headless Chromium. | Booth dry run; tune *Tries per session*, *Boxes for a prize* and *Gem value for a prize* |
+| Frame rate of the three new machines on real hardware | Their draw calls and triangles were counted on software rendering ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)); no frame rate was measured. | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) checklist on each machine |
 | Scanning the claim QR with real phones, and the claim page on event Wi-Fi | The QR was decoded from screenshots with a QR decoder and the claim page was opened in emulated phones on the container's own network. Event Wi-Fi often isolates clients, so phones may not reach the kiosk's LAN address. | Booth dry run; [docs/REWARDS.md](docs/REWARDS.md) (public claim link option) |
 
 Other known limitations:

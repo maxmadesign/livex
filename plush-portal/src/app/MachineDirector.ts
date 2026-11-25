@@ -23,7 +23,7 @@ import type { GameCore } from '../game/GameCore';
 import { bridgeState } from '../game/machines/bridge';
 import { dailyPick, isUnlocked, winsToUnlock, type UnlockMode } from '../game/machines/daily';
 import type { GenreId, MachineId, SessionEndReason } from '../game/machines/ids';
-import { GENRES, MACHINES, isMachineId, isPendingGenre, isPlayable, machineDef, neighbours, resolveMachine } from '../game/machines/registry';
+import { GENRES, MACHINES, isMachineId, isPendingGenre, isPlayable, machineDef, resolveMachine } from '../game/machines/registry';
 import { rankPosition } from '../game/machines/rush';
 import type { MachineDef, ScoredItem, SessionSnapshot } from '../game/machines/types';
 import { rarityOf, type RarityTier } from '../game/rarity';
@@ -77,9 +77,9 @@ export const AUTO_ADVANCE: Readonly<Record<GenreId, { miss: number; scored: numb
   rush: { miss: 0.35, scored: 0.35 },
 };
 
-/** Initials may be entered for this long; then the place is saved as `???`. */
 /** Longest wait for a session prize's claim code before its line goes out without the scan invitation. */
 const PRIZE_LINE_WAIT_MS = 1500;
+/** Initials may be entered for this long; then the place is saved as `???`. */
 export const INITIALS_SECONDS = 30;
 /** Attract cycle: the next offered machine after this many demo rounds. */
 export const ATTRACT_CYCLE_ROUNDS = 3;
@@ -174,7 +174,12 @@ interface SwitchOptions {
   /** Announce it (machine_selected). */
   guide: boolean;
   why: string;
+  /** Only while attract mode lasts: dropped if a player starts before it ran (the way back home). */
+  attractOnly?: boolean;
 }
+
+/** Settings that change which machines attract mode may show. */
+const LINEUP_PATHS: readonly string[] = ['machines.home', 'machines.hidden', 'machines.lobby', 'machines.unlock', 'machines.attractCycle'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -331,7 +336,7 @@ export class MachineDirector {
   }
 
   dispose(): void {
-    this.pendingSayOff?.();
+    this.dropSessionLine();
     for (const off of this.offs.splice(0)) off();
   }
 
@@ -406,6 +411,10 @@ export class MachineDirector {
       if (!m.atRoundBoundary) throw new Error(`not at a round boundary (${m.phase})`);
       const resolved = resolveMachine(id, this.machines, { includeUnavailable: this.allowUnavailable });
       if (resolved.def.id !== id) throw new Error(`machine "${id}" can not be built`);
+      // The session being left: its line is not spoken over the next machine, and a top-10 place
+      // still waiting for initials is kept as `???` (as PLAY AGAIN does; the idle reset drops it first).
+      this.dropSessionLine();
+      if (ui.getState().rankEntry) this.commitRank(UNKNOWN_INITIALS);
       host.resetRewards();
       ui.setState({ result: null, prize: null, sessionResult: null, rankEntry: null, scorePopups: [] });
       this.resetSessionState();
@@ -468,6 +477,11 @@ export class MachineDirector {
     if (entry && this.host.now() >= entry.deadline) this.commitRank(UNKNOWN_INITIALS);
     if (this.switching || ui.getState().themeBusy) return;
     const boundary = m.atRoundBoundary || (this.host.inAttract() && !m.busy);
+    // The way back home was for attract mode: a player who started meanwhile stays where they are.
+    if (this.pending?.options.attractOnly && !this.host.inAttract()) {
+      this.pending = null;
+      for (const resolve of this.waiters.splice(0)) resolve(false);
+    }
     if (this.pending && (boundary || (this.host.inAttract() && m.demo))) {
       const { id, options } = this.pending;
       if (id === this.current && !this.refreshQueued) {
@@ -479,7 +493,8 @@ export class MachineDirector {
       void this.switchTo(id, options);
       return;
     }
-    if (this.refreshQueued && boundary) {
+    // Never at RESULT: a rebuild there would wipe the result card and a win's claim QR (bridge).
+    if (this.refreshQueued && boundary && m.phase !== 'RESULT') {
       const snap = core.session.snapshot();
       // A tries / timed session is never rebuilt under a player; an open one (classic, bridge) is.
       if (snap.state === 'idle' || (snap.kind === 'open' && snap.state === 'running')) {
@@ -489,15 +504,39 @@ export class MachineDirector {
     }
     if (this.machines.attractCycle && m.phase === 'ATTRACT' && this.demoRounds >= ATTRACT_CYCLE_ROUNDS && ui.getState().modal === null) {
       this.demoRounds = 0;
-      const next = neighbours(this.current, this.offered()).next;
-      if (next && next.id !== this.current && this.unlocked(next)) void this.switchTo(next.id, { start: false, guide: false, why: 'attract cycle' });
+      const next = this.nextAttractMachine();
+      if (next) void this.switchTo(next, { start: false, guide: false, why: 'attract cycle' });
     }
+  }
+
+  /**
+   * The machines attract mode visits in turn: the offered ones that are unlocked, in lobby order.
+   * With the lobby off the kiosk is a single machine (home only).
+   */
+  private attractRotation(): MachineDef[] {
+    if (!this.machines.lobby) return this.offered().filter((d) => d.id === this.home());
+    return this.offered().filter((d) => this.unlocked(d));
+  }
+
+  /** The attract cycle's next machine: the one after the current machine in the rotation (home when it is not in it). */
+  private nextAttractMachine(): MachineId | null {
+    const rotation = this.attractRotation();
+    const i = rotation.findIndex((d) => d.id === this.current);
+    const next = i < 0 ? this.home() : rotation[(i + 1) % rotation.length]?.id;
+    return next && next !== this.current ? next : null;
   }
 
   /** Committed settings changed (paths of the diff). */
   onSettingsChanged(paths: readonly string[]): void {
     const genre = this.genre;
     if (genre !== 'classic' && paths.some((p) => p.startsWith(`machines.${genre}.`))) this.refreshQueued = true;
+    // Attract mode follows a new home machine (or a line-up that no longer includes the machine it
+    // shows) at once; otherwise it would wait for some later player's idle reset.
+    if (this.host.inAttract() && !this.pending && paths.some((p) => LINEUP_PATHS.includes(p))) {
+      const home = this.home();
+      const keep = !paths.includes('machines.home') && this.machines.attractCycle && this.attractRotation().some((d) => d.id === this.current);
+      if (home !== this.current && !keep) this.pending = { id: home, options: { start: false, guide: false, why: 'settings', attractOnly: true } };
+    }
     if (paths.some((p) => p.startsWith('machines.'))) this.refreshUi();
   }
 
@@ -505,6 +544,7 @@ export class MachineDirector {
 
   /** START: a player took over from attract mode (the field is back to its start layout). */
   onStart(): void {
+    this.dropSessionLine();
     this.resetSessionState();
     this.host.ui.setState({ sessionResult: null, rankEntry: null });
     this.refreshUi();
@@ -515,12 +555,13 @@ export class MachineDirector {
    * an unconfirmed ranking place is dropped, and the machine returns to `home` behind the curtain.
    */
   onIdleReset(): void {
+    this.dropSessionLine();
     this.host.ui.setState({ sessionResult: null, rankEntry: null });
     this.resetSessionState();
     const cancelled = this.pending !== null;
     this.pending = null;
     const home = this.home();
-    const options: SwitchOptions = { start: false, guide: false, why: 'idle reset' };
+    const options: SwitchOptions = { start: false, guide: false, why: 'idle reset', attractOnly: true };
     // A switch (or a theme change) under way finishes first; then home.
     if (this.switching || this.host.ui.getState().themeBusy) this.pending = { id: home, options };
     else if (home !== this.current) void this.switchTo(home, options);
@@ -529,9 +570,36 @@ export class MachineDirector {
     this.refreshUi();
   }
 
-  /** The field was filled anew (Game.populate): what a session prize may be. */
+  /**
+   * The field was filled anew (Game.populate: a theme change from the player's theme button, a toy
+   * setting, Settings → rebuild): what a session prize may be. A tries / timed session that has
+   * already begun starts over with the fresh field; otherwise a theme change would hand the player a
+   * full shelf or pile (both diamonds back) with the session's tries, clock and points running on.
+   */
   afterPopulate(): void {
     this.setPrints();
+    const { core } = this.host;
+    const m = core.machine;
+    const snap = core.session.snapshot();
+    if (snap.kind === 'open' || snap.state !== 'running' || m.demo || this.host.inAttract()) return;
+    if (snap.tries === 0 && !snap.timerStarted) return;
+    this.restartSession();
+  }
+
+  /** The running session ends without a result and a fresh one starts at a new READY (the field is already fresh). */
+  private restartSession(): void {
+    const { core, ui, scores } = this.host;
+    const m = core.machine;
+    this.dropSessionLine();
+    core.session.end('abandoned');
+    this.resetSessionState();
+    scores.resetSession();
+    this.host.publishScore(null);
+    ui.setState({ result: null, scorePopups: [] });
+    this.host.log('info', `${this.current} session started over: the field was filled anew`);
+    if (m.phase === 'RESULT') m.next(false);
+    else core.controller.resetRound('new_session', 'READY');
+    this.refreshUi();
   }
 
   /**
@@ -586,6 +654,7 @@ export class MachineDirector {
     const { core, ui, scores } = this.host;
     const m = core.machine;
     if (m.demo || m.phase === 'ATTRACT' || !this.sessionOver()) return false;
+    this.dropSessionLine();
     if (ui.getState().rankEntry) this.commitRank(UNKNOWN_INITIALS);
     this.host.resetRewards();
     ui.setState({ result: null, prize: null, sessionResult: null, rankEntry: null, scorePopups: [] });
@@ -723,6 +792,8 @@ export class MachineDirector {
 
   private onItemScored(roundId: number, toy: ToyBody, item: ItemSpec): void {
     const demo = this.host.core.machine.demo;
+    // A late piece after a run or session has ended is not the player's (the session ignores it): no show.
+    if (!demo && this.sessionOver()) return;
     for (const cue of itemScoredSfx(item)) this.cue(cue, demo ? 0.7 : 1);
     const p = toy.pose.pos;
     const tier = item.print ? rarityOf(item.print) : valueTier(item.value);
@@ -871,11 +942,17 @@ export class MachineDirector {
    * Game.emitPrizeWon does for a classic win; a new session or a switch first drops the line.
    */
   private sayWhenCodeSettles(roundId: number, typeId: string, context: Partial<MachineFacts>): void {
-    this.pendingSayOff?.();
+    this.dropSessionLine();
     const { ui } = this.host;
     const pending = () => {
       const r = ui.getState().reward;
       return r.roundId === roundId && r.state === 'issuing';
+    };
+    // The code came (or will not come) for this very round; a reset to idle (PLAY AGAIN, a switch,
+    // the idle reset, a theme change) is not an answer and drops the line.
+    const settled = () => {
+      const r = ui.getState().reward;
+      return r.roundId === roundId && r.state !== 'idle';
     };
     const send = () => {
       this.sayToy = typeId;
@@ -899,10 +976,15 @@ export class MachineDirector {
       if (deliver && ui.getState().sessionResult?.roundId === roundId) send();
     };
     const unsubscribe = ui.subscribe(() => {
-      if (!pending()) finish(true);
+      if (!pending()) finish(settled());
     });
     const timer = setTimeout(() => finish(true), PRIZE_LINE_WAIT_MS);
     this.pendingSayOff = () => finish(false);
+  }
+
+  /** A session line still waiting for its claim code is not spoken any more. */
+  private dropSessionLine(): void {
+    this.pendingSayOff?.();
   }
 
   /** The session prize's character while its line is being built (Game.facts puts it in facts.toy). */

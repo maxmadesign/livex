@@ -19,7 +19,41 @@ booth staff ── /staff/rewards ──────────▶  search code
 
 The wire format (request / response bodies, error codes, code alphabet, limits) is in
 `src/rewards/protocol.ts`; the kiosk's settings are the `rewards` section of
-`src/settings/spec.ts`. This page covers the server: `server/rewards/`.
+`src/settings/spec.ts`. This page covers the server: `server/rewards/`, plus which machine earns a
+code (next section).
+
+## Which machine gives what
+
+The rule is the same on every machine: a code only for a real prize that physics decided, only in a
+theme where `rewards.mode` gives codes (`gtc`: the GPU Party theme), never for a demo round or in
+attract mode, and exactly **one code per prize**. What counts as a prize depends on the machine
+(rules: [machines/](machines/)):
+
+| Machine | What earns a prize | Codes | Where the QR shows |
+| --- | --- | --- | --- |
+| Plush Classic | A plush that falls through the prize chute | One per won round | The win card |
+| Tippy Bridge | The box dropping through the pit; the prize is the character printed on it | One per dropped box. A box that drops between tries is paid at the player's next grab, under that try's round | The win card |
+| Tumble Shelf | A session (`machines.shelf.tries`, 5 tries) that drops at least `machines.shelf.rewardItems` (5) boxes into the trough; the prize is the rarest character printed on the dropped boxes (the earliest drop on a tie). Single boxes score points only | One per qualifying session (a **session prize**) | The session card |
+| Sparkle Rush | A run (`machines.rush.seconds`, 75 s) whose raw gem value (the pieces' values added up, no multipliers) reaches `machines.rush.rewardValue` (700). ≥ 1× the value gives a common plush, ≥ 1.5× rare, ≥ 2× epic, ≥ 3× legendary: the enabled character of that tier the collection holds least of (a lower tier if the theme has none) | One per qualifying run (a session prize) | The session card |
+
+Session prizes in detail (`src/app/MachineDirector.ts`, `src/game/machines/session.ts`):
+
+- The prize is awarded once, when the session ends (out of tries, or time up), for the session's last
+  try: `RoundMachine.awardSessionPrize` accepts a round id once, never a demo round. It enters the
+  collection once (prize id `<page>-<round>-S`) and counts towards the machine's *Prizes won here*.
+- The kiosk asks for its code once, keyed like every other code on the page load and that round id
+  (round ids never repeat within a page load; a reload is a new page session). A retry of the same
+  request returns the same code (`POST /api/rewards/issue`: same page load + round → same code,
+  `repeated: true`), so a session prize can never mint two.
+- The session card shows the QR for `rewards.qrSeconds`; the idle reset waits for it as for a win card.
+  PLAY AGAIN, MACHINES and the idle reset close the card and hide the QR (the code stays valid on the
+  server until it expires). The guide's session line waits up to 1.5 s for the code, so it only
+  invites a scan when the QR is really there; if the card is closed first, the line is dropped.
+- A run or session that ends without reaching the threshold gets no prize and no code. Points,
+  *Today's pick* bonus and the Sparkle Rush ranking never change prizes; with points switched off
+  prizes and codes work the same.
+- A theme change (or another fresh field) in the middle of a session starts the session over, so a
+  refilled shelf or pile can never count towards one session prize.
 
 ## Running it
 
@@ -299,6 +333,9 @@ kit (`PLUSH_BRAND=neutral`) shows "GPU Party" and its own emblem and no GTC or N
   (see Storage).
 - The server does not draw QR codes; the kiosk does (from `url`).
 - De-duplication is per page load + round. A reload of the game starts a new session.
+- A theme change while a Sparkle Rush session card is up between tries (the run ended in READY) hides
+  its QR at once (Game's theme rebuild resets the reward flow; the code stays valid on the server).
+  Classic and bridge win cards are not affected: theme changes wait while a RESULT is shown.
 - Expiry uses the server clock. Redeemed codes stay redeemed after their expiry time.
 - Staff can not redeem a code before the visitor chose a reward, nor after it expired.
 - Rate limits are per address: many visitors behind one NAT share a bucket (40 page views per
@@ -352,3 +389,11 @@ Not verified:
 - The official GTC / NVIDIA artwork and font files (not in the repo; only stand-ins were tested).
 - The kiosk side (win card, QR drawing, settings) together with this server: that is a separate
   workstream and was not run against these routes here.
+
+Session prizes (round 4B): `tests/unit/app/machineDirector.test.ts` runs real sessions headless
+(real physics, the real `RewardFlow` with a stand-in client): one prize and exactly one code per
+qualifying session, none below the threshold, none for demo rounds, a distinct round id per code,
+and the session line dropped by PLAY AGAIN, a switch or the idle reset. The e2e specs
+`29-machines-glue` and `30-lobby` check the session prize, its collection entry and the session
+card's reward state in the browser (recorded by those workstreams; not re-run in this review). The
+claim page for a session prize was not opened on a phone.

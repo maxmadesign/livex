@@ -39,6 +39,8 @@ The one rule the structure exists to enforce:
 | --- | --- | --- | --- |
 | Core | `src/core/{types,contracts,events,math}.ts` | Shared types, typed event emitter, the three port interfaces | nothing |
 | Simulation | `src/game/{GameCore,RoundMachine,RoundController,ToyField}.ts`, `src/physics/{PhysicsWorld,ClawRig,GripMonitor,fieldSpec}.ts` | Fixed-step world, claw rig, grip evaluation, round rules, toy placement | core, Rapier, manifest *types* |
+| Machines (headless) | `src/game/machines/{ids,types,registry,classic,bridge,shelf,rush,pieces,session,daily}.ts` | A machine is data (`MachineDef`) plus a genre (`GenreModule`: geometry, try rules, field, points, session rule, session prize, attract aim); the registry; `PlaySession` (open / tries / timed sessions above the rounds); today's pick and the unlock rule. See [Machines](#machines) | core, simulation (no DOM) |
+| Machine glue | `src/app/{MachineDirector,MachinePilot,machineSfx}.ts`, `src/persistence/machines.ts`, `src/ui/machines/*`, `src/scene/machines/*`, `src/scene/ItemVisuals.ts` | Switching behind the curtain, items settlement, the session card, session prize and its code, local rankings, today's pick, attract mode with several machines; the lobby, session HUD, try toast, session card and initials entry; the cabinet dressing and the items' rendering | all of the above |
 | Points, rarity, attract | `src/game/{scoring,rarity,attract}.ts`, `src/persistence/scores.ts` | Rarity tier per character; pure `scoreRound` and the idempotent `ScoreKeeper` (player and demo tracks); `IdleTimer` (wall clock) and `AttractDirector` (demo rounds in attract mode); best / lifetime storage | core (headless, no DOM) |
 | Assets | `src/plush/{manifest,PlushLibrary,PlushMaterial,PlushDeformer,customModels,fallbackGeometry,thumbnails}.ts` | Manifest contract (v4: optional textured model + provenance), GLB loading incl. texture tiers, plush shading (procedural and `PLUSH_TEXTURED` variants), visual soft-body deformation, user GLB import | core, Three.js |
 | Scene | `src/scene/{Stage,Cabinet,ClawVisual,ToyVisuals,materials,textures}.ts`, `src/themes/themes.ts` | Renderer, post-processing, cabinet geometry, visuals that follow physics poses | assets, perspective |
@@ -211,6 +213,51 @@ Outcome rules:
 
 Grip physics, the assist spring and the tuning constants are described in [PHYSICS.md](PHYSICS.md).
 
+## Machines
+
+The cabinet can be one of four machines: **Plush Classic** (`classic`, the claw machine above), **Tippy
+Bridge** (`bridge`), **Tumble Shelf** (`shelf`) and **Sparkle Rush** (`rush`). Design and every deviation:
+[design/machines.md](design/machines.md); rules and measurements per machine: [machines/](machines/).
+
+- **One simulation identity, a rebuildable stack.** `GameCore` keeps one `RoundMachine`, one controller
+  event emitter and one `PlaySession` for the page's lifetime: round ids keep counting across machines
+  (claim codes and prize ids stay unique) and listeners bound once keep working. The physics stack —
+  world, claw, grip monitor, round controller, field — belongs to the machine. `GameCore.setMachine`
+  (round boundary only) ends a running session without a result, disposes the old stack, builds a fresh
+  one from the machine's `FieldGeometry` (floor or floor with a hole, chute guard, opening, fixtures such
+  as bars, fences, the shelf and its gutter, the claw's home), fills and settles it off-screen and
+  restarts the round. Classic after any number of switches is a fresh classic world.
+- **Classic is untouched.** On classic the controller's try rules are `null` and today's code runs
+  verbatim. `tools/dev/golden-classic.ts --check` replays a recorded classic script (player rounds,
+  restocks, demo rounds, a takeover) and compares every phase, event and pose hash with the committed
+  trace; `tests/unit/machines` runs it plus a classic → other machine → classic round trip.
+- **A try on another machine** goes through `TryRules` (`beginTry`, `liftTarget`, `transportTarget`,
+  `beginSettling`, `postStep`, `canFinish`, `resultExtras`, and `filterInput` for the bridge's two-button
+  controls). Outcomes keep the one physical test of every machine: the centre of mass below the opening's
+  award height, over the opening, a collider touched the sensor. Prize machines (classic, bridge) award
+  through `RoundMachine.awardPrize`; the bridge latches a drop outside its award phases and pays it at
+  the player's next grab. Items machines (shelf, rush) score each item once through
+  `RoundMachine.scoreItem` in READY … SETTLING (several per try; a late fall counts towards the next try).
+- **Sessions** sit above the rounds (`PlaySession`): `open` (classic, bridge: never ends by itself),
+  `tries` (shelf: ends at the RESULT of the last try) and `timed` (rush: a clock on simulated time, so a
+  paused game pauses it, started by the first move; the try under way when it runs out completes and
+  counts). At the end of a tries / timed session the genre may grant one session prize
+  (`RoundMachine.awardSessionPrize`, once per round id, never for demo rounds) and input stays locked
+  until PLAY AGAIN starts a new session. Demo rounds never start or count towards a session.
+- **`MachineDirector`** (`src/app`) holds everything that depends on which machine is played, so
+  `Game` keeps hook lines only: the switch (curtain, rewards and cards cleared, visuals cleared,
+  `setMachine`, cabinet and claw visual rebuilt, the machine's own score record, warm-up), items
+  settlement (`scoreTry`, today's bonus, once per round id), the session card and its one claim code, the
+  local rankings (rush), today's pick, the unlock mode, the guide's machine events, attract mode with
+  several machines (`MachinePilot` steers through the player's input path with the genre's aim; the
+  idle reset returns to the home machine; the optional attract cycle) and the `ui.machine` slice.
+- **Nothing outside physics decides.** Points, today's bonus, rankings and the lobby are presentation;
+  the independence test (`tests/unit/core/independence.test.ts`) covers `src/game/machines` like the
+  rest of `src/game`.
+- **Adding a machine**: a variant of an existing genre is one more `MachineDef` with its own `params`; a
+  new genre is one module file plus one registry line, kept `available: false` until its tests, sweeps
+  (`tools/dev/machine-sweep.ts --machine <id>`) and e2e pass.
+
 ## UI ↔ engine communication
 
 Two vanilla zustand stores and three ports; no React state is authoritative.
@@ -221,7 +268,8 @@ Two vanilla zustand stores and three ports; no React state is authoritative.
 | `SettingsStore` (`src/settings/store.ts`) | UI ↔ engine | Applied settings, the draft being edited, `view()` = draft or applied |
 | `Game` methods | UI → engine | `setDirection`, `grab`, `pressStart`, `playAgain`, `chooseProfile`, `restartRound`, `restockNow`, `resetScores`, `dismissPopup`, … (calibration goes straight to the tracker port: `startCalibration`) |
 | `AudioPort`, `GuidePort`, `TrackerPort` (`src/core/contracts.ts`) | engine → subsystem | Narrow interfaces; each has a null implementation in `src/app/nullPorts.ts` |
-| Simulation events | simulation → `Game` | `RoundMachine`: `phase`, `result`, `award`, `watchdog`, `abort`, `aimTick`; `RoundController`: `grabStarted`, `clawTouch`, `gripEvaluated`, `liftStarted`, `slipped`, `released`, `prizeDetected`, `strayInBin`, `recovered`; `PhysicsWorld.impacts` |
+| Simulation events | simulation → `Game` | `RoundMachine`: `phase`, `result`, `award` (`session: true` for a session prize), `watchdog`, `abort`, `aimTick`, `item`; `RoundController`: `grabStarted`, `clawTouch`, `gripEvaluated`, `liftStarted`, `slipped`, `released`, `prizeDetected`, `strayInBin`, `recovered`, `itemScored`, `axisStage`; `PlaySession`: `started`, `second`, `timeLow`, `over`; `PhysicsWorld.impacts` |
+| Machine slice and methods | engine ↔ UI | `GameStore.machine` (the machine, its session, the coin plate, staff and lobby availability, today's pick), `sessionResult` (the session card), `rankEntry` (a top-10 place waiting for initials); `Game.selectMachine`, `openLobby`, `machineAction('staff')`, `stepInput`, `newSession`, `submitInitials`, `machineCards` |
 
 React components subscribe to store slices and call `Game` methods; they never
 touch Three.js or Rapier objects. Score popups are positioned by `Game.toScreen`, which projects a world point to

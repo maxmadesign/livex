@@ -3,8 +3,8 @@
  * 8.1, WS-D): the switch sequence, settlement, session prizes, rankings, today's pick, the guide
  * policy, the idle reset back home and the attract cycle.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameStore } from '../../../src/app/gameStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createGameStore, INITIAL_REWARD } from '../../../src/app/gameStore';
 import { MachineDirector, prizeTypeOf, type DirectorHost } from '../../../src/app/MachineDirector';
 import { MachinePilot } from '../../../src/app/MachinePilot';
 import type { GuideEventType, GuideFacts } from '../../../src/core/contracts';
@@ -13,14 +13,20 @@ import { AttractDirector } from '../../../src/game/attract';
 import type { GameCore } from '../../../src/game/GameCore';
 import { shelfAim } from '../../../src/game/machines/shelf';
 import type { ShelfParams } from '../../../src/game/machines/types';
-import { ScoreKeeper } from '../../../src/game/scoring';
+import { ScoreKeeper, type ScoreAward } from '../../../src/game/scoring';
+import { dailyPick } from '../../../src/game/machines/daily';
 import { createCollectionStore } from '../../../src/persistence/collection';
 import { rankingsOf } from '../../../src/persistence/machines';
 import { FIXED_DT } from '../../../src/physics/fieldSpec';
 import type { ToyBody } from '../../../src/physics/PhysicsWorld';
 import { defaultSettings, type Settings } from '../../../src/settings/spec';
-import { makeCore, playRound, roundParams, themeAssets } from '../game/harness';
+import { idle, makeCore, playRound, roundParams, themeAssets } from '../game/harness';
 import { installMemoryStorage } from '../settings/memoryStorage';
+import { RewardFlow } from '../../../src/rewards/flow';
+import type { IssueInput, RewardClient, RewardResult } from '../../../src/rewards/client';
+import type { IssueResponseBody } from '../../../src/rewards/protocol';
+import { openingCenter } from '../../../src/physics/fieldGeometry';
+import { addRanking } from '../../../src/persistence/machines';
 
 beforeEach(() => {
   installMemoryStorage();
@@ -44,10 +50,13 @@ interface Rig {
   clock: { now: number; today: string };
   /** Game's result path: the director first, classic code otherwise (here: nothing). */
   results: RoundResult[];
+  /** With `flow: true`: the real RewardFlow and the issue requests waiting for their answer. */
+  flow: RewardFlow | null;
+  issues: { input: IssueInput; answer: (r: RewardResult<IssueResponseBody>) => void }[];
 }
 
 /** A real core and the director around it, with a host that records what the game would do. */
-async function rig(options: { settings?: (s: Settings) => void; allowUnavailable?: boolean } = {}): Promise<Rig> {
+async function rig(options: { settings?: (s: Settings) => void; allowUnavailable?: boolean; flow?: boolean } = {}): Promise<Rig> {
   const core = await makeCore({ theme: 'sakura', seed: 7 });
   cores.push(core);
   const settings = defaultSettings();
@@ -56,8 +65,17 @@ async function rig(options: { settings?: (s: Settings) => void; allowUnavailable
   const collection = createCollectionStore();
   const scores = new ScoreKeeper();
   const attract = new AttractDirector(core);
-  const r: Partial<Rig> = { core, attract, calls: [], guide: [], rewards: [], sfx: [], toasts: [], settings, clock: { now: 1_000_000, today: '2026-11-25' }, results: [] };
+  const r: Partial<Rig> = { core, attract, calls: [], guide: [], rewards: [], sfx: [], toasts: [], settings, clock: { now: 1_000_000, today: '2026-11-25' }, results: [], flow: null, issues: [] };
   const rr = r as Rig;
+  if (options.flow) {
+    // Game's RewardFlow with a client whose answers the test sends (the code is "issuing" until then).
+    const client: RewardClient = {
+      session: 'review',
+      status: async () => ({ ok: false, reason: 'offline' }),
+      issue: (input) => new Promise((answer) => rr.issues.push({ input, answer })),
+    };
+    rr.flow = new RewardFlow({ ui, settings: () => ({ ...settings.rewards, mode: 'all' }), client, demoBuild: false, now: () => rr.clock.now });
+  }
   const host: DirectorHost = {
     core,
     ui,
@@ -96,9 +114,15 @@ async function rig(options: { settings?: (s: Settings) => void; allowUnavailable
     lightShow: () => undefined,
     ledPulse: () => undefined,
     emitGuide: (type) => rr.guide.push({ type, machine: rr.director.facts() ?? null }),
-    requestReward: (roundId, typeId) => rr.rewards.push({ roundId, typeId }),
-    cardShown: () => rr.calls.push('cardShown'),
-    resetRewards: () => undefined,
+    requestReward: (roundId, typeId) => {
+      rr.rewards.push({ roundId, typeId });
+      rr.flow?.onWin({ roundId, demo: false, themeId: 'sakura', prizeId: typeId, prizeName: typeId, tier: 'common', lang: 'en' });
+    },
+    cardShown: (roundId) => {
+      rr.calls.push('cardShown');
+      rr.flow?.onCardShown(roundId);
+    },
+    resetRewards: () => rr.flow?.reset(),
     toast: (key) => rr.toasts.push(key),
     log: () => undefined,
     now: () => rr.clock.now,
@@ -507,5 +531,368 @@ describe("today's pick and the lobby cards (design 4.4)", () => {
     expect(cards[1]).toMatchObject({ current: false, dailyPick: true });
     r.settings.machines.unlock = 'progress';
     expect(r.director.cards()[1]).toMatchObject({ locked: true, winsToUnlock: 3 });
+  });
+});
+
+/* ------------------------------------------------------------------ review (round 4B) */
+
+/** Puts one of the machine's items just inside its opening, falling: the running try scores it. */
+function dropItem(c: GameCore): ToyBody {
+  const o = openingCenter(c.def.geometry.opening);
+  const item = c.field.onField().find((t) => t.item)!;
+  item.body.setTranslation({ x: o.x, y: o.y + 0.02, z: o.z }, true);
+  item.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+  item.body.setLinvel({ x: 0, y: -1, z: 0 }, true);
+  item.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  return item;
+}
+
+/** A player try that scores one item (dropped into the opening while the claw descends). */
+function scoringTry(r: Rig, x = 0.1, z = -0.3): RoundResult {
+  let dropped = false;
+  const result = playRound(r.core, x, z, {
+    onStep: (c) => {
+      if (dropped || c.machine.phase !== 'DESCENDING') return;
+      dropped = true;
+      dropItem(c);
+    },
+  }).result;
+  expect(result.machine!.items.length).toBeGreaterThan(0);
+  return result;
+}
+
+/** Lets resolved promises run (the reward flow applies an answer in a `then`). */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+}
+
+/** Listeners registered on an Emitter (leak checks). */
+function listenerCount(emitter: object): number {
+  const map = (emitter as unknown as { listeners: Map<string, Set<unknown>> }).listeners;
+  let n = 0;
+  for (const set of map.values()) n += set.size;
+  return n;
+}
+
+const ISSUED: IssueResponseBody = { code: 'K7M2QX9D', url: 'http://192.168.1.20:8788/c/K7M2QX9D', reach: 'lan', issuedAt: '2026-11-25T10:00:00.000Z', expiresAt: '2026-11-27T10:00:00.000Z', options: 'both', repeated: false };
+
+describe('review: session prizes and their claim codes', () => {
+  it('the session line waits for its code; PLAY AGAIN, a switch or the idle reset while it waits drop it, so it is never spoken over what follows', { timeout: 180_000 }, async () => {
+    const r = await rig({ flow: true, settings: (s) => ((s.machines.shelf.tries = 1), (s.machines.shelf.rewardItems = 1)) });
+    await switchTo(r, 'shelf');
+    const lines = () => r.guide.filter((g) => g.type === 'session_over');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const prizeSession = () => {
+        const t = scoringTry(r);
+        const card = r.host.ui.getState().sessionResult!;
+        expect(card).toMatchObject({ machineId: 'shelf', roundId: t.roundId });
+        expect(card.rewardTypeId).not.toBeNull();
+        expect(r.host.ui.getState().reward).toMatchObject({ state: 'issuing', roundId: t.roundId });
+        return t;
+      };
+      // PLAY AGAIN while the code is still being issued.
+      prizeSession();
+      expect(lines()).toHaveLength(0);
+      expect(r.director.newSession()).toBe(true);
+      r.issues.at(-1)!.answer({ ok: true, body: ISSUED });
+      await flush();
+      vi.advanceTimersByTime(2000);
+      expect(lines()).toHaveLength(0);
+      // A switch while it waits (MACHINES on the session card).
+      prizeSession();
+      expect(r.director.select('classic')).toBe(true);
+      expect(await r.director.whenSwitched()).toBe(true);
+      vi.advanceTimersByTime(2000);
+      expect(lines()).toHaveLength(0);
+      // The idle reset: Game resets the rewards first, then tells the director (Game.idleReset).
+      await switchTo(r, 'shelf');
+      prizeSession();
+      r.flow!.reset();
+      r.attract.enter('idle_reset');
+      r.director.onIdleReset();
+      expect(await r.director.whenSwitched()).toBe(true);
+      vi.advanceTimersByTime(2000);
+      expect(lines()).toHaveLength(0);
+      // Control: the code arrives in time, the line goes out once.
+      await switchTo(r, 'shelf');
+      const t = prizeSession();
+      r.issues.at(-1)!.answer({ ok: true, body: ISSUED });
+      await flush();
+      expect(lines()).toHaveLength(1);
+      vi.advanceTimersByTime(2000);
+      expect(lines()).toHaveLength(1);
+      // Exactly one claim code per session prize, each for its own round id.
+      expect(r.issues.map((i) => i.input.roundId)).toEqual(r.rewards.map((x) => x.roundId));
+      expect(new Set(r.rewards.map((x) => x.roundId)).size).toBe(4);
+      expect(r.rewards.at(-1)!.roundId).toBe(t.roundId);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('review: timed runs and rankings', () => {
+  it('rush: a piece that falls in after the run has ended plays no score sound (it is not the run’s)', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.rush.rewardValue = 0) });
+    await switchTo(r, 'rush');
+    scoringTry(r);
+    r.core.field.clearBin();
+    r.core.machine.next(false);
+    r.core.session.setSecondsLeft(0.05);
+    idle(r.core, 0.2);
+    expect(r.director.sessionOver()).toBe(true);
+    expect(r.core.machine.phase).toBe('READY');
+    const sfx = r.sfx.length;
+    const points = r.host.ui.getState().sessionResult!.points;
+    dropItem(r.core);
+    idle(r.core, 1);
+    // The round machine records it for the dangling round; the run and the sounds ignore it.
+    expect(r.core.machine.roundItems.length).toBeGreaterThan(0);
+    expect(r.sfx.slice(sfx).filter((n) => n === 'sparkle' || n === 'score_count' || n === 'chute_drop' || n === 'combo')).toEqual([]);
+    expect(r.host.ui.getState().sessionResult!.points).toBe(points);
+  });
+
+  it('a top-10 place still waiting for initials is saved as ??? when the player switches machine (as PLAY AGAIN does)', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.rush.rewardValue = 0) });
+    await switchTo(r, 'rush');
+    scoringTry(r);
+    r.core.session.setSecondsLeft(0.02);
+    idle(r.core, 0.1);
+    const entry = r.host.ui.getState().rankEntry!;
+    expect(entry).toMatchObject({ machineId: 'rush', position: 1 });
+    expect(r.director.select('shelf')).toBe(true);
+    expect(await r.director.whenSwitched()).toBe(true);
+    expect(r.host.ui.getState().rankEntry).toBeNull();
+    expect(rankingsOf('rush')).toEqual([{ initials: '???', score: entry.score, at: r.clock.now, difficulty: 'arcade' }]);
+  });
+
+  it('ties keep the older run first; a tie with the 10th place does not rank', () => {
+    for (let i = 0; i < 10; i++) expect(addRanking('rush', { initials: 'AAA', score: 1000 - i * 10, at: 100 + i, difficulty: 'arcade' })).toBe(i + 1);
+    expect(addRanking('rush', { initials: 'BBB', score: 960, at: 500, difficulty: 'arcade' })).toBe(6);
+    const board = rankingsOf('rush');
+    expect(board).toHaveLength(10);
+    expect(board.slice(4, 7).map((e) => [e.initials, e.score])).toEqual([
+      ['AAA', 960],
+      ['BBB', 960],
+      ['AAA', 950],
+    ]);
+    // The 10th place now holds 920: another 920 does not make it.
+    expect(board[9]!.score).toBe(920);
+    expect(addRanking('rush', { initials: 'CCC', score: 920, at: 600, difficulty: 'arcade' })).toBeNull();
+    expect(rankingsOf('rush').map((e) => e.initials)).not.toContain('CCC');
+  });
+});
+
+describe('review: attract mode and settings', () => {
+  it('the attract cycle skips machines that are still locked and so comes back home', { timeout: 240_000 }, async () => {
+    const r = await rig({ settings: (s) => ((s.machines.attractCycle = true), (s.machines.unlock = 'progress')) });
+    // One prize collected: the bridge is open, shelf (3) and rush (5) are not.
+    r.host.collection.getState().addPrize(themeAssets('sakura')[0]!.id, 'p-1');
+    const visited: string[] = [r.director.machineId];
+    for (let round = 0; round < 9 && visited.length < 3; round++) {
+      demoRound(r);
+      r.director.update();
+      await r.director.whenSwitched();
+      if (r.director.machineId !== visited.at(-1)) visited.push(r.director.machineId);
+    }
+    expect(visited).toEqual(['classic', 'bridge', 'classic']);
+  });
+
+  it('with the lobby off the kiosk is a single machine: the attract cycle stays on home', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => ((s.machines.attractCycle = true), (s.machines.lobby = false), (s.machines.hidden = ['bridge', 'rush'])) });
+    for (let i = 0; i < 3; i++) {
+      demoRound(r);
+      r.director.update();
+    }
+    await r.director.whenSwitched();
+    expect(r.director.machineId).toBe('classic');
+  });
+
+  it('a new home machine (Settings → Machines) takes over attract mode at once, not after some later player', { timeout: 120_000 }, async () => {
+    const r = await rig();
+    expect(r.core.machine.phase).toBe('ATTRACT');
+    r.settings.machines.home = 'shelf';
+    r.director.onSettingsChanged(['machines.home']);
+    r.director.update();
+    expect(await r.director.whenSwitched()).toBe(true);
+    expect(r.director.machineId).toBe('shelf');
+    expect(r.core.machine.phase).toBe('ATTRACT');
+    expect(r.calls).not.toContain('pressStart');
+    expect(r.guide.filter((g) => g.type === 'machine_selected')).toHaveLength(0);
+  });
+
+  it('a settings rebuild of the bridge waits for READY: it never wipes the result card (or a win’s claim QR)', { timeout: 120_000 }, async () => {
+    const r = await rig();
+    await switchTo(r, 'bridge');
+    const miss = playRound(r.core, 0.3, -0.6).result;
+    expect(r.core.machine.phase).toBe('RESULT');
+    r.host.ui.setState({ result: miss });
+    r.calls.length = 0;
+    r.director.onSettingsChanged(['machines.bridge.gap']);
+    r.director.update();
+    expect(r.calls).not.toContain('setMachine:bridge');
+    expect(r.host.ui.getState().result).not.toBeNull();
+    r.core.machine.next(false);
+    r.director.update();
+    expect(await r.director.whenSwitched()).toBe(true);
+    expect(r.calls).toContain('setMachine:bridge');
+  });
+});
+
+describe('review: many switches', () => {
+  it('48 switches over every machine leave no emitter listeners, store subscriptions or timers behind', { timeout: 300_000 }, async () => {
+    const r = await rig({ flow: true });
+    let subscribed = 0;
+    const subscribe = r.host.ui.subscribe;
+    r.host.ui.subscribe = ((listener: Parameters<typeof subscribe>[0]) => {
+      subscribed++;
+      const off = subscribe(listener);
+      return () => {
+        subscribed--;
+        off();
+      };
+    }) as typeof subscribe;
+    const emitters = () => [listenerCount(r.core.machine.events), listenerCount(r.core.controllerEvents), listenerCount(r.core.session.events)];
+    const before = emitters();
+    const bodies = r.core.phys.world.bodies.len();
+    const colliders = r.core.phys.world.colliders.len();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      for (let i = 0; i < 12; i++) for (const id of ['bridge', 'shelf', 'rush', 'classic'] as const) await switchTo(r, id);
+      expect(emitters()).toEqual(before);
+      expect(subscribed).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+      // Classic after 48 switches is a fresh classic (a body per toy, the same static parts).
+      expect(r.core.phys.world.bodies.len()).toBe(bodies);
+      expect(r.core.phys.world.colliders.len()).toBe(colliders);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('review: bridge staff resets', () => {
+  it('Call staff pressed again and again only cycles the seeded start poses: never an award, never a lost latched drop', { timeout: 120_000 }, async () => {
+    const r = await rig();
+    await switchTo(r, 'bridge');
+    const box = r.core.field.onField().find((t) => t.item)!;
+    const startPoses = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      expect(r.director.machineAction('staff')).toBe(true);
+      const p = box.body.translation();
+      startPoses.add(`${p.x.toFixed(4)},${p.z.toFixed(4)}`);
+      // On the bars, at rest, the same box (nothing was won).
+      expect(p.y).toBeGreaterThan(0.1);
+      expect(box.inBin).toBe(false);
+    }
+    expect(r.host.collection.getState().wins).toBe(0);
+    expect(r.host.ui.getState().prize).toBeNull();
+    expect(startPoses.size).toBeGreaterThan(10);
+    // A box that went through the pit between tries waits for its award: staff can not take it back.
+    dropItem(r.core);
+    idle(r.core, 1);
+    expect(r.director.machineAction('staff')).toBe(false);
+    const paid = playRound(r.core, 0.2, -0.5);
+    expect(paid.awards).toBe(1);
+    expect(paid.result.outcome).toBe('won');
+    expect(r.host.collection.getState().wins).toBe(1);
+  });
+});
+
+describe('review: a fresh field mid-session', () => {
+  /** What Game.populate does on a theme change (the player's theme button) or Settings → rebuild. */
+  function repopulate(r: Rig): void {
+    r.core.populate(themeAssets('sakura'), 7);
+    r.director.afterPopulate();
+  }
+
+  it('rush: a theme change mid-run does not hand the player a full pile with the clock and the points running on; the run starts over', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.rush.rewardValue = 0) });
+    await switchTo(r, 'rush');
+    const diamonds = () => r.core.field.onField().filter((t) => t.item?.look === 'gemDiamond').length;
+    const full = diamonds();
+    // The player scores a diamond…
+    let dropped = false;
+    playRound(r.core, 0.1, -0.3, {
+      onStep: (c) => {
+        if (dropped || c.machine.phase !== 'DESCENDING') return;
+        dropped = true;
+        const d = c.field.onField().find((t) => t.item?.look === 'gemDiamond')!;
+        const o = openingCenter(c.def.geometry.opening);
+        d.body.setTranslation({ x: o.x, y: o.y + 0.02, z: o.z }, true);
+        d.body.setLinvel({ x: 0, y: -1, z: 0 }, true);
+      },
+    });
+    r.core.field.clearBin();
+    expect(diamonds()).toBe(full - 1);
+    const before = r.core.session.snapshot();
+    expect(before).toMatchObject({ state: 'running', tries: 1, timerStarted: true });
+    expect(before.value).toBeGreaterThanOrEqual(150);
+    r.core.machine.next(false);
+    // …then changes the theme between tries: the pile is full again.
+    repopulate(r);
+    expect(diamonds()).toBe(full);
+    const after = r.core.session.snapshot();
+    expect(after).toMatchObject({ state: 'running', tries: 0, value: 0, items: 0, timerStarted: false, secondsLeft: 75 });
+    expect(after.id).toBe(before.id + 1);
+    expect(r.core.machine.phase).toBe('READY');
+    expect(r.host.ui.getState().machine.session.points).toBe(0);
+  });
+
+  it('shelf: the same for a tries session; nothing changes before the first try, after the session or on the bridge', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.shelf.tries = 3) });
+    await switchTo(r, 'shelf');
+    const fresh = r.core.session.snapshot();
+    repopulate(r);
+    expect(r.core.session.snapshot()).toMatchObject({ id: fresh.id, state: 'running', tries: 0 });
+    scoringTry(r);
+    r.core.field.clearBin();
+    r.core.machine.next(false);
+    repopulate(r);
+    expect(r.core.session.snapshot()).toMatchObject({ id: fresh.id + 1, state: 'running', tries: 0, items: 0 });
+    // A session that is over keeps its card (PLAY AGAIN starts the next one).
+    for (let i = 0; i < 3; i++) playRound(r.core, 0.1, -0.3);
+    expect(r.director.sessionOver()).toBe(true);
+    const card = r.host.ui.getState().sessionResult;
+    repopulate(r);
+    expect(r.director.sessionOver()).toBe(true);
+    expect(r.host.ui.getState().sessionResult).toEqual(card);
+    // The bridge's open session simply goes on (a fresh box only loses progress).
+    await switchTo(r, 'bridge');
+    playRound(r.core, 0.3, -0.6);
+    const open = r.core.session.snapshot();
+    repopulate(r);
+    expect(r.core.session.snapshot()).toMatchObject({ id: open.id, tries: open.tries, state: 'running' });
+  });
+});
+
+describe("review: today's pick at midnight", () => {
+  it('the bonus is decided at each settlement: a session that runs over midnight gets ×1.5 before and ×1 after, and the HUD follows', { timeout: 120_000 }, async () => {
+    const r = await rig({ settings: (s) => (s.machines.shelf.tries = 5) });
+    // Two consecutive local dates: shelf is today's pick on the first, not on the second.
+    const ids = ['bridge', 'shelf', 'rush'] as const;
+    let day = new Date(2026, 10, 1);
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const next = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    for (let i = 0; i < 60 && !(dailyPick(ymd(day), [...ids]) === 'shelf' && dailyPick(ymd(next(day)), [...ids]) !== 'shelf'); i++) day = next(day);
+    expect(dailyPick(ymd(day), [...ids])).toBe('shelf');
+    r.clock.today = ymd(day);
+    await switchTo(r, 'shelf');
+    const published: (ScoreAward | null)[] = [];
+    (r.host as { publishScore: DirectorHost['publishScore'] }).publishScore = (a) => published.push(a);
+    expect(r.host.ui.getState().machine.bonus).toBe(1.5);
+    scoringTry(r);
+    const before = published.at(-1)!;
+    expect(before.dailyBonus).toBe(1.5);
+    r.core.field.clearBin();
+    // Midnight between two tries.
+    r.clock.today = ymd(next(day));
+    r.core.machine.next(false);
+    expect(r.host.ui.getState().machine.bonus).toBe(1);
+    scoringTry(r);
+    const after = published.at(-1)!;
+    expect(after.dailyBonus ?? 1).toBe(1);
+    expect(r.director.bonusFor(false)).toBe(1);
   });
 });

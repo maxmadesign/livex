@@ -2270,3 +2270,44 @@ pass with the flags flipped.
   at High and Ultra.
 - Outside this workstream's files: `src/settings/spec.ts` (`machines.rush.rewardValue` 600 → 700) and
   `tests/unit/machines/scaffold.test.ts` (the same number).
+
+## Implementation notes (review of round 4B)
+
+An adversarial review of the merged round (director, pilot, sessions, persistence, session prizes,
+UI glue). Every defect was reproduced by a failing unit test before the fix; the tests are in
+`tests/unit/app/machineDirector.test.ts` (the "review" blocks), `tests/unit/app/machinePilot.test.ts`
+and `tests/unit/machines/session.test.ts`. Classic stays bit-identical (golden trace and
+`tests/unit/machines` unchanged).
+
+| # | Found | Fixed | Why this way |
+| --- | --- | --- | --- |
+| R1 | A theme change from the player's theme button (or a toy setting, *Rearrange toys*) refilled the shelf or the rush pile in the middle of a session while its tries, clock and points ran on: both diamonds back mid-run, towards the prize line and the top 10. | `MachineDirector.afterPopulate` starts a tries / timed session that has begun over (fresh tries / clock, points 0, a new READY). Open sessions (classic, bridge) and finished sessions (card up) are left alone. | A fresh field is a fresh session; refusing the theme button on items machines would be a change outside the director. |
+| R2 | The session prize line waiting for its claim code was spoken after PLAY AGAIN, a switch or the idle reset: the reward flow's reset read as "the code settled". | The line is dropped explicitly at PLAY AGAIN, a switch, START and the idle reset, and a reward reset to `idle` is never taken as the answer. | Game resets the rewards before it tells the director (idle reset), so the director can not rely on call order. |
+| R3 | A timed run whose last try was aborted after the clock ran out (Settings → restart round, error recovery) stayed open until one more, free try. | `PlaySession.preStep` ends an expired run at the next READY / RESULT. | — |
+| R4 | A top-10 place still waiting for initials was dropped by a switch (MACHINES on the deck during the entry), while PLAY AGAIN keeps it as `???`. | A switch keeps it as `???` too; only the idle reset drops it (nobody is there). | The run was real and the player chose to leave. |
+| R5 | A piece falling in after a run had ended (time up between tries) played score sounds and bursts for points nobody got. | `onItemScored` stays silent once the session is over (demo rounds unchanged). | The round machine may still record it for the dangling round; the session ignores it. |
+| R6 | The attract cycle stopped on a machine whose next neighbour was locked (unlock by prizes) or that was hidden after the visit, never returning home; with the lobby off it still toured every machine. | The cycle walks the offered, unlocked machines in lobby order (home when the current one is not among them); with the lobby off it stays on home. | "Lobby off = a single-machine kiosk on home" (the setting's own text). |
+| R7 | A new home machine (Settings) only took over attract mode after some later player's idle reset. | In attract mode a change of home / hidden / lobby / unlock / attract cycle queues the switch home at once (dropped if a player starts first). | — |
+| R8 | A settings rebuild of the bridge ran at RESULT and wiped the result card (and a win's claim QR). | The rebuild waits for READY. | — |
+
+Checked and found sound (regression tests added): exactly one claim code per session prize with the
+real `RewardFlow` and distinct round ids, none for demo rounds; the pilot plays ten demo rounds per
+genre (the bridge with both controls) through ATTRACT without getting stuck, awarding a player or
+starting a session; 48 switches over every machine leave the emitters' listeners, the store's
+subscriptions and the timers as they were and classic's body and collider counts unchanged; ranking
+ties and the 10th place; today's pick across midnight (decided at each settlement, the HUD follows);
+twenty "Call staff" presses in a row only cycle the seeded start poses and never award, and a box
+that dropped between tries can not be taken back by staff.
+
+Not changed (outside the reviewed files, for the integrator):
+
+- `src/app/Game.ts`, `onSettingsChanged` / `applyQueuedRebuild`: a theme change waits while a RESULT
+  is shown, but a Sparkle Rush session card can be up in READY (the run ended between tries); the
+  theme change then applies at once and `rewards.reset()` hides that card's claim QR. Suggested: also
+  wait while `director.sessionOver()`.
+- `src/i18n/strings/score.ts`, `score.reset.confirm`: the confirmation names the best session score and
+  the lifetime points only; *Reset scores* also clears the other machines' bests, rankings and play
+  counts (`Game.resetScores` → `clearMachines`).
+- `src/persistence/scores.ts` and `src/persistence/machines.ts` treat any stored `version` above 1 as
+  data of a newer build and never overwrite it; a corrupt non-finite version (`1e999` in the file)
+  therefore freezes the records until *Reset scores*. Low risk (needs a hand edit); left as designed.

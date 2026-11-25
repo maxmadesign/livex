@@ -35,7 +35,7 @@ Values are clamped to their range and snapped to their step when set, loaded or 
 
 ## 1. Game
 
-Sections: Difficulty · Claw movement · Grip · Round · Player help.
+Sections: Difficulty · Claw movement · Grip · Round · Player help · [Machines](#machines).
 
 | Setting | Path | Default | Range / options | Applies |
 | --- | --- | --- | --- | --- |
@@ -81,6 +81,58 @@ Sections: Difficulty · Claw movement · Grip · Round · Player help.
   **Best session** and **lifetime points** are stored on the device (see [storage](#where-settings-are-stored));
   demo rounds score on a separate DEMO track that is never stored. *System → Reset scores* clears both.
 - Buttons: **Restart this round**, **Restock now**.
+
+### Machines
+
+The last section of the Game tab. Besides the classic claw machine (*Plush Classic*) the cabinet can be three
+other machines: **Tippy Bridge**, **Tumble Shelf** and **Sparkle Rush** (rules: [machines/bridge.md](machines/bridge.md),
+[machines/shelf.md](machines/shelf.md), [machines/rush.md](machines/rush.md)). Players switch machines in the
+**machine lobby** (the MACHINES button on the control panel).
+
+| Setting | Path | Default | Range / options | Applies |
+| --- | --- | --- | --- | --- |
+| Home machine | `machines.home` | `classic` | `classic` Plush Classic · `bridge` Tippy Bridge · `shelf` Tumble Shelf · `rush` Sparkle Rush | next round |
+| Machine lobby | `machines.lobby` | on | on / off | live |
+| Machines in the lobby | `machines.hidden` | *(none hidden)* | one toggle per machine (stored as the hidden ids, ≤ 16) | next round |
+| Unlocking | `machines.unlock` | `open` | `open` All open · `progress` By prizes | next round |
+| Today’s pick | `machines.dailyPick` | on | on / off | live |
+| Today’s pick bonus | `machines.dailyBonus` | 1.5 | 1 … 3 (step 0.1) × | live |
+| Attract mode visits every machine | `machines.attractCycle` | off | on / off | live |
+| Tippy Bridge: Controls | `machines.bridge.controls` | `joystick` | `joystick` Joystick · `twoStep` Two buttons | next round |
+| Tippy Bridge: Tries per box | `machines.bridge.triesPerBox` | 0 | 0 … 50 (step 1); 0 = unlimited | next round |
+| Tippy Bridge: Gap between the bars | `machines.bridge.gap` | 0.15 | 0.13 … 0.18 (step 0.005) m | rebuild |
+| Tippy Bridge: Box mass | `machines.bridge.boxMass` | 0.4 | 0.2 … 0.8 (step 0.05) kg | rebuild |
+| Tumble Shelf: Tries per session | `machines.shelf.tries` | 5 | 1 … 20 (step 1) | next round |
+| Tumble Shelf: Boxes for a prize | `machines.shelf.rewardItems` | 5 | 1 … 30 (step 1) | next round |
+| Tumble Shelf: Shelf lip height | `machines.shelf.lipHeight` | 0.014 | 0 … 0.03 (step 0.002) m | rebuild |
+| Sparkle Rush: Run length | `machines.rush.seconds` | 75 | 30 … 120 (step 5) s | next round |
+| Sparkle Rush: Gems in the pile | `machines.rush.pieces` | 44 | 24 … 48 (step 2) | rebuild |
+| Sparkle Rush: Gem value for a prize | `machines.rush.rewardValue` | 700 | 0 … 5000 (step 50); 0 = no prize | next round |
+
+- *Home machine*: attract mode plays it and the idle reset returns to it. `?machine=` overrides it for one page
+  load (never saved). Changed while the kiosk is in attract mode, attract mode moves to the new home machine at once
+  (behind the curtain); during a player's session it waits for the next idle reset.
+- *Machine lobby* off: a single-machine kiosk on the home machine (no MACHINES button, and the attract cycle stays
+  on the home machine). The MACHINES button is shown only while more than one machine is offered and is usable
+  between tries and in attract mode (never while a player's claw is busy).
+- *Machines in the lobby*: the home machine is always offered and its toggle is disabled.
+- *Unlocking → By prizes*: a machine opens once the collection holds enough prizes (Tippy Bridge 1, Tumble Shelf 3,
+  Sparkle Rush 5); the classic and the home machine are always open. Locked machines show a lock on their lobby
+  card; the attract cycle skips them.
+- *Today’s pick*: one offered, unlocked machine — never the classic — earns ×`dailyBonus` **points** today. The pick
+  is a hash of the kiosk's local date (`plush:YYYY-MM-DD`, FNV-1a) over the offered machines, so it is the same all
+  day and changes at local midnight; a try settled after midnight uses the new day's pick. Prizes and the Sparkle
+  Rush ranking are never affected by it.
+- *Attract mode visits every machine*: every 3 demo rounds attract mode moves to the next offered, unlocked machine
+  (each visit rebuilds the machine behind a short curtain). Off by default.
+- Machine settings of the machine being played rebuild it at the next fitting moment: in attract mode, at PLAY
+  AGAIN after a Tumble Shelf or Sparkle Rush session (never in the middle of one), and on Tippy Bridge at the next
+  READY (the box starts over). Settings of other machines apply when that machine is next chosen.
+- A new field in the middle of a Tumble Shelf session or a Sparkle Rush run (a theme change from the theme button,
+  a toy setting, **Rearrange toys**) starts the session over: fresh tries or a fresh clock, points back to 0. A
+  session that has already ended keeps its card.
+- Each machine keeps its own best session and lifetime points (classic: the `scores` record as before; the others:
+  `plush-portal/machines`, see [storage](#where-settings-are-stored)). *System → Reset scores* clears both.
 
 ## 2. Themes & Toys
 
@@ -369,6 +421,11 @@ pages and the server options. Sections: Prize claims · Status.
   made up. Phones playing over the LAN get no codes.
 - *Claim link* / *Swag store link*: a link that is not a well-formed http(s) URL is ignored (a note under the
   field says so).
+- **Machines** ([Game → Machines](#machines)): the same rule holds for every machine. Plush Classic and Tippy Bridge
+  give a code per won prize (a plush, a dropped box) on the win card; Tumble Shelf and Sparkle Rush give at most one
+  **session prize** per session, with one code on the session card. `machines.shelf.rewardItems` and
+  `machines.rush.rewardValue` set what a session needs for it; *Today’s pick bonus* changes points only, never
+  prizes. Demo rounds and attract mode never earn a code. Details: [REWARDS.md](REWARDS.md#which-machine-gives-what).
 - **Status** (read from the server):
   - Whether the code server is on, the claim page address and who can open it (phones on this network, your
     public link, or only this machine, with a warning), and how long codes stay valid.
@@ -402,6 +459,7 @@ Sections: General · Configuration · Reset · Public display lock · Diagnostic
   nothing is counted or stored). A tap on the call to action, START, `Space` or `Enter` stops the demo at once and starts
   a player round with a full machine.
 - **Reset scores** (two-step confirm) clears the best session score and the lifetime points; the line above it shows both.
+  It also clears the other machines' bests, their Sparkle Rush top-10 rankings and play counts (`plush-portal/machines`).
 - **Toggle full screen** (also the `F` key).
 - **Export configuration / Import configuration…** — see below.
 - **Reset all settings** (keeps the display preset, the language and the collection) and **Clear collection** (keeps settings); both ask for a second tap.
@@ -534,6 +592,7 @@ read or remove it. Protect a public installation with the operating system's kio
 | Settings | `localStorage` | `plush-portal/settings` — an object with `version` (1) and `settings` |
 | Collection | `localStorage` | `plush-portal/collection/v1` |
 | Best session score and lifetime points | `localStorage` | `plush-portal/scores` — `version`, `best`, `lifetime` (demo points are never stored) |
+| The other machines' bests, rankings and play counts | `localStorage` | `plush-portal/machines` — `version` (1), `best` and `plays` per machine, `rankings` (Sparkle Rush top 10: three initials, score, time, difficulty). Corrupt entries are dropped on load; data written by a newer version is left alone |
 | Phone first-run setup done | `localStorage` | `plush-portal/phone-setup` |
 | "How-to-play shown" flag | `localStorage` | `plush-portal/tutorial-seen` |
 | Guide line cache (only with *Line cache: Keep on this device*) | `localStorage` | `plush-portal.ai.lines.v1` |

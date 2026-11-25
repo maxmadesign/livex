@@ -182,4 +182,24 @@ describe('timed session', () => {
     expect(over[0]).toMatchObject({ reason: 'time', tries: 1, items: 1, value: 150 });
     expect(over[0]!.reward!.prizeId).toBe(`test-${trace.result.roundId}-S`);
   });
+
+  it('time up during a try that is then aborted (restart, error recovery): the run ends at the next READY, not after a free try', { timeout: 60_000 }, async () => {
+    const c = await core({ kind: 'timed', seconds: 60 });
+    const over: SessionSnapshot[] = [];
+    c.session.events.on('over', (s) => over.push(s));
+    const first = playRound(c, 0.1, -0.6);
+    c.machine.next(false);
+    c.controller.requestGrab();
+    stepUntil(c, () => c.machine.phase === 'CLOSING', 5);
+    c.session.setSecondsLeft(0.01);
+    idle(c, 0.05);
+    expect(c.session.snapshot()).toMatchObject({ state: 'running', secondsLeft: 0 });
+    // Settings → Gameplay → restart round (or the frame loop's error recovery) abandons the try.
+    c.controller.resetRound('manual_restart', 'READY');
+    idle(c, 0.05);
+    expect(over).toHaveLength(1);
+    expect(over[0]).toMatchObject({ reason: 'time', tries: 2, lastRoundId: first.result.roundId });
+    expect(c.controller.inputLocked).toBe(true);
+    expect(c.controller.requestGrab()).toBe(false);
+  });
 });

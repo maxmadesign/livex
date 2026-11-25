@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MachinePilot } from '../../../src/app/MachinePilot';
 import type { RoundResult } from '../../../src/core/types';
 import type { GameCore } from '../../../src/game/GameCore';
-import { GENRES } from '../../../src/game/machines/registry';
+import { GENRES, resolveMachine } from '../../../src/game/machines/registry';
 import type { AimPlan } from '../../../src/game/machines/types';
 import { CLAW, FIXED_DT } from '../../../src/physics/fieldSpec';
-import { makeCore } from '../game/harness';
+import { defaultSettings } from '../../../src/settings/spec';
+import { makeCore, testMachine } from '../game/harness';
 
 const cores: GameCore[] = [];
 afterEach(() => {
@@ -107,6 +108,45 @@ describe('machine pilot (design 4.5)', () => {
         c.field.clearBin();
       }
       expect(GENRES[def.def.genre].aim).toBeDefined();
+    }
+  });
+});
+
+describe('machine pilot in attract mode (review)', () => {
+  it('every genre (the bridge with two-step controls too): 10 demo rounds through ATTRACT, each ends in time, no player award, no session', { timeout: 300_000 }, async () => {
+    const twoStep = defaultSettings().machines;
+    twoStep.bridge.controls = 'twoStep';
+    const machines = [testMachine('bridge'), resolveMachine('bridge', twoStep, { includeUnavailable: true }), testMachine('shelf'), testMachine('rush')];
+    expect(machines[1]!.controls).toBe('twoStep');
+    for (const machine of machines) {
+      const c = await makeCore({ theme: 'sakura', seed: 11, machine });
+      cores.push(c);
+      const label = `${machine.def.id}/${machine.controls}`;
+      const def = c.def;
+      const pilot = new MachinePilot((cc, round) => def.module.aim!(cc, round, def.params));
+      const awards: { demo: boolean; session?: boolean }[] = [];
+      const sessions: string[] = [];
+      c.machine.events.on('award', (a) => awards.push(a));
+      c.session.events.on('started', () => sessions.push('started'));
+      c.session.events.on('over', () => sessions.push('over'));
+      for (let i = 0; i < 10; i++) {
+        // Attract mode between demo rounds: the ATTRACT boundary (refills, the bridge's own staff reset).
+        expect(c.machine.phase, label).toBe('ATTRACT');
+        const run = demo(c, pilot, 'result', 30);
+        expect(run.result, `${label} demo ${i} ended`).not.toBeNull();
+        expect(run.result!.demo).toBe(true);
+        // Late falls happen in RESULT (a box tipping into the pit after the try), then back to ATTRACT.
+        for (let s = 0; s < 1 / FIXED_DT; s++) c.fixedStep();
+        c.field.clearBin();
+        expect(c.machine.toAttract()).toBe(true);
+        for (let s = 0; s < 0.5 / FIXED_DT; s++) c.fixedStep();
+      }
+      expect(awards.every((a) => a.demo), label).toBe(true);
+      expect(awards.some((a) => a.session), label).toBe(false);
+      expect(sessions, label).toEqual([]);
+      expect(c.session.snapshot().state).toBe('idle');
+      // The field never runs empty in attract mode (refills at the ATTRACT boundary).
+      expect(c.field.onField().filter((t) => t.item).length, label).toBeGreaterThan(0);
     }
   });
 });
