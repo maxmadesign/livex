@@ -184,3 +184,24 @@ describe('reward client: status and session', () => {
     expect(createRewardClient().session).toBe(createRewardClient().session);
   });
 });
+
+describe('stall-tolerant request timeout', () => {
+  it('does not count a long main-thread stall in full', async () => {
+    vi.useFakeTimers();
+    try {
+      const { stallTolerantTimeout } = await import('../../../src/rewards/client');
+      const fired = vi.fn();
+      const timer = stallTolerantTimeout(fired, 8000);
+      // A 20 s render stall: the clock jumps while no timer can run, then one tick happens.
+      vi.setSystemTime(Date.now() + 20_000);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(fired).not.toHaveBeenCalled();
+      // Ordinary waiting still runs out.
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(fired).toHaveBeenCalledTimes(1);
+      timer.cancel();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -126,6 +126,31 @@ function validStatus(body: unknown): body is RewardsStatusBody {
   return !!b && typeof b === 'object' && typeof b.enabled === 'boolean' && typeof b.canIssue === 'boolean' && typeof b.claimBase === 'string' && REACHES.includes(b.reach as ClaimReach);
 }
 
+/** Longest gap between two timer ticks that still counts in full towards a request's time limit. */
+const MAX_TICK_MS = 500;
+const TICK_MS = 250;
+
+/**
+ * Calls `onTimeout` once `timeoutMs` of waiting has passed, counting a main-thread stall (a long
+ * render frame on a slow kiosk) as at most MAX_TICK_MS. A plain setTimeout counts the stall in full,
+ * so a code the server answered within milliseconds was reported as unavailable whenever single
+ * frames took longer than the limit.
+ */
+export function stallTolerantTimeout(onTimeout: () => void, timeoutMs: number): { cancel(): void } {
+  let waited = 0;
+  let last = Date.now();
+  const tick = setInterval(() => {
+    const now = Date.now();
+    waited += Math.min(MAX_TICK_MS, Math.max(0, now - last));
+    last = now;
+    if (waited >= timeoutMs) {
+      clearInterval(tick);
+      onTimeout();
+    }
+  }, TICK_MS);
+  return { cancel: () => clearInterval(tick) };
+}
+
 export function createRewardClient(options: RewardClientOptions = {}): RewardClient {
   const session = (options.session ?? pageSessionId()).slice(0, REWARD_LIMITS.maxSessionChars);
   const base = (options.baseUrl ?? '').replace(/\/+$/, '');
@@ -135,7 +160,7 @@ export function createRewardClient(options: RewardClientOptions = {}): RewardCli
     const fetchImpl = options.fetchImpl ?? (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
     if (!fetchImpl) return { ok: false, reason: 'offline' };
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = stallTolerantTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetchImpl(`${base}${path}`, {
         method,
@@ -159,7 +184,7 @@ export function createRewardClient(options: RewardClientOptions = {}): RewardCli
       // Network failure or the timeout fired: the server could not be reached in time.
       return { ok: false, reason: 'offline' };
     } finally {
-      clearTimeout(timer);
+      timer.cancel();
     }
   }
 
