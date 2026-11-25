@@ -543,6 +543,36 @@ grabs from behind can no longer catch an invisible handle. The other characters 
 moved by up to ±12 points at 4.5 cm (the pile around them changed); centred grabs stayed at
 96–100 %. The headless tests in `tests/unit/game` (fixed seeds, real assets) pass.
 
+### Viewer light (round 4)
+
+Method: production build served by the API server, headless Chromium (SwiftShader, no GPU),
+`?debug=1&camera=off&seed=7&display=desktop&theme=sakura&quality=medium` at 1280 × 720, device pixel
+ratio 1, a player round in READY with the claw at home, automatic optimiser switched off after boot.
+Each case is one `Stage.render` timed between two 1-pixel read-backs (which make the browser finish
+the queued GPU work); the four cases took turns frame by frame, six frames each, because the frame
+time of the loaded software rasteriser drifted by a factor of two within minutes (1-minute load
+average 15–23 from other jobs on the same four cores). Draw calls and triangles count every pass of
+the frame, read from `renderer.info`.
+
+| Case | Draw calls | Triangles | Viewer-light map drawn | Frame, median (min) |
+| --- | --- | --- | --- | --- |
+| Light off, eye still | 139 | 246 983 | — | 3.84 s (3.29 s) |
+| Light on, eye still | 139 | 246 983 | 0 of 6 frames | 3.78 s (2.89 s) |
+| Light on, eye moving | 169 | 324 573 | 6 of 6 frames | 5.18 s (3.15 s) |
+| Light off, eye moving | 139 | 246 983 | — | 4.40 s (2.35 s) |
+
+So: with a still eye and resting toys the light costs no draw call and no triangle (its map is not
+redrawn) and no measurable time; a frame that redraws its 1024² map adds 30 draw calls and about
+78 000 triangles (the toys' coarse shadow meshes and the claw) and was 0.8–1.3 s slower here, which
+is within the noise of this machine. What it costs on real integrated graphics (one more light in
+every lit fragment, one small depth pass while the player moves) was **not measured**. The proof
+screenshots (eye left, right, high and low, desktop and portrait32, Sakura and GPU Party) show the
+claw's shadow on the back wall sliding the other way as the eye moves; on the GPU Party theme the back
+wall is the LED screen, which is unlit, so its shadows land on the mat and the toys only. Checked
+the same way on the other tiers (800 × 450): High draws the 2048² soft map (291 draw calls, 2.26 M
+triangles in a still frame, the High tier's own cost), Safe leaves the light off (118 calls); no
+console errors or shader compile errors in any of these runs.
+
 ### Not measured
 
 - Any frame rate, frame-time distribution or GPU load on real graphics hardware
