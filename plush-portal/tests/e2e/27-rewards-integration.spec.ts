@@ -429,7 +429,7 @@ test.describe('27. prize claims against the real server', () => {
         await route.fulfill({ response });
         delivered.push('answer');
       } catch {
-        delivered.push('aborted'); // the client's own 4 s timeout came first
+        delivered.push('aborted'); // the client's own timeout came first
       }
     });
     await boot(page, { display: 'desktop', theme: 'gpu', lang: 'en', settings: { system: { attractDemo: false }, rewards: { qrSeconds: 60 } } });
@@ -493,7 +493,8 @@ test.describe('27. prize claims against the real server', () => {
     expectClean(w, 'kiosk (slow server, rounds A and B)');
 
     // Round C: the answer never comes in time. The card shows the placeholder, then after the
-    // client's 4 s limit the honest note; the code the server stored is never shown (an orphan).
+    // client's time limit (it asks once more after the first timeout, see src/rewards/client.ts)
+    // the honest note; the code the server stored is never shown (an orphan).
     closeGate();
     const c = (await winARound(page, 12)).result;
     const pending = await rewardState(page);
@@ -513,9 +514,13 @@ test.describe('27. prize claims against the real server', () => {
     const { event: late } = await winLineOf(page, c.roundId);
     expect(late.facts.reward).toBeUndefined();
     open();
-    await expect.poll(() => delivered.length, { timeout: 30_000 }).toBe(3);
-    console.log(`answer of round ${c.roundId} after the client gave up: ${delivered[2]}`);
+    // Two requests for round C (the first and its retry), both answered only after the client gave up.
+    await expect.poll(() => delivered.length, { timeout: 30_000 }).toBe(4);
+    console.log(`answers of round ${c.roundId} after the client gave up: ${delivered.slice(2).join(', ')}`);
+    // The server keys codes on session + round, so the retry stored no second code.
     expect(await storedCodes(request), 'the server stored the code the kiosk gave up on').toHaveLength(count + 2);
+    // The late answers change nothing on the kiosk.
+    expect(await rewardState(page)).toMatchObject({ state: 'unavailable', code: null });
     expect(w.pageErrors).toEqual([]);
     console.log(`round C: console errors ${JSON.stringify(w.consoleErrors)}, failed requests ${JSON.stringify(w.failedRequests)}`);
     expect(w.failedRequests.every((r) => r.includes('/api/rewards/issue'))).toBe(true);
