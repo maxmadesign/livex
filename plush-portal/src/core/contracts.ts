@@ -168,6 +168,12 @@ export const GUIDE_EVENT_TYPES = [
   'theme_changed',
   'retry_prompt',
   'user_requested_tip',
+  // Machines other than classic (docs/design/machines.md, section 4.9).
+  'machine_selected',
+  'machine_progress',
+  'items_scored',
+  'time_low',
+  'session_over',
 ] as const;
 export type GuideEventType = (typeof GUIDE_EVENT_TYPES)[number];
 
@@ -205,6 +211,27 @@ export interface GuideFacts {
    * says what it unlocks. Ignored on other events. Absent / null = no QR (say nothing about one).
    */
   reward?: { qr: boolean; options: 'both' | 'prize' | 'swag' } | null;
+  /**
+   * The machine being played, only on machines other than classic (classic facts never carry it).
+   * Numbers and enums only; `name` is the localised machine name. The numbers reach the model
+   * only through these facts, never through local lines.
+   */
+  machine?: {
+    id: string;
+    genre: 'bridge' | 'shelf' | 'rush';
+    name: string;
+    tries?: number;
+    triesLeft?: number | null;
+    progress?: number;
+    progressGain?: number;
+    stuck?: boolean;
+    items?: number;
+    sessionItems?: number;
+    score?: number;
+    secondsLeft?: number;
+    rank?: number | null;
+    reason?: 'tries' | 'time' | null;
+  } | null;
 }
 
 export interface GuideEvent {

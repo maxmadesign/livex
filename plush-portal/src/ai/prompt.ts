@@ -116,6 +116,11 @@ const EVENT_TASKS: Record<GuideEventType, string> = {
   theme_changed: 'The cabinet theme just changed. Welcome the player to the new theme in its mood.',
   retry_prompt: 'Lightly invite another try. No pressure: watching or stopping is fine.',
   user_requested_tip: 'The player asked for a tip. Give one concrete, practical tip.',
+  machine_selected: 'The player just switched to the machine in facts.machine. Welcome them to it in one line.',
+  machine_progress: 'The try moved the prize without dropping it. Comment on the progress from facts.machine only.',
+  items_scored: 'Items dropped into the opening this try. Cheer using facts.machine.items.',
+  time_low: 'The timed run is almost over (facts.machine.secondsLeft). Urge the player on without pressure.',
+  session_over: 'The play session on this machine just ended. Sum it up from facts.machine.',
 };
 
 /** Explanations for the physics-derived slip reasons. Unknown reasons are passed through untouched. */

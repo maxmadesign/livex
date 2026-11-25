@@ -4,6 +4,7 @@
  * the import/export validation are all derived from this table.
  */
 import { DISPLAY_PROFILE_IDS, LANGS, THEME_IDS, type DisplayProfileId, type Vec3 } from '../core/types';
+import { MACHINE_IDS } from '../game/machines/ids';
 
 /**
  * live    – applied immediately (and previewed while the settings dialog is open)
@@ -528,6 +529,45 @@ export const settingsSpec = {
     discountText: str('', 80),
     /** How long the QR card stays up after a win (the idle reset waits for it). */
     qrSeconds: num(60, 15, 300, 5, 'live', 's'),
+  },
+  /**
+   * Machines other than the classic claw machine (docs/design/machines.md, section 4.6). The machine
+   * a player is on is runtime state, never a setting: these values choose the attract / idle-reset
+   * machine and tune the genres. Physics values of the genres are never 'live'.
+   */
+  machines: {
+    /** Machine of the attract mode and of the idle reset. ?machine= overrides it for one page load (not saved). */
+    home: en('classic', MACHINE_IDS, 'round'),
+    /** Players may open the machine lobby. Off = a single-machine kiosk on `home`. */
+    lobby: bool(true),
+    /** Machine ids not offered in the lobby; `home` is always offered. */
+    hidden: strList(16, 32, 'round'),
+    /** 'open' = every offered machine is playable; 'progress' = later machines unlock with collected prizes. */
+    unlock: en('open', ['open', 'progress'] as const, 'round'),
+    /** One offered machine (never classic) per local day earns a points bonus. Presentation only. */
+    dailyPick: bool(true),
+    dailyBonus: num(1.5, 1, 3, 0.1, 'live', '×'),
+    /** Attract mode visits the offered machines in turn (each visit rebuilds the machine off-screen). */
+    attractCycle: bool(false),
+    bridge: {
+      controls: en('joystick', ['joystick', 'twoStep'] as const, 'round'),
+      /** 0 = unlimited; otherwise the box is put back (never awarded) after this many tries on it. */
+      triesPerBox: num(0, 0, 50, 1, 'round'),
+      gap: num(0.15, 0.13, 0.18, 0.005, 'rebuild', 'm'),
+      boxMass: num(0.4, 0.2, 0.8, 0.05, 'rebuild', 'kg'),
+    },
+    shelf: {
+      tries: num(5, 1, 20, 1, 'round'),
+      /** Boxes per session that earn a prize (collection + claim code). */
+      rewardItems: num(3, 1, 30, 1, 'round'),
+      lipHeight: num(0.014, 0, 0.03, 0.002, 'rebuild', 'm'),
+    },
+    rush: {
+      seconds: num(75, 30, 120, 5, 'round', 's'),
+      pieces: num(44, 24, 48, 2, 'rebuild'),
+      /** Raw gem value per run that earns a prize; 0 = never. */
+      rewardValue: num(450, 0, 5000, 50, 'round'),
+    },
   },
   camera: {
     /** Head Tracking / Window Perspective. */

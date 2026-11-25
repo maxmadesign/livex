@@ -1,6 +1,8 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { Quat, Vec3 } from '../core/types';
 import type { PlushAsset, ProxyShape } from '../plush/manifest';
+import type { FixtureKind } from './fieldGeometry';
+import type { ItemSpec } from './items';
 import { BIN, CHUTE, FIELD, FIXED_DT, GROUP, PRIZE_SENSOR, clampBinFloor, groups } from './fieldSpec';
 
 export { RAPIER };
@@ -12,7 +14,7 @@ export function initRapier(): Promise<void> {
   return rapierReady;
 }
 
-export type StaticKind = 'floor' | 'glass' | 'backWall' | 'ceiling' | 'chuteWall' | 'bin';
+export type StaticKind = 'floor' | 'glass' | 'backWall' | 'ceiling' | 'chuteWall' | 'bin' | FixtureKind;
 
 /** Interpolated transform of one dynamic body (previous + current fixed step). */
 export class BodyPose {
@@ -62,6 +64,8 @@ export interface ToyBody {
   inBin: boolean;
   /** Linear velocity at the end of the previous step (impact detection). */
   lastVel: Float32Array;
+  /** Set for machine items (boxes, snacks, gems, coins); absent on plush toys. */
+  item?: ItemSpec;
 }
 
 export interface ImpactEvent {

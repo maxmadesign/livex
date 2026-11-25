@@ -95,6 +95,18 @@ export function resolveSituation(event: GuideEvent): LineSituation {
       return at([f.lossStreak >= 3 ? 'retry.streak' : 'retry']);
     case 'user_requested_tip':
       return at(f.headTracking ? ['tip', 'tip.tracking'] : ['tip']);
+    // Machine events. TEMPORARY scaffold mapping onto existing keys that already have every pool
+    // (theme, generic and the event brand pools); the machine line keys replace it (design 4.9).
+    case 'machine_selected':
+      return at(['theme']);
+    case 'machine_progress':
+      return at(['tip']);
+    case 'items_scored':
+      return at(['win']);
+    case 'time_low':
+      return at(['tip']);
+    case 'session_over':
+      return at(['retry']);
     default:
       return at(['tip']);
   }

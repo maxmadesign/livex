@@ -7,6 +7,7 @@ import { getLog, log, logError } from '../diagnostics/log';
 import { ATTRACT_TIMING, AttractDirector, IdleTimer } from '../game/attract';
 import { GameCore } from '../game/GameCore';
 import { rarityOf, type RarityTier } from '../game/rarity';
+import type { MachineId } from '../game/machines/ids';
 import type { RoundParams } from '../game/RoundController';
 import { ScoreKeeper, comboMultiplier, type ScoreAward, type ScoringDifficulty } from '../game/scoring';
 import { readFramedEnvironment } from '../layout/frame';
@@ -32,7 +33,7 @@ import { RewardFlow, scannableQrOnScreen } from '../rewards/flow';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { DemoPilot } from './DemoPilot';
 import { attachPeekDrag } from './PeekDrag';
-import type { GameStore, PerfSnapshot } from './gameStore';
+import type { GameStore, MachineCardInfo, PerfSnapshot } from './gameStore';
 
 /** Steering input as the round controller receives it, and where it came from. */
 export interface SteerInput {
@@ -68,6 +69,11 @@ export interface LaunchParams {
   debug: boolean;
   /** Never ask for the camera (tests / kiosks without one). */
   noCamera: boolean;
+  /**
+   * `?machine=`: the home machine of this page load (attract mode and the idle reset), overriding
+   * machines.home without saving anything. Absent / null = machines.home.
+   */
+  machine?: MachineId | null;
 }
 
 export interface GameDeps {
@@ -612,6 +618,45 @@ export class Game {
 
   requestTip(): void {
     this.emitGuide('user_requested_tip');
+  }
+
+  /* ------------------------------------------------------------- machines */
+  // Public contract of the machine framework (docs/design/machines.md, sections 2.2 and 4.11).
+  // The bodies arrive with the machine director; until then every call is a safe no-op on classic.
+
+  /** Switches to another machine at the next round boundary. False when refused. */
+  selectMachine(id: MachineId): boolean {
+    void id;
+    return false;
+  }
+
+  /** Opens the machine lobby (the MACHINES deck button). */
+  openLobby(): void {}
+
+  /** A machine deck action: 'staff' = "Call staff" on the bridge. False when not available. */
+  machineAction(action: 'staff'): boolean {
+    void action;
+    return false;
+  }
+
+  /** The two-step buttons of `twoStep` controls (button 1 = +x, button 2 = -z). */
+  stepInput(step: 1 | 2, pressed: boolean): void {
+    void step;
+    void pressed;
+  }
+
+  /** PLAY AGAIN on a session card: a fresh session on the same machine. */
+  newSession(): void {}
+
+  /** Initials for a ranking place. False when no entry is waiting or the initials are invalid. */
+  submitInitials(initials: string): boolean {
+    void initials;
+    return false;
+  }
+
+  /** The lobby cards. */
+  machineCards(): MachineCardInfo[] {
+    return [];
   }
 
   private touchActivity(): void {
