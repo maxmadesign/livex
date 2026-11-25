@@ -82,7 +82,7 @@ every boundary. 144 s for all three presets.
 | runs that let a try start after the clock ran out | 0 | 0 | **3 of 24** | 2 of 24 |
 
 Step time (Arcade, busy phases): p50 0.12 ms, p95 0.27 ms, p99 0.58 ms; the single worst step was
-40 ms (a scheduling stall on this shared 4-CPU box, not physics). Centred grabs (Arcade): 0 × 16,
+40 ms (a single outlier on this shared 4-CPU box). Centred grabs (Arcade): 0 × 16,
 1 × 62, 2 × 2.
 
 **Raw value per run** (Arcade, sorted): 260 335 365 390 410 425 435 435 475 485 510 520 545 550 560
